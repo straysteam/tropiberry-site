@@ -1,10 +1,8 @@
-// Importações do Firebase (Usando sintaxe ES6 Modules no script type="module")
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-// --- CONFIGURAÇÃO DO FIREBASE (VOCÊ PRECISA COLAR SEUS DADOS AQUI) ---
-// Vá em console.firebase.google.com -> Criar Projeto -> Adicionar Web App
-  const firebaseConfig = {
+// --- CONFIGURAÇÃO DO FIREBASE ---
+const firebaseConfig = {
     apiKey: "AIzaSyD9j8xNgkb3l1YBQ0vG0Y9b6Am-3c8hZgE",
     authDomain: "tropiberry.firebaseapp.com",
     projectId: "tropiberry",
@@ -12,19 +10,19 @@ import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.g
     messagingSenderId: "189248026578",
     appId: "1:189248026578:web:dac33920f93edba0adba0b",
     measurementId: "G-P1MLB08TZ8"
-  };
+};
 
-// Inicializa Firebase (Tenta inicializar apenas se a config estiver correta)
+// Inicializa Firebase
 let db;
 try {
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
     console.log("Firebase conectado com sucesso!");
 } catch (error) {
-    console.error("Erro ao conectar Firebase. Verifique as configurações.", error);
+    console.error("Erro ao conectar Firebase.", error);
 }
 
-// --- DADOS DOS PRODUTOS ---
+// --- DADOS DOS PRODUTOS (Imagens bonitas do Unsplash) ---
 const products = [
     { id: 1, name: "Barca Clássica", description: "Açaí puro, banana, morango, leite condensado e granola.", price: 25.00, image: "https://images.unsplash.com/photo-1596560548464-f010549b84d7?ixlib=rb-4.0.3&w=600&q=80" },
     { id: 2, name: "Copo da Felicidade", description: "Camadas de açaí, creme de ninho, nutella e brownie.", price: 18.50, image: "https://images.unsplash.com/photo-1623592534887-1959779df30f?ixlib=rb-4.0.3&w=600&q=80" },
@@ -36,15 +34,15 @@ const products = [
 
 // --- ESTADO GERAL ---
 let cart = [];
-let isStoreOpen = true; // Variável de controle da loja
+let isStoreOpen = true; 
 let currentOrder = {
-    method: '', // 'retirada' ou 'delivery'
+    method: '', 
     customer: {},
     items: [],
     total: 0
 };
 
-// Tornar funções acessíveis globalmente (necessário por causa do type="module")
+// Tornar funções acessíveis no HTML
 window.addToCart = addToCart;
 window.changeQuantity = changeQuantity;
 window.toggleCart = toggleCart;
@@ -54,8 +52,6 @@ window.startCheckout = startCheckout;
 window.closeCheckout = closeCheckout;
 window.selectService = selectService;
 window.goToPayment = goToPayment;
-window.copyPix = copyPix;
-window.confirmOrder = confirmOrder;
 
 // --- INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -67,19 +63,19 @@ document.addEventListener('DOMContentLoaded', () => {
 function renderProducts() {
     const grid = document.getElementById('product-grid');
     grid.innerHTML = products.map(product => `
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition transform hover:-translate-y-1 border border-cyan-100">
-            <div class="h-48 overflow-hidden relative">
-                <img src="${product.image}" alt="${product.name}" class="w-full h-full object-cover">
-                <button onclick="addToCart(${product.id})" class="absolute bottom-2 right-2 bg-yellow-400 text-cyan-900 w-10 h-10 rounded-full flex items-center justify-center shadow-lg font-bold hover:bg-yellow-300 transition">
-                    <i class="fas fa-plus"></i>
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition transform hover:-translate-y-1 border border-cyan-50">
+            <div class="h-48 overflow-hidden relative group">
+                <img src="${product.image}" alt="${product.name}" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">
+                <button onclick="addToCart(${product.id})" class="absolute bottom-3 right-3 bg-yellow-400 text-cyan-900 w-12 h-12 rounded-full flex items-center justify-center shadow-lg font-bold hover:bg-yellow-300 hover:scale-110 transition z-10">
+                    <i class="fas fa-plus text-xl"></i>
                 </button>
             </div>
             <div class="p-5">
                 <div class="flex justify-between items-start mb-2">
-                    <h4 class="text-lg font-bold text-cyan-900">${product.name}</h4>
-                    <span class="text-lg font-bold text-cyan-700">R$ ${product.price.toFixed(2).replace('.', ',')}</span>
+                    <h4 class="text-lg font-bold text-cyan-900 leading-tight">${product.name}</h4>
+                    <span class="text-lg font-bold text-cyan-600">R$ ${product.price.toFixed(2).replace('.', ',')}</span>
                 </div>
-                <p class="text-gray-600 text-xs mb-0">${product.description}</p>
+                <p class="text-gray-500 text-sm line-clamp-2">${product.description}</p>
             </div>
         </div>
     `).join('');
@@ -104,7 +100,7 @@ function updateStoreStatusUI() {
         btn.className = "px-3 py-1 rounded-full text-xs font-bold border border-green-400 text-green-100 bg-green-600 transition flex items-center gap-2";
         banner.classList.add('hidden');
         if(modalBadge) {
-            modalBadge.className = "bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold border border-green-200";
+            modalBadge.className = "bg-green-100 text-green-800 px-4 py-1.5 rounded-full text-sm font-bold border border-green-200 shadow-sm";
             modalBadge.innerText = "Aberto";
         }
     } else {
@@ -113,7 +109,7 @@ function updateStoreStatusUI() {
         btn.className = "px-3 py-1 rounded-full text-xs font-bold border border-red-400 text-red-100 bg-red-600 transition flex items-center gap-2";
         banner.classList.remove('hidden');
         if(modalBadge) {
-            modalBadge.className = "bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-bold border border-red-200";
+            modalBadge.className = "bg-red-100 text-red-800 px-4 py-1.5 rounded-full text-sm font-bold border border-red-200 shadow-sm";
             modalBadge.innerText = "Fechado";
         }
     }
@@ -122,7 +118,7 @@ function updateStoreStatusUI() {
 // --- CARRINHO ---
 function addToCart(id) {
     if (!isStoreOpen) {
-        alert("Desculpe, a loja está fechada no momento!");
+        alert("⚠️ A loja está fechada no momento! Voltamos amanhã.");
         return;
     }
     const product = products.find(p => p.id === id);
@@ -131,7 +127,7 @@ function addToCart(id) {
     else cart.push({ ...product, quantity: 1 });
     updateCartUI();
     
-    // Animação no botão carrinho
+    // Animação no botão carrinho (topo)
     const cartBtn = document.querySelector('header .fa-shopping-cart').parentElement;
     cartBtn.classList.add('animate-bounce');
     setTimeout(() => cartBtn.classList.remove('animate-bounce'), 1000);
@@ -154,32 +150,37 @@ function updateCartUI() {
     document.getElementById('cart-total').innerText = 'R$ ' + total.toFixed(2).replace('.', ',');
 
     if (cart.length === 0) {
-        container.innerHTML = `<p class="text-center text-gray-400 mt-10">Carrinho vazio 🍧</p>`;
+        container.innerHTML = `
+            <div class="text-center py-10">
+                <i class="fas fa-shopping-basket text-4xl text-gray-200 mb-3"></i>
+                <p class="text-gray-400">Seu carrinho está vazio.</p>
+                <button onclick="toggleCart()" class="text-cyan-600 font-bold text-sm mt-2 hover:underline">Ver Cardápio</button>
+            </div>
+        `;
     } else {
         container.innerHTML = cart.map(item => `
-            <div class="flex justify-between items-center bg-white p-3 rounded shadow-sm border-l-4 border-yellow-400">
+            <div class="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm border border-gray-100">
                 <div>
                     <h5 class="font-bold text-cyan-900 text-sm">${item.name}</h5>
                     <p class="text-xs text-gray-500">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</p>
                 </div>
-                <div class="flex items-center gap-2 bg-gray-100 rounded-full px-2">
-                    <button onclick="changeQuantity(${item.id}, -1)" class="text-red-500 font-bold">-</button>
+                <div class="flex items-center gap-3 bg-gray-50 rounded-lg px-2 py-1">
+                    <button onclick="changeQuantity(${item.id}, -1)" class="text-red-500 font-bold hover:bg-white rounded w-6 h-6 transition">-</button>
                     <span class="text-sm font-bold w-4 text-center">${item.quantity}</span>
-                    <button onclick="changeQuantity(${item.id}, 1)" class="text-green-500 font-bold">+</button>
+                    <button onclick="changeQuantity(${item.id}, 1)" class="text-green-500 font-bold hover:bg-white rounded w-6 h-6 transition">+</button>
                 </div>
             </div>
         `).join('');
     }
 }
 
-// --- LÓGICA DE CHECKOUT (O CORAÇÃO DO SISTEMA) ---
+// --- CHECKOUT ---
 
-// 1. Abrir Checkout
 function startCheckout() {
-    if (cart.length === 0) return alert("Carrinho vazio!");
-    if (!isStoreOpen) return alert("Loja Fechada!");
+    if (cart.length === 0) return alert("Seu carrinho está vazio!");
+    if (!isStoreOpen) return alert("Loja Fechada! Não é possível finalizar pedidos agora.");
     
-    toggleCart(); // Fecha lateral
+    toggleCart(); 
     document.getElementById('checkout-modal').classList.remove('hidden');
     showStep('step-service');
 }
@@ -188,15 +189,13 @@ function closeCheckout() {
     document.getElementById('checkout-modal').classList.add('hidden');
 }
 
-// Utilitário para trocar telas dentro do modal
 function showStep(stepId) {
-    ['step-service', 'step-address', 'step-payment'].forEach(id => {
+    ['step-service', 'step-address'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
     });
     document.getElementById(stepId).classList.remove('hidden');
 }
 
-// 2. Escolher Serviço
 function selectService(type) {
     currentOrder.method = type;
     
@@ -206,16 +205,15 @@ function selectService(type) {
     } else {
         deliveryFields.classList.remove('hidden');
     }
-    
     showStep('step-address');
 }
 
-// 3. Validar Endereço e Ir para Pagamento
-function goToPayment() {
+// LÓGICA DE PAGAMENTO (MERCADO PAGO)
+async function goToPayment() {
     const name = document.getElementById('input-name').value;
     const phone = document.getElementById('input-phone').value;
     
-    if (!name || !phone) return alert("Preencha nome e telefone!");
+    if (!name || !phone) return alert("Por favor, preencha seu Nome e Telefone.");
 
     currentOrder.customer = { name, phone };
 
@@ -225,111 +223,73 @@ function goToPayment() {
         const district = document.getElementById('input-district').value;
         const comp = document.getElementById('input-comp').value;
 
-        if (!street || !number || !district) return alert("Preencha o endereço completo!");
+        if (!street || !number || !district) return alert("Preencha o endereço completo para entrega.");
         
         currentOrder.customer.address = `${street}, ${number} - ${district} (${comp})`;
     } else {
         currentOrder.customer.address = "Retirada na Loja";
     }
 
-    // Preparar dados do PIX
-    const total = cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-    currentOrder.total = total;
-    
-    document.getElementById('pix-total-value').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
-    
-    // Gerar QR Code (API Gratuita para teste)
-    // Na vida real você usaria uma API de banco ou payload estático CRC16
-    const pixPayload = "00020126360014BR.GOV.BCB.PIX0114+5583999999995204000053039865802BR5913TROPYBERRY6009JOAOPESSOA62070503***6304ABCD"; 
-    // ^ Payload fake para exemplo
-    
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixPayload)}`;
-    document.getElementById('pix-qrcode').src = qrUrl;
-
-    showStep('step-payment');
-
-    // Inicializar Mapa Leaflet (Correção para renderizar corretamente)
-    setTimeout(() => {
-        if(!window.checkoutMap) {
-            window.checkoutMap = L.map('map').setView([-7.1194958, -34.8450118], 15); // Ex: Coordenadas de JP
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(window.checkoutMap);
-            
-            // Marcador da Loja
-            L.marker([-7.1194958, -34.8450118]).addTo(window.checkoutMap)
-                .bindPopup('<b>TROPYBERRY</b><br>Nossa loja aqui!').openPopup();
-        }
-        window.checkoutMap.invalidateSize();
-    }, 100);
-}
-
-// 4. Copiar Pix
-function copyPix() {
-    const text = document.getElementById('pix-code-text').innerText;
-    navigator.clipboard.writeText(text).then(() => {
-        alert("Código PIX copiado!");
-    });
-}
-
-// 5. Finalizar e Salvar no Firebase
-async function confirmOrder() {
-    if(!db) {
-        alert("Erro de conexão com o Banco de Dados. Pedido será enviado via WhatsApp.");
-        sendToWhatsApp();
-        return;
-    }
-
-    const btn = event.target;
+    const btn = document.getElementById('btn-finalizar');
+    const originalText = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
     btn.disabled = true;
 
     try {
-        // Salvar no Firebase
-        const docRef = await addDoc(collection(db, "pedidos"), {
-            customer: currentOrder.customer,
-            items: cart,
-            method: currentOrder.method,
-            total: currentOrder.total,
-            status: "Pendente Pagamento",
-            createdAt: serverTimestamp()
+        await salvarPedidoInicial();
+
+        // LINK DA SUA CLOUD FUNCTION (JÁ CONFIGUREI A CORRETA)
+        const functionUrl = "https://us-central1-tropiberry.cloudfunctions.net/criarPagamento";
+        
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                items: cart,
+                playerInfo: currentOrder.customer
+            })
         });
 
-        console.log("Pedido salvo ID: ", docRef.id);
-        
-        // Sucesso
-        alert("Pedido Realizado com Sucesso! Aguardando confirmação do pagamento.");
-        sendToWhatsApp(docRef.id); // Envia para o zap como backup/notificação
-        
-        // Reset
-        cart = [];
-        updateCartUI();
-        closeCheckout();
-        window.location.reload();
+        const data = await response.json();
 
-    } catch (e) {
-        console.error("Erro ao adicionar documento: ", e);
-        alert("Houve um erro ao salvar o pedido. Tente novamente.");
-        btn.innerHTML = 'Tentar Novamente';
+        if (data.link) {
+            window.location.href = data.link; // Redireciona
+        } else {
+            alert("Erro ao gerar link de pagamento. Tente novamente.");
+            console.error(data);
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+
+    } catch (error) {
+        console.error("Erro:", error);
+        alert("Erro de conexão. Verifique sua internet.");
+        btn.innerHTML = originalText;
         btn.disabled = false;
     }
 }
 
-function sendToWhatsApp(orderId = "N/A") {
-    const phoneStore = "5583999999999"; // SEU NÚMERO
-    let msg = `*NOVO PEDIDO #${orderId.slice(0,5)}* 🍧\n\n`;
-    msg += `*Cliente:* ${currentOrder.customer.name}\n`;
-    msg += `*Tipo:* ${currentOrder.method.toUpperCase()}\n`;
-    if(currentOrder.method === 'delivery') msg += `*End:* ${currentOrder.customer.address}\n`;
-    msg += `\n*Itens:*\n`;
-    cart.forEach(i => msg += `▪ ${i.quantity}x ${i.name}\n`);
-    msg += `\n*Total:* R$ ${currentOrder.total.toFixed(2)}\n`;
-    msg += `\n_Pagamento via Pix informado._`;
-
-    window.open(`https://wa.me/${phoneStore}?text=${encodeURIComponent(msg)}`, '_blank');
+async function salvarPedidoInicial() {
+    if(!db) return;
+    const total = cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+    
+    try {
+        await addDoc(collection(db, "pedidos"), {
+            customer: currentOrder.customer,
+            items: cart,
+            method: currentOrder.method,
+            total: total,
+            status: "Aguardando Pagamento (Checkout)",
+            createdAt: serverTimestamp()
+        });
+    } catch (e) {
+        console.error("Erro ao salvar backup:", e);
+    }
 }
 
-// UI UTILS
+// UTILS VISUAIS
 function toggleCart() {
     const modal = document.getElementById('cart-modal');
     const panel = document.getElementById('cart-panel');
