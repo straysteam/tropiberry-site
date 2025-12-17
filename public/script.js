@@ -1,13 +1,16 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-// === IMPORTANDO O CARDÁPIO ===
+// === IMPORTANDO MÓDULOS ===
 import { products, renderProducts } from './cardapio.js';
+// AJUSTE AQUI: Importamos o 'db' do auth.js (renomeado para authDb) para garantir que usamos a conexão autenticada
+import { monitorarEstadoAuth, fazerLogout, verificarAdminNoBanco, db as authDb } from './auth.js'; 
 
-let statusMap = null; 
+let currentUserIsAdmin = false; // Controle interno
 
-// --- CONFIGURAÇÃO FIREBASE ---
-const firebaseConfig = {
+// === CONFIGURAÇÃO FIREBASE ===
+// AJUSTE: Comentei a configuração local para não criar uma segunda instância sem login.
+/* const firebaseConfig = {
     apiKey: "AIzaSyD9j8xNgkb3l1YBQ0vG0Y9b6Am-3c8hZgE",
     authDomain: "tropiberry.firebaseapp.com",
     projectId: "tropiberry",
@@ -16,20 +19,26 @@ const firebaseConfig = {
     appId: "1:189248026578:web:dac33920f93edba0adba0b",
     measurementId: "G-P1MLB08TZ8"
 };
+*/
 
-let db;
+// AJUSTE: Usamos o banco de dados que vem do auth.js
+let db = authDb; 
+
+/*
 try {
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
     console.log("Firebase conectado!");
 } catch (error) { console.error("Erro Firebase", error); }
+*/
 
-// --- ESTADO GERAL ---
+// === ESTADO GERAL DO SITE ===
 let cart = [];
 let isStoreOpen = true; 
 let currentOrder = { method: '', customer: {}, items: [], total: 0 };
+let statusMap = null; 
 
-// --- TORNAR FUNÇÕES GLOBAIS ---
+// === TORNAR FUNÇÕES GLOBAIS ===
 window.addToCart = addToCart;
 window.changeQuantity = changeQuantity;
 window.toggleCart = toggleCart;
@@ -46,42 +55,162 @@ window.copyPixScreen = copyPixScreen;
 window.switchToStatus = switchToStatus;
 window.toggleReceipt = toggleReceipt;
 window.openOrderScreen = openOrderScreen; 
+window.fazerLogout = fazerLogout;
+window.renderProducts = renderProducts;
 
-// --- INICIALIZAÇÃO ---
+// === INICIALIZAÇÃO ===
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("Inicializando site...");
     
-    // Tenta renderizar o cardápio
-    try {
-        renderProducts(); 
-    } catch (e) {
-        console.error("Erro ao renderizar produtos:", e);
+    if (localStorage.getItem('logout_success') === 'true') {
+        showToast("Você saiu da conta com sucesso!");
+        localStorage.removeItem('logout_success'); // Limpa para não repetir
     }
     
-    // Agora a função existe e não vai dar erro!
+    // A. Monitorar se a loja está aberta/fechada
+    monitorarStatusLojaNoBanco();
+    
+    // B. Renderizar Produtos
+    try {
+        const grid = document.getElementById('product-grid');
+        if (grid) {
+            const path = window.location.pathname;
+            if (path.includes('cardapio.html')) {
+                renderProducts('product-grid', null); 
+            } else {
+                renderProducts('product-grid', 'destaques'); 
+            }
+        }
+    } catch (e) { console.error("Erro render:", e); }
+    
+    // C. Monitorar Login e CHECAR NO BANCO SE É ADMIN
+    monitorarEstadoAuth(async (user) => {
+        const container = document.getElementById('auth-buttons-container');
+        if (!container) return;
+
+        if (user) {
+            // BUSCA ATIVA NO BANCO SE O USUÁRIO LOGADO TEM PERMISSÃO ADMIN
+            currentUserIsAdmin = await verificarAdminNoBanco(user.email);
+            
+            let adminBadge = currentUserIsAdmin ? `<span class="bg-yellow-400 text-cyan-900 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2 shadow-sm">Modo Loja</span>` : '';
+
+            container.innerHTML = `
+                <div class="flex items-center">
+                    <span class="text-xs font-bold text-white hidden md:block mr-2">${user.displayName || user.email.split('@')[0]} ${adminBadge}</span>
+                    <button onclick="fazerLogout()" class="bg-red-500/80 hover:bg-red-500 text-white text-xs px-3 py-1 rounded-full font-bold transition">Sair</button>
+                </div>
+            `;
+            
+            // Ativa o clique no botão de status se for admin
+            atualizarInteratividadeBotaoLoja();
+
+        } else {
+            currentUserIsAdmin = false;
+            container.innerHTML = `
+                <a href="login.html" class="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1 rounded-full font-bold transition">Entrar</a>
+                <a href="cadastro.html" class="bg-yellow-400 hover:bg-yellow-300 text-cyan-900 text-xs px-3 py-1 rounded-full font-bold transition">Cadastrar</a>
+            `;
+            atualizarInteratividadeBotaoLoja();
+        }
+    });
     updateStoreStatusUI();
     checkLastOrder();
-    
-    // Verifica retorno do Cartão
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('status') === 'approved') {
-        cart = []; updateCartUI();
-        if(!currentOrder.customer.name) {
-             currentOrder.customer = { name: 'Cliente', address: 'Endereço salvo' };
-        }
-        openOrderScreen('CARD-OK', 'paid');
-        saveLastOrder('CARD-OK');
-        window.history.replaceState({}, document.title, "/");
-    }
 });
 
-// --- FUNÇÕES DE LÓGICA ---
+// === FUNÇÕES DE CONTROLE DA LOJA ===
+function monitorarStatusLojaNoBanco() {
+    if(!db) return;
+    const docRef = doc(db, "config", "loja");
+    
+    onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            isStoreOpen = data.aberto;
+            updateStoreStatusUI();
+        } else {
+            setDoc(docRef, { aberto: true });
+        }
+    });
+}
 
-function showToast(message) {
+async function toggleStoreStatus() {
+    if (!currentUserIsAdmin) {
+        showToast("Apenas a loja pode alterar isso!", true); // Ativa o erro vermelho
+        return;
+    }
+
+    const novoStatus = !isStoreOpen;
+    
+    try {
+        await setDoc(doc(db, "config", "loja"), { 
+            aberto: novoStatus,
+            modificadoPor: "Admin",
+            data: serverTimestamp()
+        });
+        showToast(novoStatus ? "Loja Aberta!" : "Loja Fechada!");
+    } catch (error) {
+        console.error("Erro ao mudar status:", error);
+        showToast("Sem permissão no Firebase!", true); // Ativa o erro vermelho
+    }
+}
+
+function updateStoreStatusUI() {
+    const indicator = document.getElementById('status-indicator');
+    const text = document.getElementById('status-text');
+    const btn = document.getElementById('store-status-btn');
+    const banner = document.getElementById('closed-banner');
+
+    if(!indicator) return;
+
+    if (isStoreOpen) {
+        indicator.className = "w-2 h-2 rounded-full bg-green-400 animate-pulse";
+        text.innerText = "ABERTO";
+        btn.className = `px-3 py-1 rounded-full text-xs font-bold border transition flex items-center gap-2 ${currentUserIsAdmin ? 'cursor-pointer hover:scale-105' : 'cursor-default'} border-green-400 bg-green-600 text-green-100`;
+        if(banner) banner.classList.add('hidden');
+    } else {
+        indicator.className = "w-2 h-2 rounded-full bg-red-500";
+        text.innerText = "FECHADO";
+        btn.className = `px-3 py-1 rounded-full text-xs font-bold border transition flex items-center gap-2 ${currentUserIsAdmin ? 'cursor-pointer hover:scale-105' : 'cursor-default'} border-red-400 bg-red-600 text-red-100`;
+        if(banner) banner.classList.remove('hidden');
+    }
+}
+
+function atualizarInteratividadeBotaoLoja() {
+    const storeBtn = document.getElementById('store-status-btn');
+    if(!storeBtn) return;
+
+    if(currentUserIsAdmin) {
+        storeBtn.classList.remove('cursor-default');
+        storeBtn.classList.add('cursor-pointer');
+        storeBtn.title = "Admin: Clique para Abrir/Fechar";
+    } else {
+        storeBtn.classList.remove('cursor-pointer');
+        storeBtn.classList.add('cursor-default');
+        storeBtn.title = "Status da Loja";
+    }
+    updateStoreStatusUI();
+}
+
+// === FUNÇÕES DE CARRINHO E CHECKOUT (PADRÃO) ===
+
+function showToast(message, isError = false) {
     const toast = document.getElementById('toast-notification');
     const msgElement = document.getElementById('toast-message');
+    const titleElement = toast.querySelector('p.font-bold');
+    const iconElement = toast.querySelector('i');
+
     if (toast && msgElement) {
         msgElement.innerText = message;
+        
+        if (isError) {
+            toast.classList.add('error');
+            titleElement.innerText = "Erro!";
+            iconElement.className = "fas fa-times-circle text-xl";
+        } else {
+            toast.classList.remove('error');
+            titleElement.innerText = "Sucesso!";
+            iconElement.className = "fas fa-check-circle text-xl";
+        }
+
         toast.classList.remove('translate-x-full', 'opacity-0', 'pointer-events-none');
         setTimeout(() => {
             toast.classList.add('translate-x-full', 'opacity-0', 'pointer-events-none');
@@ -105,9 +234,13 @@ function addToCart(id, btnElement) {
         btnElement.classList.add('animate-click');
         setTimeout(() => btnElement.classList.remove('animate-click'), 200);
     }
-    const cartBtn = document.querySelector('header .fa-shopping-cart').parentElement;
-    cartBtn.classList.add('animate-bounce');
-    setTimeout(() => cartBtn.classList.remove('animate-bounce'), 1000);
+    const cartIcons = document.querySelectorAll('.fa-shopping-cart');
+    cartIcons.forEach(icon => {
+        if(icon.parentElement.tagName === 'BUTTON') {
+            icon.parentElement.classList.add('animate-bounce');
+            setTimeout(() => icon.parentElement.classList.remove('animate-bounce'), 1000);
+        }
+    });
 }
 
 function changeQuantity(id, delta) {
@@ -120,32 +253,46 @@ function changeQuantity(id, delta) {
 }
 
 function updateCartUI() {
-    document.getElementById('cart-count').innerText = cart.reduce((sum, i) => sum + i.quantity, 0);
-    const container = document.getElementById('cart-items');
+    const counters = document.querySelectorAll('#cart-count');
+    const totalCount = cart.reduce((sum, i) => sum + i.quantity, 0);
+    counters.forEach(c => c.innerText = totalCount);
+
+    const containers = document.querySelectorAll('#cart-items');
     const total = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
     
-    document.getElementById('cart-total').innerText = 'R$ ' + total.toFixed(2).replace('.', ',');
+    const totalDisplays = document.querySelectorAll('#cart-total');
+    totalDisplays.forEach(t => t.innerText = 'R$ ' + total.toFixed(2).replace('.', ','));
 
-    if (cart.length === 0) container.innerHTML = `<p class="text-center text-gray-400 py-10">Carrinho vazio</p>`;
-    else {
-        container.innerHTML = cart.map(item => `
-            <div class="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm border mb-2">
-                <div><h5 class="font-bold text-cyan-900 text-sm">${item.name}</h5><p class="text-xs text-gray-500">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</p></div>
-                <div class="flex items-center gap-2 bg-gray-50 rounded px-2">
-                    <button onclick="changeQuantity(${item.id}, -1)" class="text-red-500 font-bold w-6">-</button>
-                    <span class="text-sm font-bold w-4 text-center">${item.quantity}</span>
-                    <button onclick="changeQuantity(${item.id}, 1)" class="text-green-500 font-bold w-6">+</button>
-                </div>
-            </div>`).join('');
-    }
+    containers.forEach(container => {
+        if (cart.length === 0) container.innerHTML = `<p class="text-center text-gray-400 py-10">Carrinho vazio</p>`;
+        else {
+            container.innerHTML = cart.map(item => `
+                <div class="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm border mb-2">
+                    <div><h5 class="font-bold text-cyan-900 text-sm">${item.name}</h5><p class="text-xs text-gray-500">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</p></div>
+                    <div class="flex items-center gap-2 bg-gray-50 rounded px-2">
+                        <button onclick="changeQuantity(${item.id}, -1)" class="text-red-500 font-bold w-6">-</button>
+                        <span class="text-sm font-bold w-4 text-center">${item.quantity}</span>
+                        <button onclick="changeQuantity(${item.id}, 1)" class="text-green-500 font-bold w-6">+</button>
+                    </div>
+                </div>`).join('');
+        }
+    });
 }
 
-// --- CHECKOUT ---
 function startCheckout() {
     if (cart.length === 0) return showToast("Carrinho vazio!");
     if (!isStoreOpen) return showToast("Loja Fechada!");
-    toggleCart(); 
-    document.getElementById('checkout-modal').classList.remove('hidden');
+    
+    const cartModal = document.getElementById('cart-modal');
+    if(cartModal && !cartModal.classList.contains('hidden')) toggleCart();
+
+    const checkoutModal = document.getElementById('checkout-modal');
+    if(!checkoutModal) {
+        window.location.href = 'index.html?action=checkout';
+        return;
+    }
+
+    checkoutModal.classList.remove('hidden');
     showStep('step-service');
 }
 function closeCheckout() { document.getElementById('checkout-modal').classList.add('hidden'); }
@@ -220,9 +367,9 @@ async function processPayment() {
     finally { btn.innerHTML = originalText; btn.disabled = false; }
 }
 
-// --- TELA DE STATUS E MAPA ---
 async function openOrderScreen(orderId, statusType, pixCode = null) {
     const screen = document.getElementById('order-screen');
+    if(!screen) return;
     screen.classList.remove('hidden');
     document.getElementById('status-order-id').innerText = orderId.slice(0, 5).toUpperCase();
     const now = new Date();
@@ -293,35 +440,22 @@ function copyPixScreen() {
     document.execCommand('copy'); showToast("Código PIX copiado!");
 }
 function toggleCart() {
-    const m = document.getElementById('cart-modal'); const p = document.getElementById('cart-panel'); const btn = document.getElementById('last-order-btn');
-    if (m.classList.contains('hidden')) { m.classList.remove('hidden'); setTimeout(() => p.classList.remove('translate-x-full'), 10); if(btn) btn.classList.add('hidden'); }
-    else { p.classList.add('translate-x-full'); setTimeout(() => m.classList.add('hidden'), 300); checkLastOrder(); }
-}
-function toggleInfoModal() { document.getElementById('info-modal').classList.toggle('hidden'); }
+    const m = document.getElementById('cart-modal'); 
+    const p = document.getElementById('cart-panel'); 
+    const btn = document.getElementById('last-order-btn');
+    if(!m) return;
 
-// --- CONTROLE DA LOJA (ESTAVA FALTANDO ESSA FUNÇÃO!) ---
-function toggleStoreStatus() { isStoreOpen = !isStoreOpen; updateStoreStatusUI(); }
-
-function updateStoreStatusUI() {
-    const indicator = document.getElementById('status-indicator');
-    const text = document.getElementById('status-text');
-    const btn = document.getElementById('store-status-btn');
-    const banner = document.getElementById('closed-banner');
-
-    if (isStoreOpen) {
-        indicator.className = "w-2 h-2 rounded-full bg-green-400 animate-pulse";
-        text.innerText = "ABERTO";
-        btn.className = "px-3 py-1 rounded-full text-xs font-bold border border-green-400 text-green-100 bg-green-600 transition flex items-center gap-2";
-        if(banner) banner.classList.add('hidden');
-    } else {
-        indicator.className = "w-2 h-2 rounded-full bg-red-500";
-        text.innerText = "FECHADO";
-        btn.className = "px-3 py-1 rounded-full text-xs font-bold border border-red-400 text-red-100 bg-red-600 transition flex items-center gap-2";
-        if(banner) banner.classList.remove('hidden');
+    if (m.classList.contains('hidden')) { 
+        m.classList.remove('hidden'); 
+        setTimeout(() => p.classList.remove('translate-x-full'), 10); 
+        if(btn) btn.classList.add('hidden'); 
+    } else { 
+        p.classList.add('translate-x-full'); 
+        setTimeout(() => m.classList.add('hidden'), 300); 
+        checkLastOrder(); 
     }
 }
-
-// --- BOTÃO ULTIMO PEDIDO ---
+function toggleInfoModal() { document.getElementById('info-modal').classList.toggle('hidden'); }
 function saveLastOrder(id) { localStorage.setItem('tropyberry_last_order', JSON.stringify({ id, timestamp: Date.now() })); checkLastOrder(); }
 function checkLastOrder() {
     const saved = localStorage.getItem('tropyberry_last_order'); const btn = document.getElementById('last-order-btn'); const cart = document.getElementById('cart-modal');
