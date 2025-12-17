@@ -15,22 +15,47 @@ let currentCategoryFilter = 'all';
 
 const AVAILABLE_TAGS = [
     "Vegano", "Vegetariano", "Orgânico", "Sem açúcar", "Sem lactose", "Sem glúten",
-    "Bebida gelada", "Bebida alcoólica", "Natural", "Mais Vendido", "Promoção", "Ofertão"
+    "Bebida gelada", "Bebida alcoólica", "Natural", "Mais Vendido", "Promoção", "Ofertão",
+    "Para Compartilhar"
 ];
 
 // === INICIALIZAÇÃO ===
 document.addEventListener('DOMContentLoaded', () => {
     monitorarEstadoAuth(async (user) => {
+        // 1. Verificações de Segurança
         if (!user) { window.location.href = "login.html"; return; }
+        
         const isAdmin = await verificarAdminNoBanco(user.email);
         if (!isAdmin) { alert("Acesso restrito."); window.location.href = "index.html"; return; }
 
+        // 2. Configuração da UI do Admin
         document.getElementById('admin-user-info').innerText = `Admin: ${user.email}`;
         
+        // 3. Inicia o monitoramento de dados do Firebase
         await carregarCategorias();
         iniciarMonitoramentoProdutos();
-        iniciarMonitoramentoComplementos(); // Monitora a coleção 'complementos'
+        iniciarMonitoramentoComplementos(); 
         renderTagSelector();
+
+        // 4. (NOVO) Verifica se veio do atalho "Editar" na página do produto
+        const params = new URLSearchParams(window.location.search);
+        const editId = params.get('edit_product');
+
+        if (editId) {
+            console.log("Atalho de edição detectado para o ID:", editId);
+            
+            // Precisamos esperar a lista 'allProducts' carregar do Firebase antes de abrir o modal
+            const checkLoaded = setInterval(() => {
+                // allProducts é a variável global que definimos no início do arquivo
+                if (allProducts.length > 0) {
+                    clearInterval(checkLoaded); // Para o loop
+                    abrirModalEdicao(editId);   // Abre o modal com os dados do produto
+                    
+                    // Limpa a URL para remover o ?edit_product=... e evitar abrir de novo ao recarregar
+                    window.history.replaceState({}, document.title, "admin.html");
+                }
+            }, 500); // Verifica a cada meio segundo (500ms)
+        }
     });
 });
 
@@ -67,14 +92,21 @@ function renderAvailableGroupsList() {
     allComplementGroups.forEach(group => {
         const isAttached = currentProductAttachedGroups.includes(group.id);
         const html = `
-            <div class="flex items-center justify-between bg-white p-3 rounded border border-gray-100 shadow-sm">
-                <div>
+            <div class="flex items-center justify-between bg-white p-3 rounded border border-gray-100 shadow-sm mb-2">
+                <div class="flex-1">
                     <p class="font-bold text-sm text-cyan-900">${group.title}</p>
                     <p class="text-[10px] text-gray-500">${group.options ? group.options.length : 0} opções • ${group.required ? 'Obrigatório' : 'Opcional'}</p>
                 </div>
-                <button onclick="toggleGroupAttachment('${group.id}')" class="${isAttached ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} text-xs font-bold px-3 py-1 rounded transition">
-                    ${isAttached ? 'Remover' : 'Adicionar'}
-                </button>
+                
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleGroupAttachment('${group.id}')" class="${isAttached ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} text-xs font-bold px-3 py-1.5 rounded transition">
+                        ${isAttached ? 'Remover' : 'Adicionar'}
+                    </button>
+                    
+                    <button onclick="excluirGrupoComplemento('${group.id}')" class="bg-gray-100 hover:bg-red-500 hover:text-white text-gray-400 text-xs px-2 py-1.5 rounded transition" title="Excluir grupo do sistema">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             </div>`;
         container.innerHTML += html;
     });
@@ -165,6 +197,7 @@ window.salvarNovoGrupo = async function() {
     const title = document.getElementById('new-group-title').value;
     const required = document.getElementById('new-group-required').value === 'true';
     const max = parseInt(document.getElementById('new-group-max').value) || 1;
+    const category = document.getElementById('new-group-category').value; // PEGA A CATEGORIA SELECIONADA
     
     // Coleta Opções
     const options = [];
@@ -178,16 +211,19 @@ window.salvarNovoGrupo = async function() {
     if(!title || options.length === 0) return alert("Preencha o título e pelo menos uma opção.");
 
     try {
+        // SALVA A CATEGORIA NO BANCO DE DADOS
         const docRef = await addDoc(collection(db, "complementos"), {
-            title, required, max, min: required ? 1 : 0, options
+            title, 
+            required, 
+            max, 
+            min: required ? 1 : 0, 
+            options,
+            internalCategory: category // Campo novo no Firebase
         });
         
         showToast("Sucesso", "Grupo de complementos criado!");
         
-        // Auto-vincula ao produto atual
         toggleGroupAttachment(docRef.id);
-        
-        // Fecha modal lateral apenas (mantém o principal)
         document.getElementById('group-manager-modal').classList.add('hidden');
         
     } catch(e) {
@@ -285,10 +321,13 @@ window.abrirModalEdicao = (id) => {
 window.salvarProduto = async function() {
     const id = document.getElementById('edit-id').value;
     
+    // Pegamos o valor cru do input para validar se está vazio
+    const priceInput = document.getElementById('edit-price').value;
+
     const produto = {
         name: document.getElementById('edit-name').value,
         category: document.getElementById('edit-category').value,
-        price: parseFloat(document.getElementById('edit-price').value),
+        price: parseFloat(priceInput), // Converte para número (0 vira 0.0)
         originalPrice: document.getElementById('edit-original-price').value ? parseFloat(document.getElementById('edit-original-price').value) : null,
         description: document.getElementById('edit-desc').value,
         image: document.getElementById('edit-image-url').value,
@@ -296,10 +335,15 @@ window.salvarProduto = async function() {
         serves: document.getElementById('edit-serves').value,
         weight: document.getElementById('edit-weight').value,
         unit: document.getElementById('edit-unit').value,
-        complementIds: currentProductAttachedGroups // SALVA OS GRUPOS VINCULADOS
+        complementIds: currentProductAttachedGroups 
     };
 
-    if(!produto.name || !produto.price) return alert("Nome e Preço são obrigatórios.");
+    // CORREÇÃO:
+    // 1. Trocamos o alert por showToast com isError = true
+    // 2. Mudamos a validação do preço: agora aceita 0, só bloqueia se for NaN (vazio ou texto inválido)
+    if (!produto.name || priceInput === "" || isNaN(produto.price)) {
+        return showToast("Erro", "Nome e Preço são obrigatórios.", true);
+    }
 
     toggleLoading(true, "Salvando...");
     try {
@@ -351,14 +395,38 @@ async function criarCategoriasPadrao() {
     await batch.commit();
     await carregarCategorias();
 }
-window.adicionarNovaCategoria = async function() {
-    const nome = prompt("Digite o nome da nova categoria:");
-    if (!nome) return;
+window.adicionarNovaCategoria = function() {
+    const input = document.getElementById('new-category-name');
+    input.value = ''; // Limpa o campo
+    document.getElementById('category-modal').classList.remove('hidden');
+    setTimeout(() => input.focus(), 100); // Foca no campo para digitar direto
+}
+
+// Salva e mostra o Toast
+window.confirmarNovaCategoria = async function() {
+    const nome = document.getElementById('new-category-name').value.trim();
+    
+    if (!nome) {
+        return showToast("Atenção", "Digite um nome para a categoria.", true);
+    }
+
+    toggleLoading(true, "Criando...");
+    
     try {
         const slug = nome.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        
         await addDoc(collection(db, "categorias"), { nome, slug });
-        await carregarCategorias();
-    } catch (e) { console.error(e); }
+        await carregarCategorias(); // Recarrega a lista lateral
+        
+        showToast("Sucesso", "Categoria criada!");
+        document.getElementById('category-modal').classList.add('hidden');
+        
+    } catch (e) {
+        console.error(e);
+        showToast("Erro", "Falha ao criar categoria.", true);
+    } finally {
+        toggleLoading(false);
+    }
 }
 function atualizarUIdeCategorias() {
     const list = document.getElementById('category-list');
@@ -460,4 +528,18 @@ function showToast(title, msg, isError = false) {
     t.className = `fixed top-4 right-4 z-[70] shadow-xl rounded px-4 py-3 animate-fade-in-up border-l-4 ${isError ? 'bg-red-50 border-red-500 text-red-900' : 'bg-white border-green-500'}`;
     t.classList.remove('hidden');
     setTimeout(() => t.classList.add('hidden'), 3000);
+}
+window.excluirGrupoComplemento = async (id) => {
+    if(!confirm("⚠️ ATENÇÃO: Tem certeza que deseja excluir este grupo? \nIsso removerá esta opção de TODOS os produtos vinculados.")) return;
+    
+    toggleLoading(true, "Excluindo...");
+    try {
+        await deleteDoc(doc(db, "complementos", id));
+        showToast("Sucesso", "Grupo de complementos excluído.");
+    } catch (e) {
+        console.error(e);
+        showToast("Erro", "Não foi possível excluir.", true);
+    } finally {
+        toggleLoading(false);
+    }
 }

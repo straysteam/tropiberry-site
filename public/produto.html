@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalhes do Pedido - TROPYBERRY</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600&family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="flex flex-col min-h-screen bg-gray-50">
+
+    <div id="global-header-placeholder"></div>
+
+    <div class="container mx-auto px-4 mt-6">
+        <a href="cardapio.html" class="inline-flex items-center gap-2 text-cyan-700 font-bold hover:text-cyan-500 transition hover:-translate-x-1 duration-200">
+            <div class="bg-white p-2 rounded-full shadow-sm text-cyan-700"><i class="fas fa-arrow-left"></i></div>
+            <span>Voltar para o Cardápio</span>
+        </a>
+    </div>
+
+    <main class="container mx-auto px-4 py-8 flex-grow mb-20">
+        
+        <div id="detail-loading" class="flex flex-col items-center justify-center py-20">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-900 mb-4"></div>
+            <p class="text-gray-500">Carregando delícias...</p>
+        </div>
+
+        <div id="product-detail-container" class="hidden grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in-up">
+            
+            <div class="relative">
+                <div class="sticky top-24"> 
+                    <div class="rounded-2xl overflow-hidden shadow-xl border border-gray-100 relative group">
+                        <img id="detail-img" src="" alt="Produto" class="w-full h-96 object-cover">
+                        <div class="absolute inset-0 bg-black/10"></div>
+                    </div>
+
+                    <div id="detail-tags" class="flex flex-wrap gap-2 mt-4"></div>
+
+                    <button id="admin-edit-shortcut" class="hidden absolute top-4 right-4 bg-cyan-900 text-yellow-400 p-3 rounded-full shadow-lg hover:scale-110 transition z-20 border-2 border-yellow-400" title="Editar este produto">
+                        <i class="fas fa-edit text-xl"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col">
+                <h1 id="detail-name" class="text-3xl md:text-4xl font-bold text-cyan-900 mb-2 leading-tight"></h1>
+                
+                <div id="detail-extra-info" class="flex flex-wrap gap-2 mb-4"></div>
+
+                <p id="detail-desc" class="text-gray-600 mb-4 text-lg"></p>
+                
+                <div class="flex items-end gap-3 mb-6 border-b pb-4">
+                    <span id="detail-price" class="text-3xl font-extrabold text-green-600">R$ 0,00</span>
+                    <span id="detail-original-price" class="text-lg text-gray-400 line-through mb-1 hidden"></span>
+                </div>
+
+                <div id="complements-section" class="space-y-6 mb-8"></div>
+
+                <div class="mb-8">
+                    <label class="font-bold text-gray-700 text-sm mb-2 block"><i class="fas fa-comment-alt mr-1"></i> Alguma observação?</label>
+                    <textarea id="detail-obs" rows="3" class="w-full border-gray-300 border rounded-xl p-3 focus:ring-2 focus:ring-cyan-500 outline-none resize-none bg-white shadow-sm" placeholder="Ex: Tirar a cebola, caprichar no leite condensado..."></textarea>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <div id="action-bar" class="fixed bottom-0 left-0 w-full bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] p-4 z-30 hidden md:flex justify-between items-center border-t border-gray-100 transform translate-y-full transition-transform duration-300">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            <div class="flex items-center gap-4 bg-gray-100 rounded-full px-4 py-2">
+                <button onclick="mudarQtdDetalhe(-1)" class="text-red-500 font-bold text-xl w-8 hover:bg-white rounded-full transition">-</button>
+                <span id="detail-qtd" class="font-bold text-xl w-8 text-center text-gray-800">1</span>
+                <button onclick="mudarQtdDetalhe(1)" class="text-green-500 font-bold text-xl w-8 hover:bg-white rounded-full transition">+</button>
+            </div>
+
+            <button id="btn-add-cart-detail" onclick="adicionarAoCarrinhoDetalhado()" class="flex-1 md:flex-none bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition flex items-center justify-between md:justify-center gap-4 w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed">
+                <span>Adicionar ao Pedido</span>
+                <span id="detail-total-btn" class="bg-black/20 px-3 py-1 rounded text-sm">R$ 0,00</span>
+            </button>
+        </div>
+    </div>
+    
+    <div class="md:hidden fixed bottom-0 left-0 w-full bg-white p-4 shadow-[0_-4px_10px_rgba(0,0,0,0.1)] z-30 border-t flex flex-col gap-3">
+        <div class="flex justify-between items-center">
+             <div class="flex items-center gap-3 bg-gray-100 rounded-lg px-3 py-1">
+                <button onclick="mudarQtdDetalhe(-1)" class="text-red-500 font-bold text-lg">-</button>
+                <span id="detail-qtd-mobile" class="font-bold text-lg w-6 text-center">1</span>
+                <button onclick="mudarQtdDetalhe(1)" class="text-green-500 font-bold text-lg">+</button>
+            </div>
+            <div class="text-right">
+                <span class="text-xs text-gray-500 block">Total do item</span>
+                <span id="detail-total-mobile" class="font-bold text-xl text-cyan-900">R$ 0,00</span>
+            </div>
+        </div>
+        <button id="btn-add-cart-mobile" onclick="adicionarAoCarrinhoDetalhado()" class="w-full bg-cyan-600 text-white font-bold py-3 rounded-xl shadow-lg flex justify-center items-center gap-2 disabled:opacity-50">
+            Adicionar <i class="fas fa-shopping-cart"></i>
+        </button>
+    </div>
+
+    <div id="toast-notification" class="fixed top-24 right-4 z-50 bg-white border-l-4 border-green-500 text-gray-700 px-6 py-4 rounded shadow-2xl flex items-center gap-3 translate-x-full opacity-0 pointer-events-none transition-all duration-300">
+        <div class="text-green-500 bg-green-100 rounded-full p-1"><i class="fas fa-check-circle text-xl"></i></div>
+        <div><p class="font-bold text-sm">Sucesso!</p><p class="text-xs text-gray-500" id="toast-message">Adicionado ao carrinho.</p></div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>

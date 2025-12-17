@@ -1,2 +1,7 @@
 node_modules/
 *.local
+functions/node_modules/
+functions/.env
+functions/index.js
+# Se quiser ignorar a pasta inteira (cuidado se houver código necessário lá):
+# functions/

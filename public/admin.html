@@ -21,18 +21,24 @@
 <body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
 
     <header class="bg-cyan-900 text-white shadow-md z-20 flex justify-between items-center px-6 py-3">
+    <div class="flex items-center gap-4">
+        <a href="cardapio.html" class="bg-cyan-800 hover:bg-cyan-700 text-white p-2 rounded-full transition shadow border border-cyan-700" title="Voltar ao Cardápio">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div class="h-6 w-px bg-cyan-700"></div>
         <div class="flex items-center gap-3">
             <i class="fas fa-store text-yellow-400 text-2xl"></i>
-            <h1 class="font-bold text-lg tracking-wide">Portal da Loja</h1>
+            <h1 class="font-bold text-lg tracking-wide hidden md:block">Portal da Loja</h1>
         </div>
-        <div class="flex items-center gap-4">
-            <button id="btn-importar" onclick="importarProdutosIniciais()" class="hidden bg-yellow-500 hover:bg-yellow-600 text-cyan-900 text-xs font-bold px-3 py-1.5 rounded transition">
-                <i class="fas fa-cloud-upload-alt mr-1"></i> Importar Backup
-            </button>
-            <a href="index.html" class="text-gray-300 hover:text-white text-sm"><i class="fas fa-external-link-alt mr-1"></i> Ver Loja</a>
-            <div id="admin-user-info" class="text-xs font-bold bg-white/10 px-3 py-1 rounded-full">...</div>
-        </div>
-    </header>
+    </div>
+    <div class="flex items-center gap-4">
+        <button id="btn-importar" onclick="importarProdutosIniciais()" class="hidden bg-yellow-500 hover:bg-yellow-600 text-cyan-900 text-xs font-bold px-3 py-1.5 rounded transition">
+            <i class="fas fa-cloud-upload-alt mr-1"></i> Importar Backup
+        </button>
+        <a href="index.html" class="text-gray-300 hover:text-white text-sm"><i class="fas fa-external-link-alt mr-1"></i> Ver Loja</a>
+        <div id="admin-user-info" class="text-xs font-bold bg-white/10 px-3 py-1 rounded-full">...</div>
+    </div>
+</header>
 
     <div class="flex flex-1 overflow-hidden">
         <aside class="w-64 bg-white border-r flex flex-col shadow-sm z-10 hidden md:flex">
@@ -195,11 +201,22 @@
                         <i class="fas fa-plus-circle"></i> Criar Novo Grupo
                     </h4>
                     
-                    <form id="form-new-group" class="space-y-4">
-                        <div>
-                            <label class="text-xs font-bold text-gray-600">Título do Grupo</label>
-                            <input type="text" id="new-group-title" class="w-full border rounded p-2 text-sm" placeholder="Ex: Escolha o Tamanho, Vai colher?">
-                        </div>
+                   <form id="form-new-group" class="space-y-4">
+    <div>
+        <label class="text-xs font-bold text-gray-600">Título do Grupo</label>
+        <input type="text" id="new-group-title" class="w-full border rounded p-2 text-sm" placeholder="Ex: Escolha o Tamanho, Vai colher?">
+    </div>
+
+    <div>
+        <label class="text-xs font-bold text-cyan-700">Categoria Interna (Controle de Preço)</label>
+        <select id="new-group-category" class="w-full border rounded p-2 text-sm bg-cyan-50">
+            <option value="complemento">Complemento / Adicional (Padrão)</option>
+            <option value="embalagem">Embalagem / Copo </option>
+            <option value="organico">Orgânico / Fruta</option>
+            <option value="plastico">Utensílio / Plástico</option>
+        </select>
+        <p class="text-[10px] text-gray-400 mt-1">*Se o produto for R$ 0,00, o site usará o preço da <b>Embalagem</b> para mostrar o valor inicial.</p>
+    </div>
                         
                         <div class="grid grid-cols-2 gap-3">
                             <div>
@@ -237,7 +254,19 @@
         <p class="font-bold text-sm text-gray-800" id="toast-title">Sucesso</p>
         <p class="text-xs text-gray-500" id="toast-msg">Operação realizada.</p>
     </div>
-
     <script type="module" src="admin.js"></script>
+    <div id="category-modal" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-fade-in-up">
+        <h3 class="text-lg font-bold text-cyan-900 mb-4">Nova Categoria</h3>
+        
+        <label class="block text-xs font-bold text-gray-600 mb-1">Nome da Categoria</label>
+        <input type="text" id="new-category-name" class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-cyan-500 outline-none mb-4" placeholder="Ex: Açaí, Bebidas, Sobremesas..." onkeypress="if(event.key === 'Enter') confirmarNovaCategoria()">
+        
+        <div class="flex justify-end gap-3">
+            <button onclick="document.getElementById('category-modal').classList.add('hidden')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-bold transition">Cancelar</button>
+            <button onclick="confirmarNovaCategoria()" class="px-6 py-2 bg-cyan-900 text-white rounded-lg text-sm font-bold hover:bg-cyan-800 shadow transition">Criar</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
