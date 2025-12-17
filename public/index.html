@@ -15,9 +15,9 @@
 
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="flex flex-col min-h-screen relative">
+<body class="flex flex-col min-h-screen relative bg-blue-50">
 
-    <header class="bg-cyan-600 text-white relative shadow-lg z-30">
+    <header class="bg-cyan-600 text-white relative shadow-lg z-30 pb-16">
         <div class="container mx-auto px-4 py-4 flex justify-between items-center relative z-10">
             <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.reload()">
                 <div class="bg-yellow-400 p-2 rounded-full text-cyan-800">
@@ -27,19 +27,19 @@
             </div>
 
             <div class="flex items-center gap-3">
-                <button id="store-status-btn" onclick="toggleStoreStatus()" class="px-3 py-1 rounded-full text-xs font-bold border border-white transition flex items-center gap-2">
+                <button id="store-status-btn" onclick="toggleStoreStatus()" class="px-3 py-1 rounded-full text-xs font-bold border border-white transition flex items-center gap-2 cursor-pointer hover:scale-105">
                     <div id="status-indicator" class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
                     <span id="status-text">ABERTO</span>
                 </button>
 
-                <button onclick="toggleInfoModal()" class="text-white hover:text-yellow-300 text-xl transition">
+                <button onclick="toggleInfoModal()" class="text-white hover:text-yellow-300 text-xl transition p-2">
                     <i class="fas fa-info-circle"></i>
                 </button>
 
                 <button onclick="toggleCart()" class="relative bg-yellow-400 text-cyan-900 px-4 py-2 rounded-full font-bold hover:bg-yellow-300 transition shadow-md flex items-center gap-2">
                     <i class="fas fa-shopping-cart"></i>
                     <span class="hidden md:inline">Carrinho</span>
-                    <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">0</span>
+                    <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-white">0</span>
                 </button>
             </div>
         </div>
@@ -51,53 +51,107 @@
         </div>
     </header>
 
-    <section class="container mx-auto px-4 py-12 flex-grow">
-        <div id="closed-banner" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded shadow-md" role="alert">
-            <p class="font-bold">A Loja está fechada no momento!</p>
-            <p>Você pode navegar pelo cardápio, mas não aceitamos pedidos agora.</p>
+    <section class="container mx-auto px-4 py-8 lg:py-16 flex flex-col-reverse md:flex-row items-center justify-between gap-10 mt-[-20px] relative z-20">
+        <div class="md:w-1/2 space-y-6 text-center md:text-left animate-fade-in">
+            <h2 class="text-4xl md:text-6xl font-bold text-cyan-900 leading-tight">
+                O Verdadeiro <br> <span class="text-yellow-500 drop-shadow-sm">Sabor do Açaí</span>
+            </h2>
+            <p class="text-gray-600 text-lg md:text-xl max-w-lg mx-auto md:mx-0">
+                Refresque o seu dia com a melhor combinação de energia e sabor. Monte do seu jeito ou escolha nossos favoritos!
+            </p>
+            
+            <div class="flex flex-col sm:flex-row gap-4 justify-center md:justify-start pt-4">
+                <button onclick="document.getElementById('menu-section').scrollIntoView({behavior: 'smooth'})" class="bg-cyan-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-cyan-700 hover:-translate-y-1 transition text-lg">
+                    Ver Cardápio
+                </button>
+                
+                <a href="https://www.ifood.com.br" target="_blank" class="bg-red-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-red-700 hover:-translate-y-1 transition flex items-center justify-center gap-2 text-lg">
+                    <i class="fas fa-utensils"></i> Pedir no iFood
+                </a>
+            </div>
         </div>
 
-        <div class="text-center mb-8">
-            <h3 class="text-3xl font-bold text-cyan-800">Cardápio</h3>
-            <div class="w-24 h-1 bg-yellow-400 mx-auto mt-2 rounded"></div>
+        <div class="md:w-1/2 flex justify-center relative animate-fade-in">
+            <div class="relative w-72 h-72 md:w-[450px] md:h-[450px]">
+                <div class="absolute inset-0 bg-yellow-400 rounded-full opacity-20 animate-pulse transform scale-110"></div>
+                <div class="absolute inset-0 bg-cyan-200 rounded-full opacity-30 transform scale-105"></div>
+                <img src="https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?ixlib=rb-4.0.3&w=600&q=80" alt="Açaí Bowl Delicioso" class="absolute inset-0 w-full h-full object-cover rounded-full border-8 border-white shadow-2xl hover:scale-105 transition duration-500">
+                
+                <div class="absolute -bottom-4 -right-4 bg-white p-4 rounded-2xl shadow-xl flex items-center gap-3 animate-bounce">
+                    <div class="bg-green-100 p-2 rounded-full text-green-600">
+                        <i class="fas fa-leaf text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 font-bold">100% Natural</p>
+                        <p class="text-sm font-bold text-cyan-900">Fruta Fresca</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="menu-section" class="container mx-auto px-4 py-12 flex-grow">
+        <div id="closed-banner" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-8 rounded-lg shadow-md flex items-center gap-3" role="alert">
+            <i class="fas fa-store-slash text-2xl"></i>
+            <div>
+                <p class="font-bold">A Loja está fechada no momento!</p>
+                <p class="text-sm">Você pode navegar pelo cardápio, mas os pedidos online estão pausados.</p>
+            </div>
+        </div>
+
+        <div class="text-center mb-12">
+            <span class="text-cyan-600 font-bold tracking-wider uppercase text-sm">Nossas Delícias</span>
+            <h3 class="text-4xl font-bold text-cyan-900 mt-2">Cardápio Completo</h3>
+            <div class="w-24 h-1.5 bg-yellow-400 mx-auto mt-4 rounded-full"></div>
         </div>
 
         <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
             </div>
     </section>
 
-    <footer class="bg-cyan-800 text-white py-8 mt-auto z-20 relative">
-        <div class="container mx-auto px-4 text-center">
-            <h4 class="text-2xl font-bold brand-font text-yellow-300 mb-4">TROPYBERRY</h4>
+    <footer class="bg-cyan-800 text-white py-12 mt-auto z-20 relative overflow-hidden">
+        <div class="container mx-auto px-4 text-center relative z-10">
+            <h4 class="text-3xl font-bold brand-font text-yellow-300 mb-6">TROPYBERRY</h4>
+            <div class="flex justify-center gap-6 mb-8">
+                <a href="#" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-yellow-400 hover:text-cyan-900 transition"><i class="fab fa-instagram"></i></a>
+                <a href="#" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-green-500 hover:text-white transition"><i class="fab fa-whatsapp"></i></a>
+            </div>
             <p class="text-cyan-200 text-sm">© 2025 Tropyberry. Todos os direitos reservados.</p>
         </div>
     </footer>
 
-    <div id="info-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in">
-            <div class="bg-cyan-100 p-4 flex justify-between items-center border-b border-cyan-200">
-                <h3 class="text-xl font-bold text-cyan-900">Informações</h3>
-                <button onclick="toggleInfoModal()" class="text-gray-500 hover:text-red-500 text-2xl">&times;</button>
+    <div id="info-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-pop-up">
+            <div class="bg-cyan-600 p-4 flex justify-between items-center text-white">
+                <h3 class="text-xl font-bold"><i class="fas fa-info-circle mr-2"></i>Informações</h3>
+                <button onclick="toggleInfoModal()" class="hover:text-yellow-300 text-2xl transition">&times;</button>
             </div>
-            <div class="p-6 space-y-4">
-                <div class="flex items-center gap-3 text-cyan-800">
-                    <i class="fas fa-map-marker-alt text-2xl w-8 text-center"></i>
+            <div class="p-6 space-y-6">
+                <div class="flex items-start gap-4">
+                    <div class="bg-cyan-100 p-3 rounded-full text-cyan-600">
+                        <i class="fas fa-map-marker-alt text-xl"></i>
+                    </div>
                     <div>
-                        <p class="font-bold">Endereço</p>
-                        <p class="text-sm text-gray-600">R. Ricardo Soares de Souza Neto, 456 - Gramame, João Pessoa - PB</p>
+                        <p class="font-bold text-gray-800">Endereço</p>
+                        <p class="text-sm text-gray-600 mt-1">R. Ricardo Soares de Souza Neto, 456<br>Gramame, João Pessoa - PB</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-3 text-cyan-800">
-                    <i class="fas fa-clock text-2xl w-8 text-center"></i>
+                
+                <div class="flex items-start gap-4">
+                    <div class="bg-yellow-100 p-3 rounded-full text-yellow-600">
+                        <i class="fas fa-clock text-xl"></i>
+                    </div>
                     <div>
-                        <p class="font-bold">Horário de Funcionamento</p>
-                        <p class="text-sm text-gray-600">Todos os dias: 12:00 - 23:00</p>
+                        <p class="font-bold text-gray-800">Horário de Funcionamento</p>
+                        <p class="text-sm text-gray-600 mt-1">Segunda a Domingo<br><span class="font-bold text-cyan-700">12:00 às 23:00</span></p>
                     </div>
                 </div>
-                <hr class="border-gray-200">
-                <div class="flex justify-between items-center">
-                    <span class="text-sm font-bold text-gray-500">Status Atual:</span>
-                    <span id="modal-status-badge" class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold border border-green-200">Aberto</span>
+
+                <hr class="border-gray-100">
+
+                <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
+                    <span class="text-sm font-bold text-gray-500">Status da Loja:</span>
+                    <span id="modal-status-badge" class="bg-green-100 text-green-800 px-4 py-1.5 rounded-full text-sm font-bold border border-green-200 shadow-sm">Aberto</span>
                 </div>
             </div>
         </div>
@@ -122,122 +176,95 @@
         </div>
     </div>
 
-    <div id="checkout-modal" class="fixed inset-0 bg-gray-900 bg-opacity-90 hidden z-50 flex items-center justify-center p-0 md:p-4">
+    <div id="checkout-modal" class="fixed inset-0 bg-gray-900 bg-opacity-90 hidden z-50 flex items-center justify-center p-0 md:p-4 backdrop-blur-sm">
         <div class="bg-white w-full h-full md:h-auto md:max-w-lg md:rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
             
-            <div class="bg-white p-4 border-b flex justify-between items-center">
-                <button onclick="closeCheckout()" class="text-gray-500 hover:text-gray-800"><i class="fas fa-arrow-left"></i> Voltar</button>
+            <div class="bg-white p-4 border-b flex justify-between items-center shadow-sm z-10">
+                <button onclick="closeCheckout()" class="text-gray-500 hover:text-gray-800 flex items-center gap-1 font-medium"><i class="fas fa-chevron-left"></i> Voltar</button>
                 <h3 class="font-bold text-cyan-900 text-lg">Finalizar Compra</h3>
-                <div class="w-8"></div> </div>
+                <div class="w-16"></div> </div>
 
             <div class="flex-grow overflow-y-auto p-6 bg-gray-50 relative">
                 
                 <div id="step-service" class="checkout-step space-y-6">
-                    <h4 class="text-xl font-bold text-gray-800">Selecione o tipo de serviço:</h4>
+                    <div class="text-center mb-6">
+                        <div class="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-3 text-cyan-600">
+                            <i class="fas fa-hand-holding-heart text-2xl"></i>
+                        </div>
+                        <h4 class="text-xl font-bold text-gray-800">Como deseja receber?</h4>
+                    </div>
+                    
                     <div class="grid grid-cols-2 gap-4">
-                        <button onclick="selectService('retirada')" class="h-32 bg-white border-2 border-cyan-100 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-cyan-500 hover:bg-cyan-50 transition shadow-sm group">
-                            <i class="fas fa-store text-3xl text-cyan-400 group-hover:text-cyan-600"></i>
-                            <span class="font-bold text-gray-700 group-hover:text-cyan-900">Retirada</span>
+                        <button onclick="selectService('retirada')" class="h-40 bg-white border-2 border-gray-200 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-cyan-500 hover:bg-cyan-50 transition shadow-sm group">
+                            <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-cyan-200 transition">
+                                <i class="fas fa-store text-xl text-gray-600 group-hover:text-cyan-800"></i>
+                            </div>
+                            <span class="font-bold text-gray-700 group-hover:text-cyan-900">Retirar na Loja</span>
                         </button>
-                        <button onclick="selectService('delivery')" class="h-32 bg-white border-2 border-cyan-100 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-cyan-500 hover:bg-cyan-50 transition shadow-sm group">
-                            <i class="fas fa-motorcycle text-3xl text-cyan-400 group-hover:text-cyan-600"></i>
+                        
+                        <button onclick="selectService('delivery')" class="h-40 bg-white border-2 border-gray-200 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-cyan-500 hover:bg-cyan-50 transition shadow-sm group">
+                            <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-cyan-200 transition">
+                                <i class="fas fa-motorcycle text-xl text-gray-600 group-hover:text-cyan-800"></i>
+                            </div>
                             <span class="font-bold text-gray-700 group-hover:text-cyan-900">Delivery</span>
                         </button>
                     </div>
                 </div>
 
-                <div id="step-address" class="checkout-step hidden space-y-4">
-                    <h4 class="text-xl font-bold text-gray-800 mb-4">Seus Dados</h4>
+                <div id="step-address" class="checkout-step hidden space-y-5">
+                    <h4 class="text-lg font-bold text-cyan-900 border-b pb-2">Seus Dados</h4>
                     
-                    <div>
-                        <label class="block text-sm font-bold text-gray-600 mb-1">Nome Completo</label>
-                        <input type="text" id="input-name" class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-cyan-500" placeholder="Ex: Wesley Souza">
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-bold text-gray-600 mb-1">Telefone (WhatsApp)</label>
-                        <input type="tel" id="input-phone" class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-cyan-500" placeholder="(83) 99999-9999">
+                    <div class="grid gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Nome Completo</label>
+                            <input type="text" id="input-name" class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition" placeholder="Ex: Wesley Souza">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Telefone / WhatsApp</label>
+                            <input type="tel" id="input-phone" class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition" placeholder="(83) 99999-9999">
+                        </div>
                     </div>
 
-                    <div id="delivery-fields" class="space-y-4 pt-4 border-t">
-                        <h5 class="font-bold text-cyan-800"><i class="fas fa-map-marker-alt mr-2"></i>Endereço de Entrega</h5>
+                    <div id="delivery-fields" class="space-y-4 pt-2">
+                        <h5 class="font-bold text-cyan-900 border-b pb-2 flex items-center gap-2"><i class="fas fa-map-marker-alt text-cyan-600"></i> Endereço de Entrega</h5>
+                        
                         <div class="grid grid-cols-3 gap-3">
                             <div class="col-span-2">
-                                <label class="text-xs text-gray-500">Rua/Avenida</label>
-                                <input type="text" id="input-street" class="w-full border border-gray-300 rounded p-2" placeholder="Nome da rua">
+                                <label class="text-xs text-gray-500 ml-1">Rua/Avenida</label>
+                                <input type="text" id="input-street" class="w-full border border-gray-300 rounded-lg p-2.5 focus:border-cyan-500 outline-none" placeholder="Nome da rua">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-500">Número</label>
-                                <input type="text" id="input-number" class="w-full border border-gray-300 rounded p-2" placeholder="123">
+                                <label class="text-xs text-gray-500 ml-1">Número</label>
+                                <input type="text" id="input-number" class="w-full border border-gray-300 rounded-lg p-2.5 focus:border-cyan-500 outline-none" placeholder="123">
                             </div>
                         </div>
+                        
                         <div>
-                            <label class="text-xs text-gray-500">Bairro</label>
-                            <input type="text" id="input-district" class="w-full border border-gray-300 rounded p-2" placeholder="Ex: Gramame">
+                            <label class="text-xs text-gray-500 ml-1">Bairro</label>
+                            <input type="text" id="input-district" class="w-full border border-gray-300 rounded-lg p-2.5 focus:border-cyan-500 outline-none" placeholder="Ex: Gramame">
                         </div>
+                        
                         <div>
-                            <label class="text-xs text-gray-500">Complemento / Ref.</label>
-                            <input type="text" id="input-comp" class="w-full border border-gray-300 rounded p-2" placeholder="Apto 101, Próximo à praça...">
+                            <label class="text-xs text-gray-500 ml-1">Complemento / Ref.</label>
+                            <input type="text" id="input-comp" class="w-full border border-gray-300 rounded-lg p-2.5 focus:border-cyan-500 outline-none" placeholder="Apto 101, Próximo à praça...">
                         </div>
                     </div>
 
-                    <button onclick="goToPayment()" class="w-full bg-cyan-600 text-white font-bold py-3 rounded-lg mt-6 shadow hover:bg-cyan-700">
-                        Ir para Pagamento
+                    <button id="btn-finalizar" onclick="goToPayment()" class="w-full bg-cyan-600 text-white font-bold py-4 rounded-xl mt-4 shadow-lg hover:bg-cyan-700 hover:shadow-xl transition transform active:scale-95 flex justify-center items-center gap-2">
+                        <span>Ir para Pagamento Seguro</span>
+                        <i class="fas fa-shield-alt"></i>
                     </button>
+                    
+                    <p class="text-center text-xs text-gray-400 mt-2"><i class="fas fa-lock text-green-500"></i> Ambiente Criptografado</p>
                 </div>
 
-                <div id="step-payment" class="checkout-step hidden fixed inset-0 z-[60] bg-gray-900 bg-opacity-90 flex items-center justify-center p-4">
-    
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative animate-pop-up flex flex-col max-h-[90vh]">
-        
-        <div class="bg-cyan-600 p-4 flex justify-between items-center text-white shrink-0">
-            <h3 class="font-bold text-lg"><i class="fa-brands fa-pix mr-2"></i>Pagamento via Pix</h3>
-            <button onclick="closeCheckout()" class="hover:text-yellow-300 text-xl">&times;</button>
-        </div>
-
-        <div class="p-6 overflow-y-auto">
-            
-            <div class="text-center mb-6">
-                <p class="text-gray-600 text-sm">Escaneie o QR Code ou copie a chave abaixo para pagar.</p>
-                <h2 class="text-3xl font-bold text-cyan-800 mt-2" id="pix-total-value">R$ 0,00</h2>
             </div>
-
-            <div class="flex justify-center mb-6">
-                <div class="p-2 border-2 border-cyan-100 rounded-xl shadow-inner bg-white">
-                    <img id="pix-qrcode" src="" alt="QR Code Pix" class="w-48 h-48 object-contain">
-                </div>
-            </div>
-
-            <div class="space-y-2 mb-6">
-                <label class="text-xs font-bold text-gray-500 uppercase">Pix Copia e Cola / Chave</label>
-                <div class="flex gap-2">
-                    <input type="text" id="pix-code-text" readonly 
-                           class="w-full bg-gray-100 border border-gray-300 text-gray-600 text-xs p-3 rounded-lg font-mono focus:outline-none"
-                           value="CARREGANDO...">
-                    <button onclick="copyPix()" class="bg-cyan-600 text-white px-4 rounded-lg hover:bg-cyan-700 transition" title="Copiar">
-                        <i class="far fa-copy"></i>
-                    </button>
-                </div>
-            </div>
-
-            <div class="space-y-3">
-                <button onclick="confirmOrder()" class="w-full bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-600 transition flex items-center justify-center gap-2 text-lg">
-                    <i class="fas fa-check-circle"></i> Já fiz o pagamento
-                </button>
-                
-                <button onclick="showStep('step-address')" class="w-full text-gray-500 font-bold py-2 hover:text-gray-800 text-sm">
-                    Voltar e corrigir dados
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
         </div>
     </div>
 
     <script type="module" src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
     <script type="module" src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script type="module" src="script.js"></script>
 </body>
