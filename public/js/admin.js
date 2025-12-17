@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebas
 import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, writeBatch, getDocs, query, orderBy, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { monitorarEstadoAuth, verificarAdminNoBanco, db as authDb } from './auth.js';
-import { products as initialProducts } from './cardapio.js'; 
+import { products as initialProducts } from './cardapio.js';
 
 const db = authDb;
 const storage = getStorage(authDb.app);

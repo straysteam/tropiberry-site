@@ -1,9 +1,25 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getFirestore, collection, addDoc, serverTimestamp, doc, setDoc, getDoc, onSnapshot, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { monitorarEstadoAuth, fazerLogout, verificarAdminNoBanco, db as authDb } from './auth.js'; 
+import { 
+    getFirestore, 
+    collection, 
+    onSnapshot, 
+    doc, 
+    getDoc, 
+    setDoc, 
+    addDoc, 
+    serverTimestamp, 
+    query, 
+    orderBy, 
+    getDocs 
+} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-let currentUserIsAdmin = false; 
+import { monitorarEstadoAuth, fazerLogout, verificarAdminNoBanco, db as authDb } from './auth.js'; 
+import { renderizarHeaderGlobal } from './components.js'; 
+
+let currentUserIsAdmin = false;
+// Usa o banco já inicializado no auth.js
 let db = authDb; 
+
 let products = [];
 let categories = []; 
 let cart = [];
@@ -14,7 +30,7 @@ let currentComplements = [];
 let selectedOptions = {}; 
 let currentQtd = 1;
 
-// CACHE GLOBAL DE COMPLEMENTOS (Para calcular preço no cardápio)
+// CACHE GLOBAL DE COMPLEMENTOS
 let globalComplements = {}; 
 
 // === MAPA DE ESTILOS DAS TAGS ===
@@ -58,6 +74,7 @@ window.fecharModalRapido = fecharModalRapido;
 // === INICIALIZAÇÃO ===
 document.addEventListener('DOMContentLoaded', async () => {
 
+    // 1. Renderiza o Header (Isso cria a div 'auth-buttons-container')
     renderizarHeaderGlobal();
 
     if (window.location.pathname.includes('produto.html')) {
@@ -73,22 +90,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     await carregarCategoriasSite();
     
     // Inicia monitoramento
-    monitorarComplementosGlobal(); // NOVO: Carrega complementos para memória
+    monitorarComplementosGlobal(); 
     carregarProdutosDoBanco();
     monitorarStatusLojaNoBanco();
     
+    // 2. Monitora o Login e preenche os botões no Header
     monitorarEstadoAuth(async (user) => {
         const container = document.getElementById('auth-buttons-container');
+        
+        // Se o container não existir (header não renderizou), tenta de novo em 500ms
+        if(!container) return;
+
         if (user) {
             currentUserIsAdmin = await verificarAdminNoBanco(user.email);
             let adminBtn = currentUserIsAdmin ? `<a href="admin.html" class="bg-cyan-800 border border-cyan-400 text-yellow-400 text-[10px] px-2 py-1 rounded font-bold uppercase ml-2 shadow-sm hover:bg-cyan-700 decoration-0">Painel Admin</a>` : '';
-            if(container) container.innerHTML = `<div class="flex items-center"><span class="text-xs font-bold text-white hidden md:block mr-2">${user.displayName || user.email.split('@')[0]}</span>${adminBtn}<button onclick="fazerLogout()" class="bg-red-500/80 hover:bg-red-500 text-white text-xs px-3 py-1 ml-2 rounded-full font-bold transition">Sair</button></div>`;
+            
+            container.innerHTML = `
+                <div class="flex items-center">
+                    <span class="text-xs font-bold text-white hidden md:block mr-2">Olá, ${user.displayName || user.email.split('@')[0]}</span>
+                    ${adminBtn}
+                    <button onclick="fazerLogout()" class="bg-red-500/80 hover:bg-red-500 text-white text-xs px-3 py-1 ml-2 rounded-full font-bold transition">Sair</button>
+                </div>`;
+                
             atualizarInteratividadeBotaoLoja();
             atualizarElementosAdminUI();
             if(currentProductDetail) verificarBotaoAdmin(currentProductDetail.id);
         } else {
             currentUserIsAdmin = false;
-            if(container) container.innerHTML = `<a href="login.html" class="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1 rounded-full font-bold transition">Entrar</a><a href="cadastro.html" class="bg-yellow-400 hover:bg-yellow-300 text-cyan-900 text-xs px-3 py-1 rounded-full font-bold transition">Cadastrar</a>`;
+            container.innerHTML = `
+                <a href="login.html" class="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1 rounded-full font-bold transition">Entrar</a>
+                <a href="cadastro.html" class="bg-yellow-400 hover:bg-yellow-300 text-cyan-900 text-xs px-3 py-1 rounded-full font-bold transition">Cadastrar</a>
+            `;
             atualizarInteratividadeBotaoLoja();
             atualizarElementosAdminUI();
         }
@@ -145,7 +177,13 @@ function renderProducts(containerId, filterCategory) {
     }
 
     if (filtered.length === 0) {
-        container.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400">Nenhum produto encontrado.</div>`;
+        // Se a lista estiver vazia (mas o array products tem itens), significa que o filtro não achou nada
+        if (products.length > 0) {
+             container.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400">Nenhum produto nesta categoria.</div>`;
+        } else {
+             // Se products estiver vazio mesmo, é pq ainda está carregando ou não tem nada no banco
+             container.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 flex flex-col items-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600 mb-2"></div>Carregando cardápio...</div>`;
+        }
         return;
     }
 
@@ -227,7 +265,6 @@ function renderProducts(containerId, filterCategory) {
     `}).join('');
 }
 
-// === LÓGICA DO MODAL RÁPIDO & PÁGINA DE PRODUTO ===
 // === LÓGICA DO MODAL RÁPIDO & PÁGINA DE PRODUTO ===
 async function carregarDadosProduto(id, containerPrefix) {
     if (!db) return;
@@ -574,30 +611,6 @@ function adicionarAoCarrinhoDetalhado() {
     setTimeout(() => toggleCart(), 500);
 }
 
-function renderizarHeaderGlobal() {
-    const headerPlaceholder = document.getElementById('global-header-placeholder');
-    if (!headerPlaceholder) return;
-    const headerHTML = `
-    <header class="bg-cyan-600 text-white relative shadow-lg z-40 pb-16 sticky top-0 transition-all duration-300">
-        <div class="container mx-auto px-4 py-4 flex justify-between items-center relative z-10">
-            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='index.html'">
-                <div class="bg-yellow-400 p-2 rounded-full text-cyan-800"><i class="fas fa-ice-cream text-2xl"></i></div>
-                <h1 class="hidden md:block text-3xl font-bold tracking-wide brand-font text-yellow-300 drop-shadow-md">TROPYBERRY</h1>
-            </div>
-            <div class="flex items-center gap-3 relative">
-                <div id="auth-buttons-container" class="flex items-center gap-2 mr-2"></div>
-                <button id="store-status-btn" onclick="toggleStoreStatus()" class="px-3 py-1 rounded-full text-xs font-bold border border-white transition flex items-center gap-2 cursor-pointer hover:scale-105"><div id="status-indicator" class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div><span id="status-text">ABERTO</span></button>
-                <button onclick="toggleInfoModal()" class="text-white hover:text-yellow-300 text-xl transition p-2"><i class="fas fa-info-circle"></i></button>
-                <div class="relative">
-                    <button onclick="toggleCart()" class="relative bg-yellow-400 text-cyan-900 px-4 py-2 rounded-full font-bold hover:bg-yellow-300 transition shadow-md flex items-center gap-2 z-20"><i class="fas fa-shopping-cart"></i><span class="hidden md:inline">Carrinho</span><span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-white">0</span></button>
-                    <button id="last-order-btn" onclick="openOrderScreen('status')" class="hidden absolute top-12 right-0 w-32 bg-cyan-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg hover:bg-cyan-400 transition flex items-center justify-between gap-1 border border-cyan-400 animate-bounce z-10"><span>Último pedido</span> <i class="fas fa-chevron-right"></i></button>
-                </div>
-            </div>
-        </div>
-        <div class="wave-container"><svg data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z" class="shape-fill"></path></svg></div>
-    </header>`;
-    headerPlaceholder.innerHTML = headerHTML;
-}
 function carregarProdutosDoBanco() {
     if(!db) return;
     const colRef = collection(db, "produtos");
