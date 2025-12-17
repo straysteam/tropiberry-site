@@ -1,0 +1,78 @@
+:root {
+    --brand-blue: #E0F7FA;
+    --brand-blue-dark: #00838F;
+    --brand-yellow: #FFEB3B;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--brand-blue);
+    color: #374151;
+}
+
+h1, h2, h3, .brand-font {
+    font-family: 'Fredoka', sans-serif;
+}
+
+/* Animações */
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes popUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.animate-pop-up {
+    animation: popUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Wave Header */
+.wave-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    overflow: hidden;
+    line-height: 0;
+    transform: rotate(180deg);
+}
+
+.wave-container svg {
+    position: relative;
+    display: block;
+    width: calc(150% + 1.3px);
+    height: 60px;
+}
+
+.wave-container .shape-fill {
+    fill: #E0F7FA;
+}
+
+/* Modal e Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f1f1; 
+}
+::-webkit-scrollbar-thumb {
+    background: #00838F; 
+    border-radius: 4px;
+}
+
+#checkout-modal .checkout-step {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Mapa do Leaflet */
+.leaflet-popup-content-wrapper {
+    border-radius: 12px;
+    font-family: 'Poppins', sans-serif;
+}
