@@ -108,38 +108,87 @@
         </div>
     </div>
 
-    <div id="info-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-pop-up">
-            <div class="bg-cyan-600 p-4 flex justify-between items-center text-white">
-                <h3 class="text-xl font-bold"><i class="fas fa-info-circle mr-2"></i>Informações</h3>
-                <button onclick="toggleInfoModal()" class="hover:text-yellow-300 text-2xl transition">&times;</button>
+    <div id="info-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
+        <div class="relative h-32 bg-cyan-900 flex items-center justify-center overflow-hidden">
+             <img src="assets/image_cae8c3.png" alt="Fachada TropiBerry" class="absolute inset-0 w-full h-full object-cover opacity-50">
+            <div class="relative z-10 text-center p-4">
+                <h2 class="text-2xl font-bold text-yellow-400 mb-1 drop-shadow-lg">TropiBerry Açaí</h2>
+                <p class="text-white text-sm drop-shadow-md">O melhor sabor da cidade!</p>
             </div>
-            <div class="p-6 space-y-6">
-                <div class="flex items-start gap-4">
-                    <div class="bg-cyan-100 p-3 rounded-full text-cyan-600"><i class="fas fa-map-marker-alt text-xl"></i></div>
-                    <div><p class="font-bold text-gray-800">Endereço</p><p class="text-sm text-gray-600 mt-1">R. Ricardo Soares de Souza Neto, 456<br>Gramame, João Pessoa - PB</p></div>
-                </div>
-                <div class="flex items-start gap-4">
-                    <div class="bg-yellow-100 p-3 rounded-full text-yellow-600"><i class="fas fa-clock text-xl"></i></div>
-                    <div><p class="font-bold text-gray-800">Horário de Funcionamento</p><p class="text-sm text-gray-600 mt-1">Todos os dias: <span class="font-bold text-cyan-700">12:00 às 23:00</span></p></div>
-                </div>
+            
+            <div class="absolute top-2 right-2 flex gap-2 z-20">
+                <button onclick="compartilharSite()" class="text-white bg-white/20 hover:bg-white/40 rounded-full w-8 h-8 flex items-center justify-center transition" title="Compartilhar">
+                    <i class="fas fa-share-alt text-sm"></i>
+                </button>
+                <button onclick="toggleInfoModal()" class="text-white bg-black/30 hover:bg-black/50 rounded-full w-8 h-8 flex items-center justify-center transition">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
             </div>
         </div>
-    </div>
 
-    <div id="cart-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-40 flex justify-end">
-        <div class="bg-white w-full md:w-96 h-full shadow-2xl flex flex-col transform transition-transform duration-300 translate-x-full" id="cart-panel">
-            <div class="bg-cyan-600 p-4 flex justify-between items-center text-white shadow-md">
-                <h3 class="text-xl font-bold"><i class="fas fa-shopping-cart mr-2"></i>Seu Pedido</h3>
-                <button onclick="toggleCart()" class="text-white hover:text-yellow-300 text-2xl">&times;</button>
+        <div class="p-6 space-y-5">
+            <div class="space-y-3">
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-map-marker-alt text-cyan-900 text-lg mt-1 w-6 text-center"></i>
+                    <div>
+                        <h4 class="font-bold text-cyan-900 text-sm">Endereço</h4>
+                        <p id="info-address" class="text-gray-600 text-sm leading-relaxed">Av. Exemplo, 123 - Bairro, Cidade - PB, 58000-000</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-clock text-cyan-900 text-lg mt-1 w-6 text-center"></i>
+                    <div>
+                        <h4 class="font-bold text-cyan-900 text-sm">Horário de Funcionamento</h4>
+                         <p id="info-hours" class="text-gray-600 text-sm leading-relaxed">Seg a Sex: 10h às 22h<br>Sáb e Dom: 14h às 23h</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-phone-alt text-cyan-900 text-lg mt-1 w-6 text-center"></i>
+                    <div>
+                        <h4 class="font-bold text-cyan-900 text-sm">Contato</h4>
+                         <p id="info-phone" class="text-gray-600 text-sm">(83) 99999-9999</p>
+                    </div>
+                </div>
             </div>
-            <div id="cart-items" class="flex-grow p-4 overflow-y-auto space-y-4 bg-gray-50"></div>
-            <div class="p-4 bg-white border-t border-gray-200 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
-                <div class="flex justify-between text-xl font-bold text-cyan-900 mb-4"><span>Total:</span><span id="cart-total">R$ 0,00</span></div>
-                <button onclick="startCheckout()" class="w-full bg-cyan-600 text-white font-bold py-3 rounded-lg hover:bg-cyan-700 transition shadow-lg">Fechar Pedido</button>
+
+            <div id="admin-info-actions" class="hidden border-t pt-4 mt-4">
+                <p class="text-center text-xs text-gray-400 font-bold uppercase mb-3">—— Área da Loja ——</p>
+                <div class="grid grid-cols-1 gap-3">
+                    <button onclick="abrirEditorInformacoes()" class="bg-cyan-100 hover:bg-cyan-200 text-cyan-900 text-sm font-bold py-2 px-4 rounded-lg transition flex items-center justify-center gap-2">
+                        <i class="fas fa-edit"></i> Editar Informações da Loja
+                    </button>
+                </div>
             </div>
         </div>
+        <div class="bg-gray-50 p-3 text-center">
+             <p class="text-xs text-gray-500">TropiBerry v2.2</p>
+        </div>
     </div>
+</div>
+<div id="edit-info-modal" class="fixed inset-0 bg-black/60 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 animate-fade-in-up">
+        <h3 class="text-lg font-bold text-cyan-900 mb-4">Editar Informações da Loja</h3>
+        <div class="space-y-3">
+            <div>
+                <label class="text-sm font-bold text-gray-700">Novo Endereço</label>
+                <textarea id="edit-address-input" rows="2" class="w-full border rounded p-2 text-sm"></textarea>
+            </div>
+             <div>
+                <label class="text-sm font-bold text-gray-700">Novos Horários</label>
+                <textarea id="edit-hours-input" rows="2" class="w-full border rounded p-2 text-sm"></textarea>
+            </div>
+             <div>
+                <label class="text-sm font-bold text-gray-700">Novo Telefone</label>
+                <input type="text" id="edit-phone-input" class="w-full border rounded p-2 text-sm">
+            </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+             <button onclick="document.getElementById('edit-info-modal').classList.add('hidden')" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded transition">Cancelar</button>
+             <button onclick="salvarInformacoesLoja()" class="px-4 py-2 text-sm bg-cyan-900 text-white rounded hover:bg-cyan-800 transition font-bold">Salvar (Simulação)</button>
+        </div>
+     </div>
+</div>
 
     <div id="checkout-modal" class="fixed inset-0 bg-gray-900 bg-opacity-90 hidden z-50 flex items-center justify-center p-0 md:p-4 backdrop-blur-sm font-sans">
         <div class="bg-white w-full h-full md:h-auto md:max-w-lg md:rounded-2xl shadow-2xl flex flex-col overflow-hidden relative animate-pop-up">
