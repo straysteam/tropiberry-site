@@ -1,136 +1,91 @@
-// --- DADOS DOS PRODUTOS COM CATEGORIAS ---
+// cardapio.js - Lista de produtos para Importação Inicial no Firebase
 export const products = [
     // --- DESTAQUES ---
     { 
         id: 1, 
+        name: "Açaí Tradicional", 
+        description: "Copo 500ml com granola, banana e leite em pó.", 
+        price: 15.00, 
+        originalPrice: 18.00, 
+        image: "https://images.unsplash.com/photo-1590301157890-4810c8765923?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60", 
         category: "destaques",
-        name: "Barca Clássica", 
-        description: "Açaí puro, banana, morango, leite condensado e granola.", 
-        price: 25.00, 
-        image: "https://images.unsplash.com/photo-1596560548464-f010549b84d7?ixlib=rb-4.0.3&w=600&q=80" 
+        tags: ["Mais Vendido", "Promoção"] 
     },
     { 
         id: 2, 
-        category: "destaques",
-        name: "Copo da Felicidade", 
-        description: "Camadas de açaí, creme de ninho, nutella e brownie.", 
+        name: "Açaí com Morango", 
+        description: "Copo 500ml com morango fresco, calda de morango e leite condensado.", 
         price: 18.50, 
-        image: "https://images.unsplash.com/photo-1623592534887-1959779df30f?ixlib=rb-4.0.3&w=600&q=80" 
-    },
-       { 
-        id: 3, 
+        originalPrice: null, 
+        image: "https://images.unsplash.com/photo-1490885578174-acda8905c2c6?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60", 
         category: "destaques",
-        name: "Barca Clássica", 
-        description: "Açaí puro, banana, morango, leite condensado e granola.", 
-        price: 25.00, 
-        image: "https://images.unsplash.com/photo-1596560548464-f010549b84d7?ixlib=rb-4.0.3&w=600&q=80" 
+        tags: [] 
     },
     { 
-        id: 4, 
+        id: 3, 
+        name: "Barca de Açaí", 
+        description: "Barca média (750ml) com 5 acompanhamentos à sua escolha.", 
+        price: 35.00, 
+        originalPrice: 40.00,
+        image: "https://images.unsplash.com/photo-1580915411954-282cb1b0d780?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60", 
         category: "destaques",
-        name: "Barca Clássica", 
-        description: "Açaí puro, banana, morango, leite condensado e granola.", 
-        price: 25.00, 
-        image: "https://images.unsplash.com/photo-1596560548464-f010549b84d7?ixlib=rb-4.0.3&w=600&q=80" 
+        tags: ["Para Compartilhar"]
+    },
+
+    // --- MONTE SEU COPO ---
+    { 
+        id: 4, 
+        name: "Copo Pequeno (300ml)", 
+        description: "Açaí puro, escolha seus adicionais na observação.", 
+        price: 10.00, 
+        originalPrice: null,
+        image: "https://via.placeholder.com/500x400/591c36/ffffff?text=300ml", 
+        category: "monte", 
+        tags: [] 
     },
     { 
         id: 5, 
-        category: "destaques",
-        name: "Barca Clássica", 
-        description: "Açaí puro, banana, morango, leite condensado e granola.", 
-        price: 25.00, 
-        image: "https://images.unsplash.com/photo-1596560548464-f010549b84d7?ixlib=rb-4.0.3&w=600&q=80" 
+        name: "Copo Médio (500ml)", 
+        description: "Açaí puro, escolha seus adicionais na observação.", 
+        price: 14.00, 
+        originalPrice: null,
+        image: "https://via.placeholder.com/500x400/591c36/ffffff?text=500ml", 
+        category: "monte", 
+        tags: [] 
     },
     { 
         id: 6, 
-        category: "destaques",
-        name: "Barca Clássica", 
-        description: "Açaí puro, banana, morango, leite condensado e granola.", 
-        price: 25.00, 
-        image: "https://images.unsplash.com/photo-1596560548464-f010549b84d7?ixlib=rb-4.0.3&w=600&q=80" 
-    },
-
-    // --- MONTE SEU COPO (Opções Base) ---
-    { 
-        id: 10, 
-        category: "monte",
-        name: "Copo 300ml", 
-        description: "Escolha até 3 acompanhamentos grátis.", 
-        price: 12.00, 
-        image: "https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?ixlib=rb-4.0.3&w=600&q=80" 
-    },
-    { 
-        id: 11, 
-        category: "monte",
-        name: "Copo 500ml", 
-        description: "Escolha até 4 acompanhamentos grátis.", 
-        price: 16.00, 
-        image: "https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?ixlib=rb-4.0.3&w=600&q=80" 
+        name: "Copo Grande (700ml)", 
+        description: "Açaí puro, escolha seus adicionais na observação.", 
+        price: 18.00, 
+        originalPrice: null,
+        image: "https://via.placeholder.com/500x400/591c36/ffffff?text=700ml", 
+        category: "monte", 
+        tags: [] 
     },
 
     // --- COMBOS ---
     { 
-        id: 20, 
-        category: "combos",
+        id: 7, 
         name: "Combo Casal", 
-        description: "2 Copos de 500ml + 1 Refrigerante 1L.", 
-        price: 35.00, 
-        image: "https://images.unsplash.com/photo-1590301157890-4810ed352733?ixlib=rb-4.0.3&w=600&q=80" 
+        description: "2 Copos 500ml completos + 1 Água Mineral.", 
+        price: 32.00, 
+        originalPrice: 38.00, 
+        image: "https://via.placeholder.com/500x400/591c36/ffffff?text=Combo+Casal", 
+        category: "combos", 
+        tags: ["Ofertão"] 
     },
     { 
-        id: 21, 
-        category: "combos",
+        id: 8, 
         name: "Combo Família", 
-        description: "1 Barca Gigante + 3 Refrigerantes Lata.", 
+        description: "1 Barca Grande + 3 Refrigerantes Lata.", 
         price: 55.00, 
-        image: "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?ixlib=rb-4.0.3&w=600&q=80" 
+        originalPrice: null,
+        image: "https://via.placeholder.com/500x400/591c36/ffffff?text=Combo+Família", 
+        category: "combos", 
+        tags: [] 
     }
 ];
 
-// --- FUNÇÃO DE RENDERIZAÇÃO (Genérica) ---
-export function renderProducts(gridId, categoryFilter = null) {
-    const grid = document.getElementById(gridId);
-    if (!grid) return;
-    
-    let itemsToShow = [];
-
-    // Lógica: 
-    // 1. Se tiver filtro (ex: clicou no botão "Combos"), mostra só aquela categoria.
-    // 2. Se NÃO tiver filtro (é a carga inicial da Home), pega 'destaques' e limita a 6.
-    // 3. Se for a página cardapio.html (chamada com null no script), mostra tudo ou filtra lá.
-
-    if (categoryFilter) {
-        // Se tem categoria específica (ex: clicou no botão ou é filtro da home)
-        itemsToShow = products.filter(p => p.category === categoryFilter);
-    } else {
-        // Se não passou filtro, assume que é para mostrar tudo (Cardápio Completo)
-        itemsToShow = products;
-    }
-
-    // TRUQUE DO LIMITE NA HOME
-    // Se estivermos renderizando na Home (grid existe) E o filtro for 'destaques' (padrão da home)
-    // Limitamos a 6 itens.
-    const isHomePage = window.location.pathname.endsWith('index.html') || window.location.pathname === '/';
-    
-    if (isHomePage && categoryFilter === 'destaques') {
-        itemsToShow = itemsToShow.slice(0, 6); // Pega apenas os 6 primeiros
-    }
-
-    grid.innerHTML = itemsToShow.map(product => `
-        <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition border border-gray-100 flex flex-col h-full">
-            <div class="h-40 overflow-hidden relative group">
-                <img src="${product.image}" alt="${product.name}" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">
-                <button onclick="addToCart(${product.id}, this)" class="absolute bottom-2 right-2 bg-yellow-400 text-cyan-900 w-10 h-10 rounded-full flex items-center justify-center shadow-lg font-bold hover:bg-yellow-300 hover:scale-110 transition z-10">
-                    <i class="fas fa-plus"></i>
-                </button>
-            </div>
-            <div class="p-4 flex flex-col flex-grow">
-                <div class="flex justify-between items-start mb-1">
-                    <h4 class="font-bold text-cyan-900 text-sm leading-tight">${product.name}</h4>
-                    <span class="font-bold text-cyan-600 text-sm whitespace-nowrap ml-2">R$ ${product.price.toFixed(2).replace('.', ',')}</span>
-                </div>
-                <p class="text-gray-500 text-xs line-clamp-2 mt-1">${product.description}</p>
-            </div>
-        </div>
-    `).join('');
-}
+// Função placeholder (não é usada, mas evita erro se algum arquivo antigo importar)
+export function renderProducts() {}
