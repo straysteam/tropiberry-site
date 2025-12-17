@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - TROPYBERRY</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-blue-50 h-screen flex items-center justify-center font-sans">
+
+    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
+        <div class="text-center mb-6">
+            <div class="bg-yellow-400 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2 text-cyan-800 text-3xl shadow-md">
+                <i class="fas fa-ice-cream"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-cyan-900">Bem-vindo de volta!</h2>
+            <p class="text-gray-500 text-sm">Acesse sua conta para continuar.</p>
+        </div>
+
+        <div class="space-y-4">
+            <button id="btn-google" class="w-full bg-white border border-gray-300 text-gray-700 font-bold py-2 rounded-lg hover:bg-gray-50 transition shadow-sm flex items-center justify-center gap-2">
+                <i class="fab fa-google text-red-500"></i> Entrar com Google
+            </button>
+
+            <div class="flex items-center gap-2">
+                <div class="h-px bg-gray-200 flex-1"></div>
+                <span class="text-xs text-gray-400 uppercase">ou use e-mail</span>
+                <div class="h-px bg-gray-200 flex-1"></div>
+            </div>
+
+            <form id="form-login" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Email</label>
+                    <div class="relative">
+                        <i class="fas fa-envelope absolute left-3 top-3 text-gray-400"></i>
+                        <input type="email" id="email-login" class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-cyan-500" placeholder="seu@email.com" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Senha</label>
+                    <div class="relative">
+                        <i class="fas fa-lock absolute left-3 top-3 text-gray-400"></i>
+                        <input type="password" id="senha-login" class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-cyan-500" placeholder="******" required>
+                    </div>
+                    <div class="text-right mt-1">
+                        <button type="button" id="btn-esqueci" class="text-xs text-cyan-600 hover:underline">Esqueci minha senha</button>
+                    </div>
+                </div>
+                
+                <button type="submit" class="w-full bg-cyan-600 text-white font-bold py-3 rounded-lg hover:bg-cyan-700 transition shadow-lg">Entrar</button>
+            </form>
+        </div>
+
+        <div class="mt-6 text-center text-sm text-gray-600">
+            <p>Não tem conta? <a href="cadastro.html" class="text-cyan-600 font-bold hover:underline">Cadastre-se</a></p>
+            <p class="mt-2"><a href="index.html" class="text-gray-400 hover:text-gray-600"><i class="fas fa-arrow-left"></i> Voltar para Loja</a></p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { fazerLogin, loginComGoogle, recuperarSenha } from './auth.js';
+
+        document.getElementById('form-login').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email-login').value;
+            const senha = document.getElementById('senha-login').value;
+            fazerLogin(email, senha);
+        });
+
+        document.getElementById('btn-google').addEventListener('click', () => {
+            loginComGoogle();
+        });
+
+        document.getElementById('btn-esqueci').addEventListener('click', () => {
+            const email = document.getElementById('email-login').value;
+            recuperarSenha(email);
+        });
+    </script>
+</body>
+</html>

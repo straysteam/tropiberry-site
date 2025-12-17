@@ -92,3 +92,14 @@ h1, h2, h3, .brand-font {
 #toast-notification {
     transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55), opacity 0.3s ease;
 }
+#toast-notification.error {
+    border-left-color: #ef4444; /* Vermelho do Tailwind */
+}
+
+#toast-notification.error .text-green-500 {
+    color: #ef4444 !important;
+}
+
+#toast-notification.error .bg-green-100 {
+    background-color: #fee2e2 !important;
+}

@@ -21,6 +21,9 @@
             </div>
             
             <div class="flex items-center gap-3 relative">
+                
+                <div id="auth-buttons-container" class="flex items-center gap-2 mr-2"></div>
+                
                 <button id="store-status-btn" onclick="toggleStoreStatus()" class="px-3 py-1 rounded-full text-xs font-bold border border-white transition flex items-center gap-2 cursor-pointer hover:scale-105">
                     <div id="status-indicator" class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
                     <span id="status-text">ABERTO</span>
@@ -53,7 +56,7 @@
             <h2 class="text-4xl md:text-6xl font-bold text-cyan-900 leading-tight">O Verdadeiro <br> <span class="text-yellow-500 drop-shadow-sm">Sabor do Açaí</span></h2>
             <p class="text-gray-600 text-lg md:text-xl max-w-lg mx-auto md:mx-0">Refresque o seu dia com a melhor combinação de energia e sabor. Monte do seu jeito ou escolha nossos favoritos!</p>
             <div class="flex flex-col sm:flex-row gap-4 justify-center md:justify-start pt-4">
-                <button onclick="document.getElementById('menu-section').scrollIntoView({behavior: 'smooth'})" class="bg-cyan-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-cyan-700 hover:-translate-y-1 transition text-lg">Ver Cardápio</button>
+                <a href="cardapio.html" class="bg-cyan-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-cyan-700 hover:-translate-y-1 transition text-lg flex items-center justify-center">Ver Cardápio Completo</a>
                 <a href="https://www.ifood.com.br" target="_blank" class="bg-red-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-red-700 hover:-translate-y-1 transition flex items-center justify-center gap-2 text-lg"><i class="fas fa-utensils"></i> Pedir no iFood</a>
             </div>
         </div>
@@ -73,10 +76,17 @@
         </div>
         <div class="text-center mb-12">
             <span class="text-cyan-600 font-bold tracking-wider uppercase text-sm">Nossas Delícias</span>
-            <h3 class="text-4xl font-bold text-cyan-900 mt-2">Cardápio Completo</h3>
+            <h3 class="text-4xl font-bold text-cyan-900 mt-2">Destaques</h3>
             <div class="w-24 h-1.5 bg-yellow-400 mx-auto mt-4 rounded-full"></div>
         </div>
-        <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20"></div>
+        
+        <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10"></div>
+        
+        <div class="text-center pb-20">
+            <a href="cardapio.html" class="inline-block bg-white border-2 border-cyan-600 text-cyan-600 px-8 py-3 rounded-full font-bold hover:bg-cyan-600 hover:text-white transition shadow-md">
+                Ver Todos os Produtos <i class="fas fa-arrow-right ml-2"></i>
+            </a>
+        </div>
     </section>
 
     <footer class="bg-cyan-800 text-white py-12 mt-auto z-20 relative overflow-hidden">
@@ -90,7 +100,7 @@
         </div>
     </footer>
 
-    <div id="toast-notification" class="fixed top-24 right-4 z-50 bg-white border-l-4 border-green-500 text-gray-700 px-6 py-4 rounded shadow-2xl flex items-center gap-3 translate-x-full opacity-0 pointer-events-none">
+    <div id="toast-notification" class="fixed top-24 right-4 z-50 bg-white border-l-4 border-green-500 text-gray-700 px-6 py-4 rounded shadow-2xl flex items-center gap-3 translate-x-full opacity-0 pointer-events-none transition-all duration-300">
         <div class="text-green-500 bg-green-100 rounded-full p-1"><i class="fas fa-check-circle text-xl"></i></div>
         <div>
             <p class="font-bold text-sm">Sucesso!</p>
