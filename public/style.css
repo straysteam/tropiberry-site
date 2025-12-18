@@ -103,3 +103,12 @@ h1, h2, h3, .brand-font {
 #toast-notification.error .bg-green-100 {
     background-color: #fee2e2 !important;
 }
+/* Animação de Sincronização (Giro Lento) */
+@keyframes spin { 
+    from { transform: rotate(0deg); } 
+    to { transform: rotate(360deg); } 
+}
+
+.animate-spin-slow { 
+    animation: spin 3s linear infinite; 
+}

@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel TropyBerry</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Roboto', sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; }
+        
+        /* Sidebar */
+        .sidebar-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; color: rgba(255, 255, 255, 0.8); cursor: pointer; transition: all 0.2s; }
+        .sidebar-item:hover { background-color: #0e7490; color: white; }
+        .sidebar-item.active { background-color: #155e75; color: white; border-left: 4px solid #facc15; }
+        .submenu-item { padding-left: 2.5rem; font-size: 0.85rem; color: rgba(255,255,255,0.6); }
+        .submenu-item:hover { background-color: rgba(0,0,0,0.2); color: white; }
+
+        /* Abas e Botões */
+        .nav-tabs-container { display: flex; background: #fff; padding: 4px; border-radius: 8px; border: 1px solid #e5e7eb; gap: 8px; }
+        .nav-tab-btn { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #4b5563; border: 1px solid transparent; transition: all 0.2s; }
+        .nav-tab-btn:hover { background-color: #f9fafb; }
+        .nav-tab-btn.active { background-color: #ecfeff; border-color: #0891b2; color: #0e7490; }
+        .env-btn { padding: 8px 20px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: 1px solid #e5e7eb; background-color: white; color: #6b7280; display: flex; align-items: center; gap: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .env-btn.active { background-color: #0891b2; color: white; border-color: #0891b2; }
+
+        /* Cards e Toggle */
+        .table-card { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px dashed #d1d5db; border-radius: 12px; cursor: pointer; transition: all 0.2s; background: #fff; position: relative; }
+        .table-card:hover { border-color: #0891b2; background: #ecfeff; transform: scale(1.05); z-index: 10; }
+        .table-card.occupied { border-style: solid; border-color: #ef4444; background: #fef2f2; }
+        .table-card.add-new { border-style: dashed; border-color: #cbd5e1; background: #f8fafc; color: #94a3b8; }
+        
+        /* Modal Animation */
+        .slide-in-right { animation: slideRight 0.3s ease-out forwards; }
+        @keyframes slideRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Configuração Toggle Switch */
+        .toggle-checkbox:checked { right: 0; border-color: #0891b2; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #0891b2; }
+
+        /* Scrollbar */
+        .thin-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .thin-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+        .thin-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        /* Delivery Option Card */
+        .delivery-option-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 1rem; }
+        .delivery-option-card:hover { border-color: #0891b2; background-color: #ecfeff; }
+       .delivery-option-card.selected { border-color: #0891b2; background-color: #eff6ff; box-shadow: 0 0 0 2px #0891b2; }
+
+        @media print { body > *:not(#receipt-area) { display: none !important; } #receipt-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; } }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-gray-800 bg-[#f3f4f6]">
+
+    <aside class="w-64 bg-cyan-900 flex flex-col z-20 shadow-xl hidden md:flex transition-all border-r border-cyan-800">
+        <div class="h-[60px] flex items-center px-6 border-b border-cyan-800 bg-cyan-950">
+            <h1 class="text-white font-bold text-xl tracking-tight flex items-center gap-2">
+                <i class="fas fa-ice-cream text-yellow-400"></i> TropyBerry
+            </h1>
+        </div>
+        <nav class="flex-1 py-4 overflow-y-auto space-y-1">
+            <div class="sidebar-item active" onclick="navegarPara('view-pdv-wrapper')">
+                <i class="fas fa-clipboard-list w-5"></i> <span class="text-sm font-medium">Pedidos PDV</span>
+            </div>
+            <div class="sidebar-item" onclick="navegarPara('view-kitchen')">
+                <i class="fas fa-fire-alt w-5 text-orange-400"></i> <span class="text-sm font-medium">Cozinha</span>
+            </div>
+            <div class="sidebar-item" onclick="navegarPara('view-inventory')">
+                <i class="fas fa-boxes w-5 text-green-400"></i> <span class="text-sm font-medium">Inventário</span>
+            </div>
+            
+            <div class="sidebar-item" onclick="toggleSubmenu('submenu-vendas')">
+                <i class="fas fa-coins w-5"></i> <span class="text-sm font-medium flex-1">Vendas</span>
+                <i class="fas fa-chevron-down text-xs transition-transform" id="arrow-vendas"></i>
+            </div>
+            <div id="submenu-vendas" class="hidden bg-cyan-950/30 transition-all overflow-hidden">
+                <div class="sidebar-item submenu-item" onclick="navegarPara('view-historico')"><i class="fas fa-history w-4"></i> Histórico</div>
+                <div class="sidebar-item submenu-item" onclick="navegarPara('view-relatorios')"><i class="fas fa-chart-line w-4"></i> Relatórios</div>
+                <div class="sidebar-item submenu-item" onclick="navegarPara('view-financeiro')"><i class="fas fa-file-invoice-dollar w-4"></i> Financeiro</div>
+                <div class="sidebar-item submenu-item" onclick="navegarPara('view-caixa')"><i class="fas fa-cash-register w-4"></i> Caixas</div>
+                <div class="sidebar-item submenu-item" onclick="navegarPara('view-nfce')"><i class="fas fa-qrcode w-4"></i> Nota Fiscal</div>
+            </div>
+
+            <div class="sidebar-item" onclick="toggleSubmenu('submenu-cardapio')">
+                <i class="fas fa-book-open w-5"></i> <span class="text-sm font-medium flex-1">Cardápio & Loja</span>
+                <i class="fas fa-chevron-down text-xs transition-transform" id="arrow-cardapio"></i>
+            </div>
+            <div id="submenu-cardapio" class="hidden bg-cyan-950/30 transition-all overflow-hidden">
+                <div class="sidebar-item submenu-item" onclick="navegarPara('view-produtos')"><i class="fas fa-box w-4"></i> Produtos</div>
+                <div class="sidebar-item submenu-item" onclick="navegarPara('view-boasvindas')"><i class="fas fa-home w-4"></i> Página Inicial</div>
+                <div class="sidebar-item submenu-item" onclick="navegarPara('view-config-pedidos')"><i class="fas fa-cogs w-4"></i> Configurações</div>
+            </div>
+
+            <div class="sidebar-item" onclick="window.location.href='index.html'">
+                <i class="fas fa-store w-5"></i> <span class="text-sm font-medium">Ver Loja</span>
+            </div>
+            
+            <div class="border-t border-cyan-800 my-2 opacity-30"></div> <div class="sidebar-item" onclick="navegarPara('view-chatbot')">
+                <i class="fab fa-whatsapp w-5 text-green-400"></i> <span class="text-sm font-medium">Chatbot WhatsApp</span>
+            </div>
+            </nav> 
+    </aside>
+
+    <div class="flex-1 flex flex-col min-w-0 h-full">
+        
+        <header class="h-[60px] bg-cyan-900 text-white flex items-center justify-between px-6 shadow-md z-50">
+            <div class="flex items-center gap-4">
+                <button class="md:hidden text-white"><i class="fas fa-bars"></i></button>
+            </div>
+            <div class="flex items-center gap-6">
+                <div class="relative cursor-pointer group" onclick="toggleNotificacoes()">
+                    <i class="far fa-bell text-xl hover:text-yellow-300 transition"></i>
+                    <span id="notif-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold hidden">0</span>
+                    <div id="notif-dropdown" class="hidden absolute right-0 top-10 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden text-gray-800">
+                        <div class="bg-gray-50 px-4 py-2 border-b text-xs font-bold text-gray-500">NOTIFICAÇÕES</div>
+                        <div id="notif-list" class="max-h-64 overflow-y-auto"><div class="p-4 text-center text-gray-400 text-xs">Sem notificações</div></div>
+                    </div>
+                </div>
+                <div class="relative">
+                    <div class="flex items-center gap-3 cursor-pointer pl-4 border-l border-cyan-700" onclick="togglePerfil()">
+                        <div class="text-right hidden sm:block"><p class="text-sm font-bold leading-none" id="header-user-name">Admin</p><p class="text-[10px] text-cyan-200 leading-none mt-1">Gerente</p></div>
+                        <div class="w-9 h-9 rounded-full bg-cyan-700 flex items-center justify-center border-2 border-cyan-500 text-white font-bold">A</div>
+                    </div>
+                    <div id="perfil-dropdown" class="hidden absolute right-0 top-12 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-50 text-gray-800">
+                        <div class="p-4 border-b flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-cyan-100 flex items-center justify-center text-cyan-900 font-bold text-lg">T</div><div class="overflow-hidden"><p class="font-bold text-sm truncate">TropyBerry</p><p class="text-xs text-gray-500 truncate" id="header-user-email">...</p></div></div>
+                        <div class="border-t py-1"><button onclick="fazerLogout()" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-bold">Sair</button></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto bg-[#f0f2f5] relative">
+            
+            <div id="view-pdv-wrapper" class="flex flex-col h-full">
+                <div id="pdv-sub-header" class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
+                    <div class="nav-tabs-container">
+                        <button onclick="mudarAbaServico('retirada')" id="tab-retirada" class="nav-tab-btn active"><i class="fas fa-store"></i> Balcão <span id="badge-retirada" class="hidden bg-orange-500 text-white text-[10px] px-1.5 rounded-full ml-1">0</span></button>
+                        <div class="w-px bg-gray-200 h-6"></div>
+                        <button onclick="mudarAbaServico('delivery')" id="tab-delivery" class="nav-tab-btn"><i class="fas fa-motorcycle"></i> Delivery <span id="badge-delivery" class="hidden bg-orange-500 text-white text-[10px] px-1.5 rounded-full ml-1">0</span></button>
+                        <div class="w-px bg-gray-200 h-6"></div>
+                        <button onclick="mudarAbaServico('mesa')" id="tab-mesa" class="nav-tab-btn"><i class="fas fa-chair"></i> Mesas <span id="badge-mesa" class="hidden bg-orange-500 text-white text-[10px] px-1.5 rounded-full ml-1">0</span></button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="window.location.reload()" class="w-9 h-9 rounded border border-gray-300 flex items-center justify-center text-gray-500 hover:text-cyan-600 transition bg-white"><i class="fas fa-sync-alt"></i></button>
+                        <button class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded text-sm font-bold shadow-sm transition flex items-center gap-2"><i class="fas fa-plus"></i> <span class="hidden sm:inline">Novo pedido</span></button>
+                    </div>
+                </div>
+                <div id="view-lista" class="flex-1 overflow-hidden flex flex-col">
+                    <div class="px-6 py-4 flex justify-between items-center shrink-0">
+                        <div class="flex items-center gap-2"><button onclick="filtrarStatus('todos')" class="bg-cyan-100 text-cyan-800 px-4 py-1.5 rounded-full text-xs font-bold border border-cyan-200">Todos</button><button onclick="filtrarStatus('pendente')" class="bg-white text-gray-600 px-4 py-1.5 rounded-full text-xs font-bold border border-gray-300">Pendente</button></div>
+                    </div>
+                    <div class="px-6 pb-2 shrink-0"><div class="grid grid-cols-12 gap-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-white p-2 rounded border border-gray-200"><div class="col-span-2">Data / Origem</div><div class="col-span-2">Estado</div><div class="col-span-2">Total</div><div class="col-span-4">Cliente / Itens</div><div class="col-span-2 text-right">Ações</div></div></div>
+                    <div class="flex-1 overflow-y-auto px-6 pb-6 space-y-2" id="orders-list"></div>
+                </div>
+                <div id="view-mesas" class="flex-1 overflow-hidden hidden flex-col">
+                    <div class="px-6 py-4 border-b border-gray-200 bg-white shadow-sm flex items-center gap-3 shrink-0 overflow-x-auto" id="environments-bar"></div>
+                    <div class="flex-1 overflow-y-auto p-8"><div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-6" id="tables-grid"></div></div>
+                </div>
+            </div>
+
+            <div id="view-relatorios" class="hidden p-6 space-y-6">
+                <h2 class="text-2xl font-bold mb-4 text-gray-800">Visão Geral</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 shadow-sm"><h3 class="font-bold text-gray-800 mb-4">Progresso de vendas</h3><div class="h-64"><canvas id="salesChart"></canvas></div></div>
+                    <div class="space-y-4"><div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm"><h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Resumo</h3><div class="space-y-3"><div class="flex justify-between"><span class="text-sm text-gray-500">Pedidos</span><span class="font-bold text-gray-800" id="rel-qtd">0</span></div><div class="flex justify-between bg-cyan-50 p-2 rounded"><span class="text-sm text-cyan-700 font-bold">Vendas Totais</span><span class="font-bold text-cyan-900" id="rel-total">R$ 0,00</span></div><div class="flex justify-between"><span class="text-sm text-gray-500">Ticket Médio</span><span class="font-bold text-gray-800" id="rel-ticket">R$ 0,00</span></div></div></div></div>
+                </div>
+            </div>
+            <div id="view-historico" class="hidden p-6"><h2 class="text-2xl font-bold mb-4 text-gray-800">Histórico de Pedidos</h2><div class="bg-white rounded shadow overflow-hidden"><table class="w-full text-sm text-left"><thead class="bg-gray-50 text-xs uppercase text-gray-700"><tr><th class="px-6 py-3">ID</th><th class="px-6 py-3">Data</th><th class="px-6 py-3">Total</th><th class="px-6 py-3">Status</th></tr></thead><tbody id="table-historico-body"></tbody></table></div></div>
+            <div id="view-financeiro" class="hidden p-6"><h2 class="text-2xl font-bold mb-4 text-gray-800">Financeiro</h2><button onclick="abrirModalFinanceiro()" class="bg-cyan-600 text-white px-4 py-2 rounded mb-4 font-bold">+ Lançamento</button><div class="bg-white rounded shadow overflow-hidden"><table class="w-full text-sm"><thead class="bg-gray-50 text-xs uppercase text-gray-700"><tr><th class="px-6 py-3">Data</th><th class="px-6 py-3">Desc</th><th class="px-6 py-3">Valor</th></tr></thead><tbody id="table-financeiro-body"></tbody></table></div></div>
+            <div id="view-caixa" class="hidden p-6"><h2 class="text-2xl font-bold mb-4 text-gray-800">Caixas</h2><div id="caixa-fechado-panel" class="bg-white p-8 rounded text-center shadow hidden"><button onclick="abrirCaixa()" class="bg-cyan-600 text-white px-6 py-2 rounded font-bold">Abrir Caixa</button></div><div id="caixa-aberto-panel" class="bg-white p-6 rounded shadow border-t-4 border-green-500 hidden"><h3 class="font-bold text-lg text-green-700">Caixa Aberto</h3><h2 class="text-3xl font-bold mt-2" id="caixa-saldo">R$ 0,00</h2><button onclick="fecharCaixa()" class="mt-4 bg-red-600 text-white px-4 py-2 rounded font-bold">Fechar</button></div></div>
+            
+            <div id="view-nfce" class="hidden p-6 overflow-y-auto">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Configuração Fiscal (NFC-e)</h2>
+                <div class="bg-white p-6 rounded-xl shadow-sm border">
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                        <p class="text-sm text-blue-700"><strong>Informação:</strong> Configure seu certificado digital A1 para emissão de notas.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">CNPJ</label><input type="text" class="w-full border rounded p-2" placeholder="00.000.000/0000-00"></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">Inscrição Estadual</label><input type="text" class="w-full border rounded p-2"></div>
+                        <div class="col-span-2"><label class="block text-sm font-bold text-gray-700 mb-1">Upload Certificado A1 (.pfx)</label><input type="file" class="w-full border rounded p-2"></div>
+                        <div class="col-span-2"><label class="block text-sm font-bold text-gray-700 mb-1">Senha do Certificado</label><input type="password" class="w-full border rounded p-2"></div>
+                    </div>
+                    <button class="mt-6 bg-cyan-600 text-white px-6 py-2 rounded font-bold hover:bg-cyan-700">Salvar Configurações</button>
+                </div>
+            </div>
+
+            <div id="view-produtos" class="hidden flex-col h-full bg-[#f0f2f5]">
+                <div class="px-6 py-4 flex justify-between items-center bg-white border-b shadow-sm">
+                    <h2 class="text-2xl font-bold text-gray-800">Meus Produtos</h2>
+                    <button onclick="abrirModalNovoProduto()" class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg font-bold shadow flex items-center gap-2"><i class="fas fa-plus"></i> Novo Produto</button>
+                </div>
+                <div id="products-list-container" class="flex-1 overflow-y-auto p-6 space-y-3"></div>
+            </div>
+
+            <div id="view-boasvindas" class="hidden p-6 overflow-y-auto">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Página Inicial da Loja</h2>
+                <div class="bg-white rounded-xl shadow-sm border p-6 max-w-3xl">
+                    <div class="flex justify-between items-center mb-6 border-b pb-4">
+                        <div class="flex items-center gap-4"><div class="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center text-cyan-600 text-2xl"><i class="fas fa-home"></i></div><div><h3 class="font-bold text-lg">Seção Principal</h3><p class="text-xs text-gray-500">Informações do topo do site</p></div></div>
+                        <label class="flex items-center cursor-pointer gap-2"><span class="text-sm font-bold text-gray-500">Loja Fechada</span><input type="checkbox" id="store-toggle" class="w-6 h-6" onchange="salvarConfigLoja()"><span class="text-sm font-bold text-green-600">Loja Aberta</span></label>
+                    </div>
+                    <div class="space-y-4">
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">Título</label><input type="text" id="store-title" class="w-full border rounded p-2"></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">Descrição</label><textarea id="store-desc" rows="2" class="w-full border rounded p-2"></textarea></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">WhatsApp</label><input type="text" id="store-phone" class="w-full border rounded p-2"></div>
+                    </div>
+                    <div class="mt-6 text-right"><button onclick="salvarConfigLoja()" class="bg-cyan-600 text-white px-6 py-2 rounded font-bold">Salvar</button></div>
+                </div>
+            </div>
+
+            <div id="view-config-pedidos" class="hidden p-6 overflow-y-auto space-y-8 max-w-5xl mx-auto pb-24">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-3xl font-extrabold text-cyan-950 tracking-tight">Configurações do Sistema</h2>
+                        <p class="text-gray-500 text-sm">Gerencie todos os canais de venda e regras da sua loja.</p>
+                    </div>
+                    <button onclick="salvarConfigPedidos()" class="bg-cyan-600 hover:bg-cyan-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-cyan-200 transition-all flex items-center gap-2">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 group hover:shadow-md transition-shadow">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="flex gap-4">
+                            <div class="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center text-xl shadow-inner">
+                                <i class="fas fa-check-double"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-800 text-lg">Aceitar Pedidos</h3>
+                                <p class="text-xs text-gray-500">Seus clientes acessam seu cardápio digital para fazer pedidos.</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="cfg-accept-orders" class="sr-only peer" onchange="notifyToggle('cfg-accept-orders', 'Recebimento de Pedidos')" checked>
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                        </label>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-50">
+                        <div class="space-y-4">
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Receber pedidos em:</span>
+                            <div class="flex gap-4">
+                                <label class="flex-1 cursor-pointer">
+                                    <input type="radio" name="receive-mode" value="whatsapp" checked class="hidden peer">
+                                    <div class="p-4 border-2 rounded-xl text-center transition-all peer-checked:border-green-500 peer-checked:bg-green-50 hover:bg-gray-50">
+                                        <i class="fab fa-whatsapp text-2xl mb-1 text-green-500"></i>
+                                        <p class="text-sm font-bold text-gray-700">WhatsApp</p>
+                                    </div>
+                                </label>
+                                <label class="flex-1 cursor-pointer">
+                                    <input type="radio" name="receive-mode" value="panel" class="hidden peer">
+                                    <div class="p-4 border-2 rounded-xl text-center transition-all peer-checked:border-cyan-600 peer-checked:bg-cyan-50 hover:bg-gray-50">
+                                        <i class="fas fa-desktop text-2xl mb-1 text-cyan-600"></i>
+                                        <p class="text-sm font-bold text-gray-700">Painel</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">WhatsApp para pedidos</span>
+                            <div class="flex border-2 rounded-xl overflow-hidden focus-within:border-cyan-500 transition-colors">
+                                <div class="bg-gray-50 px-4 py-3 border-r flex items-center"><img src="https://upload.wikimedia.org/wikipedia/commons/0/05/Flag_of_Brazil.svg" class="w-5"></div>
+                                <input type="text" id="cfg-whatsapp-number" class="w-full p-3 outline-none font-medium text-gray-700" value="+55 83996025703">
+                            </div>
+                            <div class="pt-2">
+                                <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Status de Entrada</span>
+                                <div class="flex gap-4 mt-2">
+                                    <label class="flex items-center gap-2 text-sm text-gray-600"><input type="radio" name="entry-status" value="manual" checked class="accent-cyan-600"> Revisados</label>
+                                    <label class="flex items-center gap-2 text-sm text-gray-600"><input type="radio" name="entry-status" value="auto" class="accent-cyan-600"> Automáticos</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+
+                <div class="bg-gradient-to-br from-cyan-900 to-cyan-950 rounded-2xl shadow-xl p-6 text-white relative overflow-hidden">
+                    <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-3xl"></div>
+                    <div class="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div class="flex gap-4">
+                            <div class="w-14 h-14 bg-yellow-400 text-cyan-950 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-yellow-400/20">
+                                <i class="fas fa-rocket"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-xl">Aumente a sacola dos seus clientes <span class="ml-2 bg-green-500 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-tighter">Novo</span></h3>
+                                <p class="text-cyan-200 text-sm max-w-md">Sugira automaticamente produtos adicionais para aumentar o ticket médio.</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer scale-125">
+                            <input type="checkbox" id="cfg-ticket-booster" class="sr-only peer" onchange="notifyToggle('cfg-ticket-booster', 'Ticket Booster')">
+                            <div class="w-11 h-6 bg-white/20 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-400"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-motorcycle"></i></div>
+                                <h3 class="font-bold text-gray-800">Delivery</h3>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="cfg-delivery-active" class="sr-only peer" onchange="notifyToggle('cfg-delivery-active', 'Serviço de Delivery')" checked>
+                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                            </label>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="p-3 bg-gray-50 rounded-xl flex justify-between items-center border border-gray-100">
+                                <div><p class="text-[10px] font-bold text-gray-400 uppercase">Preços e Cobertura</p><p id="delivery-price-label" class="text-sm font-bold text-cyan-900">Sem preço</p></div>
+                                <button onclick="document.getElementById('delivery-settings-modal').classList.remove('hidden')" class="text-cyan-600 text-xs font-bold hover:underline">Editar</button>
+                            </div>
+                            <button onclick="abrirModalEntregadores()" class="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-500 text-xs font-bold hover:border-cyan-300 hover:text-cyan-600 transition-colors">
+                                <i class="fas fa-users-cog mr-2"></i>Configurar Entregadores Próprios
+                            </button>
+                            
+                            <div class="pt-4 border-t">
+                                <button onclick="toggleAdvanced('adv-delivery', 'icon-adv-delivery')" class="flex items-center justify-between w-full group">
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase group-hover:text-cyan-600 transition-colors">Opções Avançadas</span>
+                                    <i id="icon-adv-delivery" class="fas fa-chevron-down text-[10px] text-gray-400 transition-transform"></i>
+                                </button>
+                                
+                                <div id="adv-delivery" class="hidden mt-3 space-y-2">
+                                    <label class="flex items-center justify-between text-xs py-1"><span>Solicite informações adicionais</span><input type="checkbox" id="cfg-deliv-extra" class="w-4 h-4 accent-orange-500" onchange="notifyToggle('cfg-deliv-extra', 'Informações Adicionais Delivery')"></label>
+                                    <label class="flex items-center justify-between text-xs py-1"><span>Solicite complemento obrigatório</span><input type="checkbox" id="cfg-deliv-comp" class="w-4 h-4 accent-orange-500" onchange="notifyToggle('cfg-deliv-comp', 'Complemento Obrigatório Delivery')"></label>
+                                    <label class="flex items-center justify-between text-xs py-1"><span>Valor mínimo para entrega</span><input type="number" id="cfg-deliv-min" class="w-20 border rounded px-1 text-right" placeholder="R$ 0,00"></label>
+                                    <label class="flex items-center justify-between text-xs py-1"><span>Entrega grátis acima de</span><input type="number" id="cfg-deliv-free" class="w-20 border rounded px-1 text-right" placeholder="R$ 60,00"></label>
+                                    <label class="flex items-center justify-between text-xs py-1"><span>Taxa de serviço</span><input type="number" id="cfg-deliv-service" class="w-20 border rounded px-1 text-right" placeholder="R$ 0,00"></label>
+                                    <label class="flex items-center justify-between text-xs py-1"><span>Permitir pedidos agendados</span><input type="checkbox" id="cfg-deliv-sched" class="w-4 h-4 accent-orange-500" onchange="notifyToggle('cfg-deliv-sched', 'Agendamento Delivery')"></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-between">
+                        <div class="flex justify-between items-center mb-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-store"></i></div>
+                                <h3 class="font-bold text-gray-800">Retirada</h3>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="cfg-pickup-active" class="sr-only peer" onchange="notifyToggle('cfg-pickup-active', 'Serviço de Retirada')">
+                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                            </label>
+                        </div>
+                        
+                        <div class="pt-4 border-t">
+                            <button onclick="toggleAdvanced('adv-pickup', 'icon-adv-pickup')" class="flex items-center justify-between w-full group">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase group-hover:text-blue-600 transition-colors">Opções Avançadas</span>
+                                <i id="icon-adv-pickup" class="fas fa-chevron-down text-[10px] text-gray-400 transition-transform"></i>
+                            </button>
+                            
+                            <div id="adv-pickup" class="hidden mt-3 space-y-2">
+                                <label class="flex items-center justify-between text-xs py-1"><span>Solicite informações adicionais</span><input type="checkbox" id="cfg-pick-extra" class="w-4 h-4 accent-blue-600" onchange="notifyToggle('cfg-pick-extra', 'Informações Adicionais Retirada')"></label>
+                                <label class="flex items-center justify-between text-xs py-1"><span>Taxa de serviço</span><input type="checkbox" id="cfg-pick-service" class="w-4 h-4 accent-blue-600" onchange="notifyToggle('cfg-pick-service', 'Taxa de Serviço Retirada')"></label>
+                                <label class="flex items-center justify-between text-xs py-1"><span>Preço de embalagem</span><input type="checkbox" id="cfg-pick-pack" class="w-4 h-4 accent-blue-600" onchange="notifyToggle('cfg-pick-pack', 'Embalagem Retirada')"></label>
+                                <label class="flex items-center justify-between text-xs py-1"><span>Permitir pedidos agendados</span><input type="checkbox" id="cfg-pick-sched" class="w-4 h-4 accent-blue-600" onchange="notifyToggle('cfg-pick-sched', 'Agendamento Retirada')"></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-cyan-100 text-cyan-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-utensils"></i></div>
+                            <h3 class="font-bold text-gray-800">No Local</h3>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="cfg-local-active" class="sr-only peer" onchange="notifyToggle('cfg-local-active', 'Consumo no Local')">
+                            <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                        </label>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div class="space-y-4">
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Tipo de Identificação</span>
+                            <div class="flex gap-4">
+                                <label class="flex-1 cursor-pointer">
+                                    <input type="radio" name="qr-type" value="generic" checked class="hidden peer">
+                                    <div class="p-3 border-2 rounded-xl text-center peer-checked:border-cyan-600 peer-checked:bg-cyan-50">
+                                        <p class="text-xs font-bold">QR Genérico</p>
+                                    </div>
+                                </label>
+                                <label class="flex-1 cursor-pointer">
+                                    <input type="radio" name="qr-type" value="specific" class="hidden peer">
+                                    <div class="p-3 border-2 rounded-xl text-center peer-checked:border-cyan-600 peer-checked:bg-cyan-50">
+                                        <p class="text-xs font-bold">QR Mesa/Cadeira</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            <button onclick="toggleAdvanced('adv-local', 'icon-adv-local')" class="flex items-center justify-between w-full group">
+                                <span class="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-cyan-600 transition-colors">Opções Avançadas</span>
+                                <i id="icon-adv-local" class="fas fa-chevron-down text-xs text-gray-400 transition-transform"></i>
+                            </button>
+                            
+                            <div id="adv-local" class="hidden space-y-2 mt-2">
+                                <label class="flex items-center justify-between text-sm text-gray-600 py-1"><span>Peça nome e telefone</span><input type="checkbox" id="cfg-ask-name" class="w-4 h-4 accent-cyan-600" onchange="notifyToggle('cfg-ask-name', 'Identificação de Cliente')" checked></label>
+                                <label class="flex items-center justify-between text-sm text-gray-600 py-1"><span>Solicite informações adicionais</span><input type="checkbox" id="cfg-local-extra" class="w-4 h-4 accent-cyan-600" onchange="notifyToggle('cfg-local-extra', 'Informações Adicionais Local')"></label>
+                                <label class="flex items-center justify-between text-sm text-gray-600 py-1"><span>Taxa de serviço</span><input type="checkbox" id="cfg-local-service" class="w-4 h-4 accent-cyan-600" onchange="notifyToggle('cfg-local-service', 'Taxa de Serviço Local')"></label>
+                                <label class="flex items-center justify-between text-sm text-gray-600 py-1"><span>Permitir pedidos agendados</span><input type="checkbox" id="cfg-scheduled-orders" class="w-4 h-4 accent-cyan-600" onchange="notifyToggle('cfg-scheduled-orders', 'Agendamento Local')"></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-chair"></i></div>
+                            <div>
+                                <h3 class="font-bold text-gray-800">Na Mesa (solo PDV)</h3>
+                                <p class="text-[10px] text-gray-400">Permite múltiplos pedidos por mesa antes de fechar a conta.</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="cfg-table-active" class="sr-only peer" onchange="notifyToggle('cfg-table-active', 'Serviço de Mesa')">
+                            <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between bg-gray-50 p-4 rounded-xl">
+                        <label class="flex items-center gap-3 text-sm font-bold text-gray-700">
+                            <input type="checkbox" id="cfg-table-service-fee" class="w-5 h-5 accent-purple-600" onchange="notifyToggle('cfg-table-service-fee', 'Taxa de Serviço de Mesa')">
+                            Taxa de Serviço
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-gray-400">%</span>
+                            <input type="number" id="cfg-table-fee-value" class="w-20 border rounded-lg p-2 text-right text-sm font-bold outline-none focus:border-purple-500" placeholder="10">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-6">
+                    <button class="w-full bg-white border-2 border-cyan-100 text-cyan-600 font-bold py-4 rounded-2xl hover:bg-cyan-50 hover:border-cyan-200 transition-all flex items-center justify-center gap-3 shadow-sm">
+                        <i class="fas fa-qrcode"></i> Ir para Links e Códigos QR do seu Menu
+                    </button>
+                </div>
+            </div>
+
+            <div id="view-kitchen" class="hidden flex-col h-full bg-[#f3f4f6]">
+    <div class="px-6 py-3 border-b bg-white flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-1 bg-white border border-blue-500 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold">
+                Cozinha principal <span id="kitchen-count-badge" class="bg-blue-600 text-white w-5 h-5 flex items-center justify-center rounded-full ml-1 font-bold">0</span>
+            </div>
+            <button onclick="toggleKitchenAutoRefresh()" id="kitchen-auto-refresh-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition">Ativar atualização automática</button>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="abrirModalConfirmAll()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm flex items-center gap-2">
+                <i class="fas fa-check"></i> Marcar todos os pedidos
+            </button>
+            <button class="w-8 h-8 flex items-center justify-center border rounded bg-white text-gray-500 hover:bg-gray-50"><i class="fas fa-expand"></i></button>
+            
+            <button onclick="abrirModalConfigCozinha()" class="bg-white border text-gray-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-gray-50">
+                <i class="fas fa-cog"></i> Cozinhas
+            </button>
+        </div>
+    </div>
+    <div class="flex-1 overflow-y-auto p-4">
+        <div class="bg-white border rounded-lg p-3 flex justify-between items-center mb-4">
+            <span class="text-xs text-gray-400 italic">Os pedidos no status "Em preparação" entram aqui.</span>
+            <span class="text-[10px] text-gray-400 flex items-center gap-2 font-medium">
+                <i class="fas fa-sync-alt animate-spin-slow"></i> Atualize a página manualmente para visualizar novos tickets da cozinha.
+            </span>
+        </div>
+        <div id="kitchen-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-fr">
+            </div>
+    </div>
+</div>
+
+<div id="view-inventory" class="hidden flex-col h-full bg-[#f3f4f6]">
+    <div class="p-6">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">Inventário</h2>
+            <button onclick="exportarInventarioCSV()" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 shadow-sm transition-all">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/3/34/Microsoft_Office_Excel_%282019%E2%80%93present%29.svg" class="w-5 h-5">
+                Baixar Excel
+            </button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
+                <div class="flex items-center gap-6 text-sm font-bold">
+                    <div class="flex items-center gap-2"><i class="fas fa-filter text-gray-400"></i></div>
+                    <span class="text-green-600" id="inv-count-disponivel">0 Disponível</span>
+                    <span class="text-orange-500" id="inv-count-alerta">(0 Alerta)</span>
+                    <span class="text-red-500" id="inv-count-esgotado">0 Esgotado</span>
+                </div>
+                <div class="relative w-64">
+                    <i class="fas fa-search absolute left-3 top-2.5 text-gray-400 text-sm"></i>
+                    <input type="text" id="inventory-search" onkeyup="renderizarInventario()" placeholder="Procure um produto" class="w-full pl-10 pr-4 py-2 border rounded-lg text-sm outline-none focus:border-cyan-500">
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-white border-b text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                        <tr>
+                            <th class="px-6 py-3">Produtos</th>
+                            <th class="px-6 py-3">Controle de Estoque</th>
+                            <th class="px-6 py-3">Disponibilidade</th>
+                            <th class="px-6 py-3 text-center">Inventário</th>
+                            <th class="px-6 py-3 text-right">Estoque Mín.</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table-body" class="divide-y divide-gray-100 bg-white">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="view-chatbot" class="hidden flex-col h-full bg-[#f3f4f6]">
+    
+    <div class="flex-1 overflow-y-auto p-8 space-y-8 thin-scroll">
+        
+        <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 flex flex-col lg:flex-row items-center gap-12 relative overflow-hidden">
+            <div class="flex-1 z-10">
+                <h1 class="text-4xl font-black text-gray-800 mb-6 tracking-tight">Chatbot WhatsApp da TropiBerry</h1>
+                <p class="text-gray-500 text-xl mb-8 max-w-xl leading-relaxed">
+                    Uma ferramenta poderosa para vender e responder automaticamente aos seus clientes. 
+                    <span class="text-blue-600 font-bold">Use facilmente, sem necessidade de conhecimentos de programação!</span>
+                </p>
+                
+                <ul class="space-y-4 mb-10">
+                    <li class="flex items-center gap-4 text-gray-600 font-semibold text-lg">
+                        <div class="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs"><i class="fas fa-check"></i></div>
+                        Mensagens automáticas totalmente editáveis.
+                    </li>
+                    <li class="flex items-center gap-4 text-gray-600 font-semibold text-lg">
+                        <div class="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs"><i class="fas fa-check"></i></div>
+                        Respostas instantâneas e inteligentes impulsionadas por IA.
+                    </li>
+                    <li class="flex items-center gap-4 text-gray-600 font-semibold text-lg">
+                        <div class="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs"><i class="fas fa-check"></i></div>
+                        Informações chave do seu negócio 24/7 para seus clientes.
+                    </li>
+                </ul>
+
+                <button onclick="abrirModalQR()" class="bg-[#25D366] hover:bg-[#1ebd5e] text-white px-10 py-5 rounded-2xl font-black text-lg flex items-center gap-3 transition-all shadow-xl shadow-green-100 hover:-translate-y-1 active:scale-95">
+    <i class="fab fa-whatsapp text-3xl"></i> Vincular Chatbot do WhatsApp
+</button>
+            </div>
+
+            <div class="relative w-full lg:w-[500px] flex justify-center items-center">
+                <img src="assets/chatbot-tropiberry.png" alt="Ilustração Chatbot" class="w-full h-auto z-10">
+                
+                <div class="absolute -left-10 bottom-20 bg-white p-4 rounded-2xl shadow-2xl z-20 border border-gray-50 flex items-center gap-4 animate-pop-up">
+                    <span class="text-3xl">😻</span>
+                    <div>
+                        <p class="text-lg font-black text-gray-800 leading-none">+2,000</p>
+                        <p class="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Clientes felizes</p>
+                    </div>
+                </div>
+
+                <div class="absolute -right-5 top-1/4 bg-white p-4 rounded-2xl shadow-2xl z-20 border border-gray-50 flex items-center gap-4 animate-pop-up" style="animation-delay: 0.2s">
+                    <div>
+                        <p class="text-lg font-black text-gray-800 leading-none">4.8 to 5</p>
+                        <div class="flex text-yellow-400 text-[10px] mt-1 italic"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i></div>
+                        <p class="text-[11px] text-gray-400 font-bold uppercase tracking-widest mt-1">Avaliações</p>
+                    </div>
+                    <span class="text-3xl">⭐</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-10 grid grid-cols-1 md:grid-cols-3 gap-12 relative">
+            <div class="flex flex-col items-start gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center overflow-hidden">
+                        <img src="assets/chatbot-icon-C6gFLFUw.svg" class="w-50 h-50 object-contain">
+                    </div>
+                    <span class="text-2xl font-black text-gray-200">1.</span>
+                </div>
+                <h3 class="font-black text-gray-800 text-xl leading-tight">Vincule seu Chatbot ao WhatsApp</h3>
+                <p class="text-gray-400 font-medium">De maneira fácil e rápida</p>
+            </div>
+
+            <div class="flex flex-col items-start gap-4 md:border-x border-gray-100 md:px-12">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center overflow-hidden">
+                         <img src="assets/chatbot-phone-BbYtBVLC.svg" class="w-50 h-50  object-contain">
+                    </div>
+                    <span class="text-2xl font-black text-gray-200">2.</span>
+                </div>
+                <h3 class="font-black text-gray-800 text-xl leading-tight">Responda automaticamente aos seus clientes</h3>
+                <p class="text-gray-400 font-medium">Economize tempo! O Chatbot faz isso por você.</p>
+            </div>
+
+            <div class="flex flex-col items-start gap-4 md:pl-12">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center overflow-hidden">
+                         <img src="assets/chatbot-sales-usa0oryc.svg" class="w-50 h-50 object-contain">
+                    </div>
+                    <span class="text-2xl font-black text-gray-200">3.</span>
+                </div>
+                <h3 class="font-black text-gray-800 text-xl leading-tight">Aumente suas vendas</h3>
+                <p class="text-gray-400 font-medium text-lg italic">Ganhe até <span class="text-green-600 font-black">5 vezes mais!</span></p>
+            </div>
+        </div>
+
+        <div class="flex flex-row gap-6 items-start pt-6">
+            
+            <div class="w-80 flex flex-col gap-4 shrink-0">
+                <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <div class="p-4 bg-gray-50 border-b text-sm font-bold text-gray-700">Recuperador de Vendas</div>
+                    <div class="flex flex-col text-xs">
+                        <button onclick="selecionarMsgBot('carrinho-abandonado')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Carrinho abandonado</button>
+                        <button onclick="selecionarMsgBot('desconto-novos')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Desconto para novos clientes</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <div class="p-4 bg-gray-50 border-b text-sm font-bold text-gray-700 leading-tight">Resolva as perguntas dos seus clientes</div>
+                    <div class="flex flex-col text-xs">
+                        <button onclick="selecionarMsgBot('boas-vindas')" class="bot-menu-btn active p-3 text-left border-l-4 border-blue-600 bg-blue-50 font-bold text-blue-700">Mensagem de boas-vindas</button>
+                        <button onclick="selecionarMsgBot('ausencia')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Mensagem de ausência</button>
+                        <button onclick="selecionarMsgBot('fazer-pedido')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Mensagem para fazer um pedido</button>
+                        <button onclick="selecionarMsgBot('promocoes')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Mensagem de promoções</button>
+                        <button onclick="selecionarMsgBot('informacoes')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Mensagem para solicitar informações</button>
+                        <button onclick="selecionarMsgBot('horarios')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Mensagem de horários de atendimento</button>
+                    </div>
+                </div>
+
+                <button id="btn-bot-ver-mais" onclick="toggleMaisMensagens()" class="text-blue-600 text-[11px] font-black py-2 hover:underline flex items-center justify-center gap-2 w-full uppercase tracking-tighter">
+                    Ver mais mensagens <i class="fas fa-chevron-down text-[8px]"></i>
+                </button>
+
+                <div id="colection-extra-messages" class="hidden space-y-4">
+    <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div class="p-4 bg-gray-50 border-b text-sm font-bold text-gray-700">Obtenha avaliações</div>
+        <button onclick="selecionarMsgBot('solicitar-avaliacao')" class="bot-menu-btn w-full p-3 text-left text-xs border-l-4 border-transparent hover:bg-gray-50 transition">Solicitar uma avaliação</button>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div class="p-4 bg-gray-50 border-b text-sm font-bold text-gray-700 font-bold uppercase text-[10px] tracking-widest text-gray-400">Atualizações do pedido</div>
+        <div class="flex flex-col text-xs">
+            <button onclick="selecionarMsgBot('pedido-recebido')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Pedido recebido</button>
+            <button onclick="selecionarMsgBot('pedido-aceito')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Pedido aceito</button>
+            <button onclick="selecionarMsgBot('pedido-pronto')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Pedido pronto</button>
+            <button onclick="selecionarMsgBot('pedido-a-caminho')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Pedido a caminho</button>
+            <button onclick="selecionarMsgBot('pedido-chegou')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Pedido chegou</button>
+            <button onclick="selecionarMsgBot('pedido-entregue')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Pedido entregue</button>
+            <button onclick="selecionarMsgBot('pedido-finalizado')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Pedido finalizado</button>
+            <button onclick="selecionarMsgBot('pedido-cancelado')" class="bot-menu-btn p-3 text-left border-l-4 border-transparent hover:bg-gray-50 transition">Pedido cancelado</button>
+        </div>
+    </div>
+</div>
+            </div>
+
+            <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 flex flex-col items-center w-[440px] shrink-0 sticky top-0">
+                <div class="w-full mb-6">
+                    <h3 id="bot-view-title" class="text-xl font-black text-blue-600 mb-1">Mensagem de boas-vindas</h3>
+                    <p id="bot-view-desc" class="text-xs text-gray-500 font-medium">Visualize como seus clientes recebem as mensagens.</p>
+                </div>
+
+                <div class="w-[280px] h-[540px] bg-black rounded-[45px] border-[10px] border-gray-800 shadow-2xl relative overflow-hidden flex flex-col">
+                    <div class="h-12 bg-[#075E54] flex items-center p-3 gap-3">
+                        <i class="fas fa-arrow-left text-white text-xs"></i>
+                        <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-black text-[#075E54] text-xs">T</div>
+                        <div class="flex-1 text-white leading-none">
+                            <p class="font-bold text-[11px]">TropyBerry</p>
+                            <p class="text-[8px] opacity-70">online</p>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 bg-[#E5DDD5] p-3 space-y-3 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat">
+                        <div id="bubble-incoming" class="flex justify-end">
+                            <div class="bg-[#DCF8C6] text-[10px] p-2 rounded-lg shadow-sm max-w-[80%]">
+                                <span id="text-incoming">Olá, bom dia</span>
+                                <div class="text-[7px] text-gray-500 text-right mt-1 font-bold">12:44 p.m. <i class="fas fa-check-double text-blue-400"></i></div>
+                            </div>
+                        </div>
+                        <div class="flex justify-start">
+                            <div class="bg-white text-[11px] p-3 rounded-lg shadow-sm max-w-[90%] leading-relaxed border-l-2 border-white shadow-md animate-fade-in">
+                                <span id="text-bot-response">Selecione uma opção...</span>
+                                <div class="text-[7px] text-gray-400 text-right mt-2 font-bold uppercase tracking-tighter">12:45 p.m.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+<div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-10 mt-12 mb-12">
+    <h2 class="text-2xl font-black text-gray-800 mb-8">Perguntas Frequentes</h2>
+    
+    <div class="space-y-8">
+        <div class="flex gap-6 items-start">
+            <div class="w-14 h-14 bg-blue-50 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden">
+                <img src="assets/chatbot-icon-C6gFLFUw.svg" class="w-20 h-20 object-contain"> </div>
+            <div>
+                <h3 class="font-bold text-gray-800 text-lg mb-2">O que é um Chatbot do WhatsApp?</h3>
+                <p class="text-gray-400 leading-relaxed text-sm">Um chatbot do WhatsApp é uma IA que simula conversas reais, permitindo respostas automáticas e oportunas aos seus clientes através de texto, a qualquer momento.</p>
+            </div>
+        </div>
+
+        <div class="flex gap-6 items-start">
+            <div class="w-14 h-14 bg-purple-50 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden">
+                <img src="assets/chatbot-phone-BbYtBVLC.svg" class="w-20 h-20 object-contain"> </div>
+            <div>
+                <h3 class="font-bold text-gray-800 text-lg mb-2">Como funciona o Chatbot do WhatsApp?</h3>
+                <p class="text-gray-400 leading-relaxed text-sm">Quando um cliente envia uma mensagem pelo WhatsApp, o chatbot responde automaticamente com mensagens de boas-vindas ou ausência, oferecendo informações sobre seu negócio e permitindo contato direto.</p>
+            </div>
+        </div>
+
+        <div class="flex gap-6 items-start">
+            <div class="w-14 h-14 bg-orange-50 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden">
+                <img src="assets/chatbot-question-3-CX9Ei_rh.svg" class="w-20 h-20 object-contain"> </div>
+            <div>
+                <h3 class="font-bold text-gray-800 text-lg mb-2">Por que usar um Chatbot do WhatsApp?</h3>
+                <p class="text-gray-400 leading-relaxed text-sm">Os chatbots do WhatsApp automa tizam respostas, imitam o comportamento humano e economizam tempo, permitindo interações rápidas e eficientes com seus clientes.</p>
+            </div>
+        </div>
+
+        <div class="flex gap-6 items-start">
+            <div class="w-14 h-14 bg-green-50 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden">
+                <img src="assets/chatbot-question-4-ojk_iZo4.svg" class="w-20 h-20 object-contain"> </div>
+            <div>
+                <h3 class="font-bold text-gray-800 text-lg mb-2">Posso usar meu próprio número de telefone com o Chatbot do WhatsApp?</h3>
+                <p class="text-gray-400 leading-relaxed text-sm">Sim, você pode usar seu número de telefone atual. Não é necessário obter outro número.</p>
+            </div>
+        </div>
+    </div>
+</div>
+        </main>
+
+        <div id="view-pos" class="hidden bg-gray-100 flex-col md:flex-row overflow-hidden absolute inset-0 z-30 top-0 transition-all duration-300">
+            <div class="flex-1 flex flex-col border-r border-gray-200 bg-white">
+                <div class="p-3 border-b flex items-center justify-between bg-white shadow-sm z-10">
+                    <div class="relative w-full max-w-md"><i class="fas fa-search absolute left-3 top-2.5 text-gray-400"></i><input type="text" id="pos-search" placeholder="Procurar produto..." class="w-full bg-gray-100 pl-10 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"></div>
+                    <button onclick="fecharMesaPDV()" class="bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm font-bold ml-2">Voltar</button>
+                </div>
+                <div class="flex gap-2 p-3 overflow-x-auto border-b bg-gray-50 thin-scroll" id="pos-categories"></div>
+                <div class="flex-1 overflow-y-auto p-4 bg-gray-100"><div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="pos-products-grid"></div></div>
+            </div>
+            <div class="w-full md:w-96 bg-white flex flex-col shadow-2xl relative border-l border-gray-200">
+                <div class="p-4 bg-cyan-50 border-b border-cyan-100 flex justify-between items-center"><div><div class="flex items-center gap-2"><i class="fas fa-chair text-cyan-700"></i><span class="font-bold text-gray-800 text-lg" id="pos-table-title">Mesa --</span></div></div></div>
+                <div class="flex-1 overflow-y-auto p-4 space-y-3" id="pos-order-items"></div>
+                <div class="p-4 bg-gray-50 border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <div class="flex justify-between mb-4 text-xl font-bold text-gray-900 border-t border-dashed border-gray-300 pt-2"><span>Total</span> <span id="pos-total">R$ 0,00</span></div>
+                    <button onclick="confirmarPedidoMesa()" class="w-full py-3 rounded-lg bg-green-600 text-white font-bold text-sm hover:bg-green-700 shadow-md">Enviar Pedido</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="product-modal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+                <h3 id="modal-product-title" class="font-bold text-lg text-gray-800">Editar Produto</h3>
+                <button onclick="fecharModalProduto()" class="text-gray-400 hover:text-red-500 text-xl"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="flex border-b bg-white">
+                <button onclick="mudarAba('sobre')" id="tab-btn-sobre" class="flex-1 py-3 text-sm font-bold text-cyan-700 border-b-2 border-cyan-700 bg-cyan-50">Sobre o produto</button>
+                <button onclick="mudarAba('complementos')" id="tab-btn-complementos" class="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50">Complementos</button>
+            </div>
+            <form id="form-produto" class="flex-1 overflow-y-auto bg-white relative">
+                <input type="hidden" id="edit-id">
+                <div id="tab-sobre" class="p-6 space-y-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">Nome</label><input type="text" id="edit-name" class="w-full border rounded-lg p-2 text-sm"></div>
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">Categoria</label><select id="edit-category" class="w-full border rounded-lg p-2 text-sm bg-white"></select></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">Preço (R$)</label><input type="number" step="0.01" id="edit-price" class="w-full border rounded-lg p-2 text-sm"></div>
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">Descrição</label><input type="text" id="edit-desc" class="w-full border rounded-lg p-2 text-sm"></div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Imagem</label>
+                        <div class="flex items-center gap-4">
+                            <img id="preview-image" src="" class="w-16 h-16 rounded border object-cover hidden">
+                            <input type="file" id="file-upload" class="text-sm" accept="image/*" onchange="handleImageUpload(this)">
+                            <input type="hidden" id="edit-image-url">
+                        </div>
+                    </div>
+                </div>
+                <div id="tab-complementos" class="p-6 hidden h-full flex flex-col">
+                    <div id="attached-groups-list" class="space-y-3 flex-1 overflow-y-auto"><p class="text-center text-gray-400 py-4">Grupos de complementos aparecerão aqui.</p></div>
+                </div>
+            </form>
+            <div class="px-6 py-4 border-t bg-gray-50 flex justify-between">
+                <button type="button" onclick="deletarProduto()" class="text-red-500 font-bold text-sm">Excluir</button>
+                <div class="flex gap-2">
+                    <button onclick="fecharModalProduto()" class="px-4 py-2 text-gray-600 font-bold">Cancelar</button>
+                    <button type="button" onclick="salvarProduto()" class="px-4 py-2 bg-cyan-900 text-white rounded font-bold">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="delivery-settings-modal" class="fixed inset-0 bg-black/60 z-[90] hidden flex justify-end backdrop-blur-sm">
+        <div class="bg-white w-full max-w-md h-full shadow-2xl flex flex-col slide-in-right relative">
+            <div class="bg-white border-b px-6 py-4 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-gray-800">Configurar preços de envio</h3>
+                <button onclick="document.getElementById('delivery-settings-modal').classList.add('hidden')" class="text-2xl">&times;</button>
+            </div>
+            <div class="flex-1 p-6 bg-gray-50 space-y-4">
+                <div class="bg-white p-4 rounded border mb-4">
+                    <p class="font-bold text-sm text-gray-800">Endereço do negócio</p>
+                    <p class="text-xs text-gray-500 flex items-center gap-1 mt-1"><i class="fas fa-map-marker-alt text-blue-500"></i> <span id="biz-address">Carregando...</span></p>
+                </div>
+                
+                <p class="font-bold text-sm text-gray-700">Selecione o preço e a cobertura de envio</p>
+                
+                <div class="delivery-option-card selected" onclick="selectDeliveryOption(this, 'free')">
+                    <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600"><i class="fas fa-coins"></i></div>
+                    <div><p class="font-bold text-sm">Sem preço</p><p class="text-xs text-gray-500">Ofereça frete grátis aos seus clientes</p></div>
+                </div>
+                <div class="delivery-option-card" onclick="selectDeliveryOption(this, 'fixed')">
+                    <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600"><i class="fas fa-money-bill-wave"></i></div>
+                    <div><p class="font-bold text-sm">Preço fixo</p><p class="text-xs text-gray-500">O mesmo preço para todos os pedidos</p></div>
+                </div>
+                <div class="delivery-option-card" onclick="selectDeliveryOption(this, 'district')">
+                    <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600"><i class="fas fa-map-marked-alt"></i></div>
+                    <div><p class="font-bold text-sm">Bairro de destino</p><p class="text-xs text-gray-500">O preço varia de acordo com o bairro</p></div>
+                </div>
+                <div class="delivery-option-card" onclick="selectDeliveryOption(this, 'distance')">
+                    <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600"><i class="fas fa-route"></i></div>
+                    <div><p class="font-bold text-sm">Distância percorrida</p><p class="text-xs text-gray-500">O cliente paga por KM</p></div>
+                </div>
+            </div>
+            <div class="p-6 border-t"><button onclick="salvarConfigEntrega()" class="w-full bg-blue-600 text-white font-bold py-3 rounded shadow">Salvar</button></div>
+        </div>
+    </div>
+
+    <div id="modal-fixed-price" class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-pop-up">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-bold text-lg text-gray-800">Editar Preço Fixo</h3>
+                <button onclick="this.closest('.fixed').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="space-y-4">
+                <label class="block text-xs font-bold text-gray-400 uppercase">Preço da Entrega</label>
+                <input type="number" id="input-fixed-price" class="w-full border-2 rounded-xl p-3 text-xl font-bold text-cyan-900 outline-none focus:border-cyan-500" placeholder="R$ 0,00">
+                <button onclick="salvarPrecoFixo()" class="w-full bg-cyan-600 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-cyan-700 transition">Salvar Preço</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-neighborhood-price" class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-md flex flex-col max-h-[90vh] shadow-2xl animate-pop-up">
+            <div class="p-6 border-b flex justify-between items-center">
+                <h3 class="font-bold text-lg text-gray-800">Preço por Bairro</h3>
+                <button onclick="this.closest('.fixed').classList.add('hidden')" class="text-gray-400"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="flex gap-2 mb-6">
+                    <input type="text" id="bairro-nome" placeholder="Nome do Bairro" class="flex-1 border rounded-lg p-2 text-sm">
+                    <input type="number" id="bairro-custo" placeholder="R$" class="w-24 border rounded-lg p-2 text-sm">
+                    <button onclick="adicionarBairroLista()" class="bg-cyan-600 text-white px-4 rounded-lg"><i class="fas fa-plus"></i></button>
+                </div>
+                <div id="lista-bairros-config"></div>
+            </div>
+            <div class="p-6 border-t">
+                <button onclick="salvarBairrosBanco()" class="w-full bg-cyan-600 text-white font-bold py-3 rounded-xl">Salvar Tabela</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-entregadores" class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-pop-up">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-bold text-lg text-gray-800">Gerenciar Entregadores</h3>
+                <button onclick="document.getElementById('modal-entregadores').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="space-y-4">
+                <div class="flex gap-2">
+                    <input type="text" id="new-driver-name" placeholder="Nome do Entregador" class="flex-1 border-2 rounded-xl p-2 text-sm focus:border-cyan-500 outline-none">
+                    <button onclick="adicionarEntregador()" class="bg-cyan-600 text-white px-4 rounded-xl font-bold hover:bg-cyan-700">+</button>
+                </div>
+                <div id="lista-entregadores" class="max-h-60 overflow-y-auto space-y-2 thin-scroll">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="payment-modal" class="fixed inset-0 bg-black/60 z-[70] hidden flex justify-end backdrop-blur-sm">
+        <div class="bg-white w-full max-w-md h-full shadow-2xl flex flex-col slide-in-right relative">
+            <div class="bg-white border-b px-6 py-4 flex justify-between items-center"><h3 class="font-bold text-lg">Pagamento</h3><button onclick="fecharModalPagamento()" class="text-2xl">&times;</button></div>
+            <div class="flex-1 p-6"><div class="text-3xl font-bold mb-4" id="pay-total-display">R$ 0,00</div><input type="number" id="pay-input-value" class="w-full border rounded p-3 text-xl mb-4" placeholder="Valor pago"><button onclick="confirmarPagamento(true)" class="w-full bg-green-500 text-white py-3 rounded font-bold">Confirmar</button></div>
+        </div>
+    </div>
+
+    <div id="config-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm"><div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6"><h3 class="font-bold text-lg mb-4">Configurar Ambientes</h3><div id="config-content"></div><button onclick="toggleConfigModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded">Fechar</button></div></div>
+    <div id="modal-financeiro" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4"><div class="bg-white rounded p-6"><h3 class="font-bold mb-4">Lançamento</h3><input id="fin-desc" class="border p-2 w-full mb-2" placeholder="Desc"><input id="fin-valor" type="number" class="border p-2 w-full mb-4" placeholder="Valor"><button onclick="salvarLancamento()" class="bg-blue-600 text-white px-4 py-2 rounded">Salvar</button> <button onclick="document.getElementById('modal-financeiro').classList.add('hidden')" class="px-4 py-2">Cancelar</button></div></div>
+
+    <div id="toast" class="fixed top-4 right-4 z-[100] bg-white border-l-4 border-green-500 shadow-xl rounded px-4 py-3 hidden animate-fade-in-up">
+        <p class="font-bold text-sm text-gray-800" id="toast-title">Sucesso</p>
+        <p class="text-xs text-gray-500" id="toast-msg">Operação realizada.</p>
+    </div>
+
+    <div id="receipt-area" class="hidden bg-white p-2 text-black font-mono text-xs max-w-[80mm]"></div>
+    <audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
+    <script type="module" src="js/notifications.js"></script>
+    <script type="module" src="js/dashboard.js"></script>
+    <div id="modal-confirm-all-ready" class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-pop-up">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-xl text-gray-800">Marcar tudo como preparado</h3>
+            <button onclick="fecharModalConfirmAll()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <p class="text-gray-600 text-sm mb-6">
+            Você está prestes a marcar todos os pedidos de todas as cozinhas como preparados. Esta ação não pode ser desfeita.<br><br>
+            <strong>Você tem certeza de que deseja continuar?</strong>
+        </p>
+        <div class="flex justify-end gap-4">
+            <button onclick="fecharModalConfirmAll()" class="px-6 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition">Voltar</button>
+            <button onclick="marcarTodosComoProntos()" class="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg transition">Continuar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-config-kitchens" class="fixed inset-0 bg-black/60 z-[90] hidden flex justify-end backdrop-blur-sm">
+    <div class="bg-white w-full max-w-sm h-full shadow-2xl flex flex-col slide-in-right">
+        <div class="p-4 border-b flex justify-between items-center">
+            <h3 class="font-bold text-lg text-gray-800">Configurar cozinhas</h3>
+            <button onclick="fecharModalConfigCozinha()" class="text-gray-400 text-2xl">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-6">
+            <div class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border">
+                <div>
+                    <p class="text-sm font-bold text-gray-700">Atualização automática</p>
+                    <span id="auto-refresh-status-badge" class="text-[10px] bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-bold uppercase">Desativado</span>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="toggle-auto-refresh-kitchen" class="sr-only peer" onchange="toggleKitchenAutoRefresh()">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+
+            <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                    <p class="text-sm font-bold text-gray-700">Nome da cozinha: <span id="kitchen-name-label" class="font-normal">Cozinha principal</span></p>
+                    <button onclick="renomearCozinha()" class="text-gray-400 hover:text-blue-600"><i class="fas fa-pencil-alt text-sm"></i></button>
+                </div>
+                <p class="text-xs text-gray-400 italic">Esta cozinha recebe por padrão:</p>
+                <p class="text-xs font-bold text-gray-800">Todos os produtos</p>
+            </div>
+
+            <button onclick="criarNovaCozinha()" class="text-blue-600 text-sm font-bold flex items-center gap-2 hover:underline">
+                <i class="fas fa-plus"></i> Nova cozinha
+            </button>
+
+            <div class="bg-blue-50 border border-blue-200 p-4 rounded-xl text-blue-700 space-y-3">
+                <div class="flex gap-3">
+                    <i class="fas fa-info-circle mt-1"></i>
+                    <div class="text-xs space-y-2">
+                        <p>Crie uma nova cozinha para:</p>
+                        <ul class="list-disc pl-4 space-y-1">
+                            <li>Produzir produtos em outras áreas (bar, grelha, etc.)</li>
+                            <li>Neste Painel da cozinha, cada cozinha será apresentada como uma nova aba.</li>
+                            <li>No aplicativo de impressão, cada cozinha pode ser atribuída a uma impressora específica.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 border-t bg-gray-50">
+            <div class="flex items-center justify-between">
+                <p class="text-xs text-gray-700 font-bold">Mantenha os produtos na cozinha mesmo após <span class="text-black">concluir o pedido</span>.</p>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="cfg-keep-kitchen-items" class="sr-only peer" onchange="salvarConfigManterProdutos()">
+                    <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-4 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+<script type="module" src="js/notifications.js"></script>
+    <script type="module" src="js/dashboard.js"></script>
+    <script type="module" src="js/operations.js"></script> 
+    <div id="modal-qrcode-whatsapp" class="fixed inset-0 bg-black/70 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-md">
+    <div class="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl animate-pop-up text-center">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="font-black text-xl text-gray-800">Vincular WhatsApp</h3>
+            <button onclick="fecharModalQR()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+        </div>
+
+        <div id="qr-container" class="bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 flex flex-col items-center justify-center min-h-[300px] mb-6">
+            <div id="qr-loading" class="flex flex-col items-center gap-3">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+                <p class="text-xs text-gray-500 font-bold uppercase">Gerando sessão segura...</p>
+            </div>
+            <img id="qr-image" src="" class="hidden w-64 h-64 shadow-lg rounded-xl border-4 border-white">
+        </div>
+
+        <div class="text-left space-y-4 mb-6">
+            <p class="text-sm text-gray-600 leading-relaxed">
+                <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded font-black mr-2">1</span> Abra o WhatsApp no seu celular.
+            </p>
+            <p class="text-sm text-gray-600 leading-relaxed">
+                <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded font-black mr-2">2</span> Vá em <b>Aparelhos conectados</b> > <b>Conectar um aparelho</b>.
+            </p>
+            <p class="text-sm text-gray-600 leading-relaxed">
+                <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded font-black mr-2">3</span> Aponte a câmera para este QR Code.
+            </p>
+        </div>
+
+        <div id="status-conexao" class="hidden bg-green-50 text-green-700 p-4 rounded-xl font-bold text-sm flex items-center justify-center gap-3">
+            <i class="fas fa-check-circle text-xl"></i> WhatsApp Conectado com Sucesso!
+        </div>
+    </div>
+</div>
+</body>
+</html>

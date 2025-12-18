@@ -29,6 +29,8 @@ let currentProductDetail = null;
 let currentComplements = []; 
 let selectedOptions = {}; 
 let currentQtd = 1;
+let configPedidos = {};
+let currentDeliveryFee = 0;
 
 // CACHE GLOBAL DE COMPLEMENTOS
 let globalComplements = {}; 
@@ -97,18 +99,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2. Monitora o Login e preenche os botões no Header
     monitorarEstadoAuth(async (user) => {
         const container = document.getElementById('auth-buttons-container');
-        
-        // Se o container não existir (header não renderizou), tenta de novo em 500ms
         if(!container) return;
 
         if (user) {
             currentUserIsAdmin = await verificarAdminNoBanco(user.email);
-            let adminBtn = currentUserIsAdmin ? `<a href="admin.html" class="bg-cyan-800 border border-cyan-400 text-yellow-400 text-[10px] px-2 py-1 rounded font-bold uppercase ml-2 shadow-sm hover:bg-cyan-700 decoration-0">Painel Admin</a>` : '';
+            
+            // --- AQUI ESTÁ A MUDANÇA ---
+            let adminButtons = '';
+            if (currentUserIsAdmin) {
+                adminButtons = `
+                    <div class="hidden md:flex gap-2 ml-2">
+                        <a href="dashboard.html" class="bg-cyan-900 border border-cyan-400 text-white text-[10px] px-3 py-1 rounded-lg font-bold uppercase shadow-sm hover:bg-cyan-800 flex items-center gap-1">
+                            <i class="fas fa-columns"></i> Dashboard
+                        </a>
+                        <a href="admin.html" class="bg-cyan-700 border border-cyan-400 text-yellow-400 text-[10px] px-3 py-1 rounded-lg font-bold uppercase shadow-sm hover:bg-cyan-600">
+                            Painel Admin
+                        </a>
+                    </div>
+                `;
+            }
+            // ---------------------------
             
             container.innerHTML = `
                 <div class="flex items-center">
                     <span class="text-xs font-bold text-white hidden md:block mr-2">Olá, ${user.displayName || user.email.split('@')[0]}</span>
-                    ${adminBtn}
+                    ${adminButtons}
                     <button onclick="fazerLogout()" class="bg-red-500/80 hover:bg-red-500 text-white text-xs px-3 py-1 ml-2 rounded-full font-bold transition">Sair</button>
                 </div>`;
                 
@@ -116,6 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             atualizarElementosAdminUI();
             if(currentProductDetail) verificarBotaoAdmin(currentProductDetail.id);
         } else {
+            // ... (código de quando não está logado continua igual) ...
             currentUserIsAdmin = false;
             container.innerHTML = `
                 <a href="login.html" class="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1 rounded-full font-bold transition">Entrar</a>
@@ -699,18 +715,25 @@ function showToast(message, isError = false) {
 function addToCart(id) { /* Função legada, agora usamos adicionarAoCarrinhoDetalhado */ }
 function changeQuantity(id, delta) { const item = cart.find(i => i.id === id); if (item) { item.quantity += delta; if (item.quantity <= 0) cart = cart.filter(i => i.id !== id); updateCartUI(); } }
 function updateCartUI() {
-    const counters = document.querySelectorAll('#cart-count'); const totalCount = cart.reduce((sum, i) => sum + i.quantity, 0); counters.forEach(c => c.innerText = totalCount);
-    const containers = document.querySelectorAll('#cart-items'); const total = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
-    const totalDisplays = document.querySelectorAll('#cart-total'); totalDisplays.forEach(t => t.innerText = 'R$ ' + total.toFixed(2).replace('.', ','));
-    containers.forEach(container => {
-        if (cart.length === 0) container.innerHTML = `<p class="text-center text-gray-400 py-10">Carrinho vazio</p>`;
-        else {
-            container.innerHTML = cart.map(item => `
-                <div class="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm border mb-2">
-                    <div><h5 class="font-bold text-cyan-900 text-sm">${item.name}</h5><p class="text-[10px] text-gray-500 max-w-[150px] truncate">${item.details || ''}</p><p class="text-xs text-gray-500">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</p></div>
-                    <div class="flex items-center gap-2 bg-gray-50 rounded px-2"><button onclick="changeQuantity('${item.id}', -1)" class="text-red-500 font-bold w-6">-</button><span class="text-sm font-bold w-4 text-center">${item.quantity}</span><button onclick="changeQuantity('${item.id}', 1)" class="text-green-500 font-bold w-6">+</button></div>
-                </div>`).join('');
-        }
+    // ... seu código existente ...
+    const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+    const frete = calcularFrete();
+    const totalComFrete = subtotal + frete;
+
+    totalDisplays.forEach(t => {
+        t.innerHTML = `
+            <div class="flex flex-col items-end">
+                ${frete > 0 ? `<span class="text-xs text-gray-400 font-normal">Subtotal: R$ ${subtotal.toFixed(2).replace('.', ',')}</span>` : ''}
+                ${frete > 0 ? `<span class="text-xs text-green-600 font-normal">Entrega: R$ ${frete.toFixed(2).replace('.', ',')}</span>` : ''}
+                <span>R$ ${totalComFrete.toFixed(2).replace('.', ',')}</span>
+            </div>
+        `;
+    });
+
+    // Inserção do Ticket Booster (Sua função anterior)
+    const boosterHtml = renderTicketBooster();
+    containers.forEach(c => {
+        if (cart.length > 0) c.insertAdjacentHTML('beforeend', boosterHtml);
     });
 }
 function startCheckout() { if (cart.length === 0) return showToast("Carrinho vazio!"); if (!isStoreOpen) return showToast("Loja Fechada!"); const cartModal = document.getElementById('cart-modal'); if(cartModal && !cartModal.classList.contains('hidden')) toggleCart(); const checkoutModal = document.getElementById('checkout-modal'); if(!checkoutModal) { window.location.href = 'index.html?action=checkout'; return; } checkoutModal.classList.remove('hidden'); showStep('step-service'); }
@@ -728,16 +751,82 @@ function goToPaymentMethod() {
     } else { currentOrder.customer.address = "Retirada na Loja"; localStorage.setItem('tropyberry_user', JSON.stringify({ name: n, phone: p })); }
     showStep('step-payment-method');
 }
+document.getElementById('input-district')?.addEventListener('input', () => {
+    updateCartUI();     
+});
 async function processPayment() {
-    if(!db) return showToast("Erro de conexão.", true);
-    const btn = document.getElementById('btn-generate-pay'); const originalText = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...'; btn.disabled = true;
-    const method = document.querySelector('input[name="pay-method"]:checked').value; const total = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+    // 1. Cálculos de Valores
+    const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+    const frete = calcularFrete();
+    
+    // Lógica da Taxa de Serviço (Mesa ou Local)
+    let serviceFee = 0;
+    if (currentOrder.method === 'mesa' || currentOrder.method === 'local') {
+        serviceFee = (subtotal * (configPedidos.tableFee || 0)) / 100;
+    }
+    
+    const totalFinal = subtotal + frete + serviceFee;
+
+    // 2. Validação básica de pagamento (Pix ou Cartão)
+    const payMethod = document.querySelector('input[name="pay-method"]:checked')?.value || 'pix';
+
+    // 3. Montagem do objeto do Pedido
+    const pedidoParaBanco = {
+        customer: currentOrder.customer,
+        items: cart,
+        method: currentOrder.method,
+        subtotal: subtotal,
+        deliveryFee: frete,
+        serviceFee: serviceFee,
+        total: totalFinal,
+        paymentMethod: payMethod,
+        paymentStatus: 'pending', // Inicia como pendente até a confirmação
+        status: 'Aguardando',
+        origin: 'web',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+    };
+
+    // Botão de loading visual
+    const btnPay = document.getElementById('btn-generate-pay');
+    if(btnPay) {
+        btnPay.disabled = true;
+        btnPay.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+    }
+
     try {
-        const orderRef = await addDoc(collection(db, "pedidos"), { customer: currentOrder.customer, items: cart, method: currentOrder.method, total, status: 'Aguardando', createdAt: serverTimestamp() });
-        const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: cart, playerInfo: currentOrder.customer, total, method }) });
-        const data = await response.json();
-        if (data.success) { closeCheckout(); saveLastOrder(orderRef.id); if (data.type === 'pix') openOrderScreen(orderRef?.id || 'TEMP', 'pix_pending', data.qr_code); else if (data.type === 'card_link') window.location.href = data.link; } else { alert("Erro: " + data.error); }
-    } catch (error) { console.error(error); alert("Erro de conexão."); } finally { btn.innerHTML = originalText; btn.disabled = false; }
+        // 4. Envio para o Firebase Firestore
+        const docRef = await addDoc(collection(db, "pedidos"), pedidoParaBanco);
+        const orderId = docRef.id;
+
+        // 5. Ações Pós-Sucesso
+        showToast("Pedido enviado com sucesso!");
+        
+        // Salva localmente para o cliente poder consultar o status depois
+        saveLastOrder(orderId);
+        
+        // Limpa o carrinho
+        cart = [];
+        updateCartUI();
+        
+        // Fecha o modal de checkout e abre a tela de acompanhamento
+        closeCheckout();
+        
+        // Simulação de código PIX ou Link de Cartão (Se for Pix)
+        const pixFake = "00020126330014br.gov.bcb.pix0111" + orderId;
+        
+        // Abre a tela de status do pedido (Função que você já tem no script.js)
+        openOrderScreen(orderId, payMethod === 'pix' ? 'pix_pending' : 'paid', pixFake);
+
+    } catch (e) {
+        console.error("Erro ao processar pedido:", e);
+        showToast("Erro ao processar pedido. Tente novamente.", true);
+        
+        if(btnPay) {
+            btnPay.disabled = false;
+            btnPay.innerHTML = '<span>Finalizar Pedido</span><i class="fas fa-check-circle"></i>';
+        }
+    }
 }
 async function openOrderScreen(orderId, statusType, pixCode = null) {
     const screen = document.getElementById('order-screen'); if(!screen) return; screen.classList.remove('hidden'); document.getElementById('status-order-id').innerText = orderId.slice(0, 5).toUpperCase();
@@ -746,6 +835,87 @@ async function openOrderScreen(orderId, statusType, pixCode = null) {
     if (statusType === 'pix_pending') { badge.className = "bg-orange-100 text-orange-600 text-xs px-3 py-1 rounded-full font-bold border border-orange-200"; badge.innerText = "Aguardando Pagamento"; if(pixCode) { showToast("Copie o código PIX!"); const pixScreen = document.getElementById('pix-copy-paste-screen'); if(pixScreen) pixScreen.value = pixCode; } } 
     else { badge.className = "bg-green-100 text-green-600 text-xs px-3 py-1 rounded-full font-bold border border-green-200"; badge.innerText = "Pago"; }
     renderReceipt(); document.getElementById('btn-whatsapp-status').href = `https://wa.me/5583999999999?text=${encodeURIComponent(`Pedido #${orderId.slice(0,5)}. Status?`)}`;
+}
+async function monitorarConfiguracoes() {
+    onSnapshot(doc(db, "config", "pedidos"), (docSnap) => {
+        if (docSnap.exists()) {
+            configPedidos = docSnap.data();
+            
+            const btnPickup = document.querySelector('button[onclick="selectService(\'retirada\')"]');
+            if (btnPickup) {
+                if (configPedidos.pickup === false) {
+                    btnPickup.classList.add('hidden');
+                } else {
+                    btnPickup.classList.remove('hidden');
+                }
+            }
+        }
+    });
+}
+
+// Chame monitorarConfiguracoes() no DOMContentLoaded
+document.addEventListener('DOMContentLoaded', monitorarConfiguracoes);
+
+function renderTicketBooster() {
+    if (!configPedidos.ticketBooster || cart.length === 0) return '';
+
+    // Filtra produtos que NÃO estão no carrinho e ordena por preço (menor primeiro)
+    const cartIds = cart.map(item => item.originalId);
+    const sugestoes = products
+        .filter(p => !cartIds.includes(p.id))
+        .sort((a, b) => a.price - b.price)
+        .slice(0, 3); // Pega os 3 mais baratos
+
+    if (sugestoes.length === 0) return '';
+
+    return `
+        <div class="mt-6 border-t pt-4 animate-fade-in">
+            <p class="text-xs font-bold text-cyan-700 uppercase mb-3 flex items-center gap-2">
+                <i class="fas fa-rocket text-yellow-500"></i> Que tal adicionar?
+            </p>
+            <div class="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+                ${sugestoes.map(p => `
+                    <div class="min-w-[140px] bg-white border rounded-xl p-2 shadow-sm">
+                        <img src="${p.image}" class="w-full h-20 object-cover rounded-lg mb-2">
+                        <h4 class="text-[10px] font-bold text-gray-700 truncate">${p.name}</h4>
+                        <div class="flex justify-between items-center mt-1">
+                            <span class="text-xs font-bold text-green-600">R$ ${p.price.toFixed(2)}</span>
+                            <button onclick="abrirModalRapido('${p.id}')" class="bg-cyan-100 text-cyan-600 p-1 rounded-lg hover:bg-cyan-600 hover:text-white transition">
+                                <i class="fas fa-plus text-[10px]"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+function calcularFrete() {
+    if (currentOrder.method !== 'delivery') {
+        currentDeliveryFee = 0;
+        return 0;
+    }
+
+    const mode = configPedidos.deliveryMode;
+    
+    if (mode === 'fixed') {
+        currentDeliveryFee = configPedidos.deliveryFixedPrice || 0;
+    } 
+    else if (mode === 'district') {
+        const bairroCliente = document.getElementById('input-district').value.trim().toLowerCase();
+        const infoBairro = configPedidos.deliveryDistricts?.find(b => b.nome.toLowerCase() === bairroCliente);
+        
+        if (infoBairro) {
+            currentDeliveryFee = infoBairro.custo;
+        } else {
+            // Se não achar o bairro, você pode definir um padrão ou avisar
+            currentDeliveryFee = 0; 
+        }
+    } else {
+        currentDeliveryFee = 0;
+    }
+
+    return currentDeliveryFee;
 }
 function renderReceipt() { const list = document.getElementById('receipt-items-list'); list.innerHTML = ''; let subtotal = 0; cart.forEach(item => { const t = item.price * item.quantity; subtotal += t; list.innerHTML += `<div class="flex justify-between items-start mb-2"><div><span class="font-bold text-gray-700">${item.quantity}x</span> <span class="text-gray-600">${item.name}</span></div><span class="text-gray-800 font-medium">R$ ${t.toFixed(2).replace('.', ',')}</span></div>`; }); document.getElementById('receipt-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; document.getElementById('receipt-total').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; }
 function toggleReceipt() { const el = document.getElementById('receipt-details'); const arr = document.getElementById('arrow-receipt'); if (el.classList.contains('hidden')) { el.classList.remove('hidden'); arr.classList.add('rotate-180'); } else { el.classList.add('hidden'); arr.classList.remove('rotate-180'); } }
