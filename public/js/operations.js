@@ -301,18 +301,11 @@ window.renomearCozinha = async () => {
     
     if (novoNome && novoNome !== nomeAtual) {
         try {
-            // Salva na coleção de configurações do sistema
-            await updateDoc(doc(db, "config", "cozinha"), { 
-                nomePrincipal: novoNome 
-            }, { merge: true });
-            
-            // Atualiza a interface
+            await updateDoc(doc(db, "config", "cozinha"), { nomePrincipal: novoNome }, { merge: true });
             document.getElementById('kitchen-name-label').innerText = novoNome;
-            document.querySelector('#view-kitchen .bg-white.border-blue-500').firstChild.textContent = novoNome + ' '; 
-            
-            showToast("Sucesso", "Nome da cozinha atualizado!");
+            window.showToast("Cozinha", "Nome atualizado com sucesso!"); // Uso do Toast
         } catch (e) {
-            console.error("Erro ao renomear:", e);
+            window.showToast("Erro", "Falha ao renomear.", true);
         }
     }
 };
@@ -325,18 +318,14 @@ window.criarNovaCozinha = async () => {
     try {
         const docRef = doc(db, "config", "cozinha");
         const docSnap = await getDoc(docRef);
-        let cozinhas = [];
-        
-        if (docSnap.exists()) {
-            cozinhas = docSnap.data().lista || [];
-        }
+        let cozinhas = docSnap.exists() ? (docSnap.data().lista || []) : [];
         
         cozinhas.push({ id: Date.now(), nome: nome, ativa: true });
-        
         await setDoc(docRef, { lista: cozinhas }, { merge: true });
-        showToast("Sucesso", `Cozinha "${nome}" criada! (As abas serão geradas na próxima atualização)`);
+        
+        window.showToast("Sucesso", `Cozinha "${nome}" criada!`); // Uso do Toast
     } catch (e) {
-        console.error("Erro ao criar cozinha:", e);
+        window.showToast("Erro", "Erro ao criar cozinha.", true);
     }
 };
 

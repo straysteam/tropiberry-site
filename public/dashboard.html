@@ -891,7 +891,23 @@
     </div>
 
     <div id="config-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm"><div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6"><h3 class="font-bold text-lg mb-4">Configurar Ambientes</h3><div id="config-content"></div><button onclick="toggleConfigModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded">Fechar</button></div></div>
-    <div id="modal-financeiro" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4"><div class="bg-white rounded p-6"><h3 class="font-bold mb-4">Lançamento</h3><input id="fin-desc" class="border p-2 w-full mb-2" placeholder="Desc"><input id="fin-valor" type="number" class="border p-2 w-full mb-4" placeholder="Valor"><button onclick="salvarLancamento()" class="bg-blue-600 text-white px-4 py-2 rounded">Salvar</button> <button onclick="document.getElementById('modal-financeiro').classList.add('hidden')" class="px-4 py-2">Cancelar</button></div></div>
+   <div id="modal-financeiro" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
+        <h3 class="font-bold text-lg mb-4 text-cyan-900">Novo Lançamento</h3>
+        <div class="space-y-3">
+            <input id="fin-desc" class="border rounded-lg p-3 w-full outline-none focus:border-cyan-500" placeholder="Descrição (Ex: Compra de Leite)">
+            <select id="fin-tipo" class="border rounded-lg p-3 w-full bg-white outline-none">
+                <option value="entrada">Entrada (+)</option>
+                <option value="saida">Saída (-)</option>
+            </select>
+            <input id="fin-valor" type="number" step="0.01" class="border rounded-lg p-3 w-full outline-none focus:border-cyan-500" placeholder="Valor R$ 0,00">
+        </div>
+        <div class="flex gap-2 mt-6">
+            <button onclick="document.getElementById('modal-financeiro').classList.add('hidden')" class="flex-1 py-2 text-gray-500 font-bold">Cancelar</button>
+            <button onclick="salvarLancamento()" class="flex-1 bg-cyan-600 text-white py-2 rounded-lg font-bold hover:bg-cyan-700">Salvar</button>
+        </div>
+    </div>
+</div>
 
     <div id="toast" class="fixed top-4 right-4 z-[100] bg-white border-l-4 border-green-500 shadow-xl rounded px-4 py-3 hidden animate-fade-in-up">
         <p class="font-bold text-sm text-gray-800" id="toast-title">Sucesso</p>
@@ -1012,5 +1028,47 @@
         </div>
     </div>
 </div>
+<div id="modal-abrir-caixa" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl animate-pop-up">
+        <div class="flex items-center gap-3 mb-4 text-cyan-900">
+            <i class="fas fa-unlock-alt text-2xl"></i>
+            <h3 class="font-bold text-lg">Abrir Caixa</h3>
+        </div>
+        <p class="text-xs text-gray-500 mb-4">Informe o valor inicial para troco (Fundo de reserva).</p>
+        
+        <div class="relative mb-6">
+            <span class="absolute left-3 top-3 text-gray-400 font-bold">R$</span>
+            <input id="caixa-valor-inicial" type="number" step="0.01" 
+                   class="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg outline-none focus:border-cyan-500 text-lg font-bold" 
+                   value="0.00">
+        </div>
+
+        <div class="flex gap-2">
+            <button onclick="document.getElementById('modal-abrir-caixa').classList.add('hidden')" 
+                    class="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition">Cancelar</button>
+            <button onclick="confirmarAberturaCaixa()" 
+                    class="flex-1 bg-cyan-600 text-white py-3 rounded-lg font-bold hover:bg-cyan-700 shadow-lg">Abrir Caixa</button>
+        </div>
+    </div>
+</div>
+<div id="modal-confirmar-fechamento" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl animate-pop-up">
+        <div class="text-center">
+            <div class="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 text-2xl">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3 class="font-bold text-lg text-gray-800 mb-2">Fechar o Caixa?</h3>
+            <p class="text-sm text-gray-500 mb-6">Esta ação irá encerrar o turno atual e o saldo final será registrado no sistema.</p>
+        </div>
+        
+        <div class="flex gap-2">
+            <button onclick="document.getElementById('modal-confirmar-fechamento').classList.add('hidden')" 
+                    class="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition">Cancelar</button>
+            <button onclick="executarFechamentoReal()" 
+                    class="flex-1 bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 shadow-lg">Confirmar</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

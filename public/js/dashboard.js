@@ -68,19 +68,25 @@ async function carregarProdutosECategorias() {
 }
 
 // === NAVEGAÇÃO ===
-window.mudarAbaServico = (aba) => {
+window.mudarAbaServico = async (aba) => {
     currentServiceTab = aba;
     document.querySelectorAll('.nav-tab-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`tab-${aba}`).classList.add('active');
     
-    document.getElementById('view-lista').classList.add('hidden');
-    document.getElementById('view-mesas').classList.add('hidden');
+    const viewLista = document.getElementById('view-lista');
+    const viewMesas = document.getElementById('view-mesas');
     
     if (aba === 'mesa') {
-        document.getElementById('view-mesas').classList.remove('hidden');
+        viewLista.classList.add('hidden');
+        viewMesas.classList.remove('hidden');
+        // Garante que as configurações de ambiente existam antes de renderizar
+        if (!tablesConfig.environments || tablesConfig.environments.length === 0) {
+            await carregarConfigMesas();
+        }
         renderizarAmbientes(); 
     } else {
-        document.getElementById('view-lista').classList.remove('hidden');
+        viewMesas.classList.add('hidden');
+        viewLista.classList.remove('hidden');
         renderizarPedidosLista();
     }
 }
@@ -291,34 +297,84 @@ window.carregarHistorico = async () => {
 
 window.carregarFinanceiro = async () => {
     const tbody = document.getElementById('table-financeiro-body');
-    tbody.innerHTML = '';
-    const q = query(collection(db, "movimentacoes"), orderBy("data", "desc"));
-    const snap = await getDocs(q);
-    snap.forEach(docSnap => {
-        const m = docSnap.data();
-        const color = m.tipo === 'entrada' ? 'text-green-600' : 'text-red-600';
-        const sinal = m.tipo === 'entrada' ? '+' : '-';
-        tbody.innerHTML += `<tr class="bg-white border-b"><td class="px-6 py-3">${m.data ? m.data.toDate().toLocaleDateString() : '--'}</td><td class="px-6 py-3">${m.descricao}</td><td class="px-6 py-3 uppercase text-xs font-bold">${m.tipo}</td><td class="px-6 py-3 ${color} font-bold">${sinal} R$ ${m.valor.toFixed(2)}</td></tr>`;
-    });
+    if (!tbody) return;
+    
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-400">Carregando lançamentos...</td></tr>';
+    
+    try {
+        const q = query(collection(db, "movimentacoes"), orderBy("data", "desc"));
+        const snap = await getDocs(q);
+        
+        tbody.innerHTML = '';
+        if (snap.empty) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-400">Nenhuma movimentação encontrada.</td></tr>';
+            return;
+        }
+
+        snap.forEach(docSnap => {
+            const m = docSnap.data();
+            const color = m.tipo === 'entrada' ? 'text-green-600' : 'text-red-600';
+            const sinal = m.tipo === 'entrada' ? '+' : '-';
+            const dataFormatada = m.data ? m.data.toDate().toLocaleDateString('pt-BR') : '--/--/----';
+            
+            tbody.innerHTML += `
+                <tr class="bg-white border-b hover:bg-gray-50 transition">
+                    <td class="px-6 py-3 text-gray-600">${dataFormatada}</td>
+                    <td class="px-6 py-3 font-medium">${m.descricao}</td>
+                    <td class="px-6 py-3 uppercase text-[10px] font-bold">
+                        <span class="px-2 py-1 rounded-full ${m.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${m.tipo}</span>
+                    </td>
+                    <td class="px-6 py-3 ${color} font-bold">${sinal} R$ ${parseFloat(m.valor).toFixed(2).replace('.', ',')}</td>
+                </tr>`;
+        });
+    } catch (e) {
+        console.error("Erro ao carregar financeiro:", e);
+        window.showToast("Erro", "Falha ao carregar a lista financeira.", true);
+    }
 }
 
 window.abrirModalFinanceiro = () => { document.getElementById('modal-financeiro').classList.remove('hidden'); }
 
 window.salvarLancamento = async () => {
-    const desc = document.getElementById('fin-desc').value;
-    const tipo = document.getElementById('fin-tipo').value;
-    const valor = parseFloat(document.getElementById('fin-valor').value);
+    const descEl = document.getElementById('fin-desc');
+    const tipoEl = document.getElementById('fin-tipo');
+    const valorEl = document.getElementById('fin-valor');
 
-    if(!desc || !valor) return alert("Preencha todos os campos");
+    const desc = descEl.value.trim();
+    const tipo = tipoEl.value;
+    const valor = parseFloat(valorEl.value);
+
+    // Validação usando Toast
+    if (!desc || isNaN(valor) || valor <= 0) {
+        return window.showToast("Atenção", "Preencha a descrição e um valor válido.", true);
+    }
 
     try {
-        await addDoc(collection(db, "movimentacoes"), { descricao: desc, tipo, valor, data: serverTimestamp() });
+        // Salva no Firestore
+        await addDoc(collection(db, "movimentacoes"), { 
+            descricao: desc, 
+            tipo: tipo, 
+            valor: valor, 
+            data: serverTimestamp() 
+        });
+
+        // Feedback de Sucesso
+        window.showToast("Sucesso", "Lançamento registrado!");
+
+        // Limpa e fecha o modal
+        descEl.value = '';
+        valorEl.value = '';
         document.getElementById('modal-financeiro').classList.add('hidden');
+
+        // Atualiza a tabela e o saldo do caixa
         carregarFinanceiro();
         atualizarSaldoCaixa(tipo, valor);
-    } catch(e) { console.error(e); alert("Erro ao salvar"); }
-}
 
+    } catch (e) {
+        console.error("Erro ao salvar lançamento:", e);
+        window.showToast("Erro", "Não foi possível salvar no banco de dados.", true);
+    }
+}
 // === MÓDULO VENDAS: CAIXA ===
 window.carregarEstadoCaixa = async () => {
     const storedCaixa = localStorage.getItem('caixa_status');
@@ -337,34 +393,94 @@ window.carregarEstadoCaixa = async () => {
 }
 
 window.abrirCaixa = () => {
-    const inicial = prompt("Valor de abertura (Fundo de troco):", "0");
-    if(inicial === null) return;
+    document.getElementById('modal-abrir-caixa').classList.remove('hidden');
+    document.getElementById('caixa-valor-inicial').focus();
+};
+
+// 2. Confirmação com Toast e Proteção de Saldo
+window.confirmarAberturaCaixa = async () => {
+    const input = document.getElementById('caixa-valor-inicial');
+    // Força a conversão para número para evitar o erro de saldo "0"
+    const valorNumerico = Number(input.value) || 0;
     
-    const status = { aberto: true, inicio: Date.now(), saldo: parseFloat(inicial) || 0 };
+    const status = { 
+        aberto: true, 
+        inicio: new Date().toISOString(), 
+        saldo: valorNumerico 
+    };
+    
     localStorage.setItem('caixa_status', JSON.stringify(status));
+    document.getElementById('modal-abrir-caixa').classList.add('hidden');
+    
     carregarEstadoCaixa();
-    addDoc(collection(db, "movimentacoes"), { descricao: "Abertura Caixa", tipo: "entrada", valor: status.saldo, data: serverTimestamp() });
-}
+    
+    // Feedback Bonitão
+    if (typeof showToast === "function") {
+        showToast("Caixa Aberto", `Fundo de troco: R$ ${valorNumerico.toFixed(2)}`);
+    }
+
+    try {
+        await addDoc(collection(db, "movimentacoes"), { 
+            descricao: "Abertura de Caixa", 
+            tipo: "entrada", 
+            valor: valorNumerico, 
+            data: serverTimestamp() 
+        });
+    } catch(e) {
+        console.error("Erro ao registrar abertura:", e);
+    }
+};
 
 window.fecharCaixa = () => {
-    if(!confirm("Deseja fechar o caixa?")) return;
-    localStorage.removeItem('caixa_status');
-    carregarEstadoCaixa();
-    addDoc(collection(db, "movimentacoes"), { descricao: "Fechamento Caixa", tipo: "neutro", valor: 0, data: serverTimestamp() });
-}
-
-function atualizarSaldoCaixa(tipo, valor) {
-    const stored = localStorage.getItem('caixa_status');
-    if(stored) {
-        const status = JSON.parse(stored);
-        if(status.aberto) {
-            if(tipo === 'entrada') status.saldo += valor;
-            else status.saldo -= valor;
-            localStorage.setItem('caixa_status', JSON.stringify(status));
-            document.getElementById('caixa-saldo').innerText = `R$ ${status.saldo.toFixed(2)}`;
-        }
+    const data = localStorage.getItem('caixa_status');
+    if (!data) {
+        showToast("Erro", "O caixa já está fechado.", true);
+        return;
     }
-}
+    document.getElementById('modal-confirmar-fechamento').classList.remove('hidden');
+};
+
+// 2. Executa o fechamento após a confirmação no modal
+window.executarFechamentoReal = () => {
+    const data = localStorage.getItem('caixa_status');
+    const status = JSON.parse(data);
+    const saldoFinal = Number(status.saldo) || 0;
+
+    showToast("Sucesso", `Caixa fechado com R$ ${saldoFinal.toFixed(2).replace('.', ',')}`);
+    
+    localStorage.removeItem('caixa_status');
+    document.getElementById('modal-confirmar-fechamento').classList.add('hidden');
+    carregarEstadoCaixa();
+};
+
+// 3. CORREÇÃO DO ERRO DO SALDO 0: Forçar atualização do display
+window.atualizarSaldoCaixa = (tipo, valor) => {
+    const data = localStorage.getItem('caixa_status');
+    if (!data) return;
+
+    let status = JSON.parse(data);
+    
+    // Garantia de que estamos lidando com NÚMEROS
+    let saldoAtual = Number(status.saldo) || 0;
+    const valorMovimentacao = Number(valor) || 0;
+
+    if (tipo === 'entrada') {
+        saldoAtual += valorMovimentacao;
+    } else {
+        saldoAtual -= valorMovimentacao;
+    }
+
+    status.saldo = saldoAtual;
+    localStorage.setItem('caixa_status', JSON.stringify(status));
+    
+    // IMPORTANTE: Atualiza o texto na tela imediatamente
+    const display = document.getElementById('caixa-saldo-display');
+    if(display) {
+        display.innerText = `R$ ${saldoAtual.toFixed(2).replace('.', ',')}`;
+    }
+    
+    console.log(`Saldo atualizado para: ${saldoAtual}`);
+};
 
 window.realizarSangria = () => {
     const val = prompt("Valor da Sangria:");
