@@ -7,7 +7,11 @@ import {
     doc, 
     updateDoc, 
     getDocs, 
-    orderBy 
+    orderBy,
+    getDoc,         // Adicionado para funcionar a config de cozinha
+    setDoc,         // Adicionado para salvar novas cozinhas
+    addDoc,         // Adicionado para o bot criar pedidos
+    serverTimestamp // Adicionado para as datas de criação
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 let kitchenListener = null;
