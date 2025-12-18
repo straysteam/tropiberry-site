@@ -9,54 +9,6 @@ const storage = getStorage(authDb.app);
 const notificationSound = document.getElementById('notif-sound');
 let lastNotifCount = 0;
 
-// === FUNÇÃO DE NAVEGAÇÃO GLOBAL ===
-window.navegarPara = (telaId) => {
-    // LISTA COMPLETA DE TELAS
-    const telas = [
-        'view-pdv-wrapper', 'view-pos', 'view-historico', 'view-relatorios', 
-        'view-financeiro', 'view-caixa', 'view-nfce', 
-        'view-produtos', 'view-boasvindas', 'view-config-pedidos',
-        'view-kitchen', 'view-inventory' // <-- NOVAS TELAS
-    ];
-    
-    // Esconde todas as telas
-    telas.forEach(id => {
-        const el = document.getElementById(id);
-        if(el) {
-            el.classList.add('hidden');
-            if(id === 'view-pos') el.classList.remove('flex');
-        }
-    });
-
-    // Mostra a tela desejada
-    const target = document.getElementById(telaId);
-    if(target) {
-        target.classList.remove('hidden');
-        if(telaId === 'view-pos') target.classList.add('flex');
-    }
-
-    // GATILHOS DE CARREGAMENTO ESPECÍFICO
-    if(telaId === 'view-historico') carregarHistorico();
-    if(telaId === 'view-relatorios') renderizarRelatorios();
-    if(telaId === 'view-financeiro') carregarFinanceiro();
-    if(telaId === 'view-caixa') carregarEstadoCaixa();
-    if(telaId === 'view-produtos') renderizarListaProdutos();
-    if(telaId === 'view-boasvindas') carregarConfigLoja();
-    if(telaId === 'view-config-pedidos') carregarConfigPedidos();
-
-    // NOVOS GATILHOS (OPERATIONS.JS)
-    if(telaId === 'view-kitchen') {
-        if (typeof window.iniciarMonitorCozinha === "function") {
-            window.iniciarMonitorCozinha();
-        }
-    }
-    if(telaId === 'view-inventory') {
-        if (typeof window.renderizarInventario === "function") {
-            window.renderizarInventario();
-        }
-    }
-}
-
 // === SISTEMA DE NOTIFICAÇÕES EM TEMPO REAL ===
 function iniciarNotificacoes() {
     const q = query(collection(db, "pedidos"), orderBy("createdAt", "desc"), limit(20));
