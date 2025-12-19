@@ -27,7 +27,7 @@ export function renderizarHeaderGlobal() {
                         <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-white">0</span>
                     </button>
 
-                    <button id="last-order-btn" onclick="openOrderScreen('status')" class="hidden absolute top-12 right-0 w-32 bg-cyan-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg hover:bg-cyan-400 transition flex items-center justify-between gap-1 border border-cyan-400 animate-bounce z-10">
+                    <button id="last-order-btn" onclick="abrirUltimoPedido()" class="hidden absolute top-12 right-0 w-32 bg-cyan-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg hover:bg-cyan-400 transition flex items-center justify-between gap-1 border border-cyan-400 animate-bounce z-10">
                         <span>Último pedido</span> 
                         <i class="fas fa-chevron-right"></i>
                     </button>

@@ -1,4 +1,3 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { 
     getFirestore, 
     collection, 
@@ -7,6 +6,7 @@ import {
     getDoc, 
     setDoc, 
     addDoc, 
+    updateDoc, // ADICIONE ISSO AQUI
     serverTimestamp, 
     query, 
     orderBy, 
@@ -715,147 +715,293 @@ function showToast(message, isError = false) {
 function addToCart(id) { /* Função legada, agora usamos adicionarAoCarrinhoDetalhado */ }
 function changeQuantity(id, delta) { const item = cart.find(i => i.id === id); if (item) { item.quantity += delta; if (item.quantity <= 0) cart = cart.filter(i => i.id !== id); updateCartUI(); } }
 function updateCartUI() {
-    // ... seu código existente ...
+    const cartItemsContainer = document.getElementById('cart-items');
+    const cartTotalElement = document.getElementById('cart-total');
+    const cartCountBadge = document.getElementById('cart-count');
+
+    if (!cartItemsContainer || !cartTotalElement) return;
+
+    // 1. Limpa o container antes de renderizar
+    cartItemsContainer.innerHTML = '';
+    
+    if (cart.length === 0) {
+        cartItemsContainer.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-10 text-gray-400">
+                <i class="fas fa-shopping-basket text-4xl mb-3"></i>
+                <p class="text-sm font-medium">Seu carrinho está vazio</p>
+            </div>`;
+    } else {
+        // 2. Renderiza cada item do carrinho
+        cart.forEach(item => {
+            const itemHtml = `
+                <div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm group">
+                    <img src="${item.image || 'https://via.placeholder.com/100'}" class="w-16 h-16 object-cover rounded-lg border">
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <h4 class="text-sm font-bold text-gray-800 leading-tight">${item.name}</h4>
+                            <button onclick="changeQuantity('${item.id}', -100)" class="text-gray-300 hover:text-red-500 transition">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-gray-500 line-clamp-1 mb-1 italic">${item.details || ''}</p>
+                        <div class="flex justify-between items-center mt-1">
+                            <span class="text-sm font-black text-cyan-700 font-sans">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+                            <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-2 py-1 scale-90">
+                                <button onclick="changeQuantity('${item.id}', -1)" class="text-red-500 font-bold w-4 hover:bg-white rounded transition">-</button>
+                                <span class="text-xs font-bold w-4 text-center">${item.quantity}</span>
+                                <button onclick="changeQuantity('${item.id}', 1)" class="text-green-500 font-bold w-4 hover:bg-white rounded transition">+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            cartItemsContainer.insertAdjacentHTML('beforeend', itemHtml);
+        });
+    }
+    localStorage.setItem('tropyberry_cart', JSON.stringify(cart));
+
+    // 3. Cálculo e atualização do Total
     const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
-    const frete = calcularFrete();
-    const totalComFrete = subtotal + frete;
+    cartTotalElement.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
 
-    totalDisplays.forEach(t => {
-        t.innerHTML = `
-            <div class="flex flex-col items-end">
-                ${frete > 0 ? `<span class="text-xs text-gray-400 font-normal">Subtotal: R$ ${subtotal.toFixed(2).replace('.', ',')}</span>` : ''}
-                ${frete > 0 ? `<span class="text-xs text-green-600 font-normal">Entrega: R$ ${frete.toFixed(2).replace('.', ',')}</span>` : ''}
-                <span>R$ ${totalComFrete.toFixed(2).replace('.', ',')}</span>
-            </div>
-        `;
-    });
-
-    // Inserção do Ticket Booster (Sua função anterior)
-    const boosterHtml = renderTicketBooster();
-    containers.forEach(c => {
-        if (cart.length > 0) c.insertAdjacentHTML('beforeend', boosterHtml);
-    });
+    // 4. Atualiza o Badge do carrinho (número vermelho no topo)
+    if (cartCountBadge) {
+        const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
+        cartCountBadge.innerText = totalItems;
+        cartCountBadge.classList.toggle('hidden', totalItems === 0);
+    }
 }
-function startCheckout() { if (cart.length === 0) return showToast("Carrinho vazio!"); if (!isStoreOpen) return showToast("Loja Fechada!"); const cartModal = document.getElementById('cart-modal'); if(cartModal && !cartModal.classList.contains('hidden')) toggleCart(); const checkoutModal = document.getElementById('checkout-modal'); if(!checkoutModal) { window.location.href = 'index.html?action=checkout'; return; } checkoutModal.classList.remove('hidden'); showStep('step-service'); }
+function startCheckout() {
+    if (cart.length === 0) return showToast("Carrinho vazio!");
+    if (!isStoreOpen) return showToast("Loja Fechada!");
+
+    const checkoutModal = document.getElementById('checkout-modal');
+    
+    if (!checkoutModal) {
+        // Se o modal não existe nesta página (ex: produto.html), vai para a home
+        window.location.href = 'index.html?action=checkout';
+        return;
+    }
+
+    // Se estiver na index.html, abre o modal direto
+    checkoutModal.classList.remove('hidden');
+    showStep('step-service');
+}
 function closeCheckout() { document.getElementById('checkout-modal').classList.add('hidden'); }
 function showStep(stepId) { ['step-service', 'step-address', 'step-payment-method'].forEach(id => document.getElementById(id).classList.add('hidden')); document.getElementById(stepId).classList.remove('hidden'); if (stepId === 'step-address') checkSavedAddress(); }
 function selectService(type) { currentOrder.method = type; const f = document.getElementById('delivery-fields'); if (type === 'retirada') f.classList.add('hidden'); else f.classList.remove('hidden'); showStep('step-address'); }
 function checkSavedAddress() { const s = localStorage.getItem('tropyberry_user'); if (s) { const d = JSON.parse(s); document.getElementById('input-name').value = d.name || ''; document.getElementById('input-phone').value = d.phone || ''; document.getElementById('input-street').value = d.street || ''; document.getElementById('input-number').value = d.number || ''; document.getElementById('input-district').value = d.district || ''; document.getElementById('input-comp').value = d.comp || ''; if(d.street) { document.getElementById('saved-address-card').classList.remove('hidden'); document.getElementById('saved-address-card').classList.add('flex'); document.getElementById('saved-address-text').innerText = `${d.street}, ${d.number}`; } } }
 function useSavedAddress() { goToPaymentMethod(); }
 function goToPaymentMethod() {
-    const n = document.getElementById('input-name').value; const p = document.getElementById('input-phone').value; if (!n || !p) return showToast("Preencha Nome e Telefone.");
-    currentOrder.customer = { name: n, phone: p };
+    const n = document.getElementById('input-name').value; 
+    const p = document.getElementById('input-phone').value; 
+    const e = document.getElementById('input-email').value; // Captura o email que você adicionou no HTML
+
+    if (!n || !p || !e) return showToast("Preencha Nome, Telefone e E-mail.");
+
+    // Armazena os dados do cliente
+    currentOrder.customer = { name: n, phone: p, email: e };
+
     if (currentOrder.method === 'delivery') {
-        const s = document.getElementById('input-street').value; const num = document.getElementById('input-number').value; const d = document.getElementById('input-district').value; const c = document.getElementById('input-comp').value;
-        if (!s || !num) return showToast("Endereço incompleto."); currentOrder.customer.address = `${s}, ${num} - ${d} (${c})`; localStorage.setItem('tropyberry_user', JSON.stringify({ name: n, phone: p, street: s, number: num, district: d, comp: c }));
-    } else { currentOrder.customer.address = "Retirada na Loja"; localStorage.setItem('tropyberry_user', JSON.stringify({ name: n, phone: p })); }
+        const s = document.getElementById('input-street').value; 
+        const num = document.getElementById('input-number').value; 
+        const d = document.getElementById('input-district').value; 
+        const c = document.getElementById('input-comp').value;
+        
+        if (!s || !num) return showToast("Endereço incompleto."); 
+        currentOrder.customer.address = `${s}, ${num} - ${d} (${c})`; 
+    } else { 
+        currentOrder.customer.address = "Retirada na Loja"; 
+    }
     showStep('step-payment-method');
 }
 document.getElementById('input-district')?.addEventListener('input', () => {
     updateCartUI();     
 });
 async function processPayment() {
-    // 1. Cálculos de Valores
-    const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
-    const frete = calcularFrete();
-    
-    // Lógica da Taxa de Serviço (Mesa ou Local)
-    let serviceFee = 0;
-    if (currentOrder.method === 'mesa' || currentOrder.method === 'local') {
-        serviceFee = (subtotal * (configPedidos.tableFee || 0)) / 100;
-    }
-    
-    const totalFinal = subtotal + frete + serviceFee;
+    const payMethod = document.querySelector('input[name="pay-method"]:checked')?.value;
+    const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const frete = (typeof calcularFrete === 'function') ? calcularFrete() : 0;
+    const totalFinal = subtotal + frete;
 
-    // 2. Validação básica de pagamento (Pix ou Cartão)
-    const payMethod = document.querySelector('input[name="pay-method"]:checked')?.value || 'pix';
+    if (!payMethod) return showToast("Selecione um método de pagamento", true);
 
-    // 3. Montagem do objeto do Pedido
-    const pedidoParaBanco = {
-        customer: currentOrder.customer,
-        items: cart,
-        method: currentOrder.method,
-        subtotal: subtotal,
-        deliveryFee: frete,
-        serviceFee: serviceFee,
-        total: totalFinal,
-        paymentMethod: payMethod,
-        paymentStatus: 'pending', // Inicia como pendente até a confirmação
-        status: 'Aguardando',
-        origin: 'web',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-    };
-
-    // Botão de loading visual
-    const btnPay = document.getElementById('btn-generate-pay');
-    if(btnPay) {
-        btnPay.disabled = true;
-        btnPay.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
-    }
+    const btn = document.getElementById('btn-generate-pay');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PIX...';
 
     try {
-        // 4. Envio para o Firebase Firestore
-        const docRef = await addDoc(collection(db, "pedidos"), pedidoParaBanco);
-        const orderId = docRef.id;
+        let pixData = { qr_code: null, qr_code_base64: null };
 
-        // 5. Ações Pós-Sucesso
-        showToast("Pedido enviado com sucesso!");
-        
-        // Salva localmente para o cliente poder consultar o status depois
-        saveLastOrder(orderId);
-        
-        // Limpa o carrinho
-        cart = [];
-        updateCartUI();
-        
-        // Fecha o modal de checkout e abre a tela de acompanhamento
-        closeCheckout();
-        
-        // Simulação de código PIX ou Link de Cartão (Se for Pix)
-        const pixFake = "00020126330014br.gov.bcb.pix0111" + orderId;
-        
-        // Abre a tela de status do pedido (Função que você já tem no script.js)
-        openOrderScreen(orderId, payMethod === 'pix' ? 'pix_pending' : 'paid', pixFake);
+        if (payMethod === 'pix') {
+            const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+        method: payMethod, 
+        total: totalFinal, 
+        playerInfo: currentOrder.customer, // AQUI: Mudei de 'customer' para 'playerInfo'
+        items: cart 
+    })
+});
 
-    } catch (e) {
-        console.error("Erro ao processar pedido:", e);
-        showToast("Erro ao processar pedido. Tente novamente.", true);
-        
-        if(btnPay) {
-            btnPay.disabled = false;
-            btnPay.innerHTML = '<span>Finalizar Pedido</span><i class="fas fa-check-circle"></i>';
-        }
-    }
-}
-async function openOrderScreen(orderId, statusType, pixCode = null) {
-    const screen = document.getElementById('order-screen'); if(!screen) return; screen.classList.remove('hidden'); document.getElementById('status-order-id').innerText = orderId.slice(0, 5).toUpperCase();
-    const now = new Date(); document.getElementById('status-order-time').innerText = `${now.getHours()}:${now.getMinutes()<10?'0'+now.getMinutes():now.getMinutes()}`; document.getElementById('status-client-name').innerText = currentOrder.customer.name; document.getElementById('status-client-phone').innerText = currentOrder.customer.phone; document.getElementById('status-client-address').innerText = currentOrder.customer.address;
-    const badge = document.getElementById('status-payment-badge');
-    if (statusType === 'pix_pending') { badge.className = "bg-orange-100 text-orange-600 text-xs px-3 py-1 rounded-full font-bold border border-orange-200"; badge.innerText = "Aguardando Pagamento"; if(pixCode) { showToast("Copie o código PIX!"); const pixScreen = document.getElementById('pix-copy-paste-screen'); if(pixScreen) pixScreen.value = pixCode; } } 
-    else { badge.className = "bg-green-100 text-green-600 text-xs px-3 py-1 rounded-full font-bold border border-green-200"; badge.innerText = "Pago"; }
-    renderReceipt(); document.getElementById('btn-whatsapp-status').href = `https://wa.me/5583999999999?text=${encodeURIComponent(`Pedido #${orderId.slice(0,5)}. Status?`)}`;
-}
-async function monitorarConfiguracoes() {
-    onSnapshot(doc(db, "config", "pedidos"), (docSnap) => {
-        if (docSnap.exists()) {
-            configPedidos = docSnap.data();
-            
-            const btnPickup = document.querySelector('button[onclick="selectService(\'retirada\')"]');
-            if (btnPickup) {
-                if (configPedidos.pickup === false) {
-                    btnPickup.classList.add('hidden');
-                } else {
-                    btnPickup.classList.remove('hidden');
-                }
+            const data = await response.json();
+            console.log("Resposta da API:", data); // VEJA O ERRO NO CONSOLE DO NAVEGADOR (F12)
+
+            if (data.success) {
+                pixData.qr_code = data.qr_code;
+                pixData.qr_code_base64 = data.qr_code_base64;
+            } else {
+                throw new Error(data.error || "Erro na API de pagamento");
             }
         }
+
+        const docRef = await addDoc(collection(db, "pedidos"), {
+            customer: currentOrder.customer,
+            items: cart,
+            total: totalFinal,
+            paymentMethod: payMethod,
+            status: 'Aguardando',
+            pixCode: pixData.qr_code,
+            pixQR: pixData.qr_code_base64,
+            createdAt: serverTimestamp()
+        });
+        
+        saveLastOrder(docRef.id);
+        cart = [];
+        updateCartUI();
+        closeCheckout();
+        openOrderScreen(docRef.id);
+        showToast("Pedido enviado!");
+
+    } catch (e) {
+        console.error("Erro completo:", e);
+        showToast("Falha ao gerar PIX. Verifique os dados ou tente outro método.", true);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Finalizar Pedido</span><i class="fas fa-check-circle"></i>';
+    }
+}
+let countdownInterval = null;
+
+window.openOrderScreen = (orderId) => {
+    const screen = document.getElementById('order-screen');
+    if(!screen) return;
+    screen.classList.remove('hidden');
+
+    // Inicializa o mapa (Leaflet) conforme seu exemplo antigo
+    setTimeout(() => {
+        const mapContainer = document.getElementById('final-map');
+        if (mapContainer) {
+            if (window.currentMap) window.currentMap.remove();
+            window.currentMap = L.map('final-map').setView([-7.1195, -34.8450], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.currentMap);
+            L.marker([-7.1195, -34.8450]).addTo(window.currentMap).bindPopup('Seu pedido está sendo preparado!').openPopup();
+        }
+    }, 400);
+
+    // Escuta mudanças no Firebase
+    onSnapshot(doc(db, "pedidos", orderId), (docSnap) => {
+        if (!docSnap.exists()) return;
+        const order = docSnap.data();
+
+        document.getElementById('status-order-id').innerText = orderId.slice(-5).toUpperCase();
+        document.getElementById('status-client-name').innerText = order.customer.name;
+
+        const pixArea = document.getElementById('pix-qr-container');
+        const pixSlot = document.getElementById('pix-qr-image-slot');
+        
+        // Se o pedido está aguardando PIX e os dados existem
+        if (order.paymentMethod === 'pix' && order.status === 'Aguardando') {
+            pixArea.classList.remove('hidden');
+            if (order.pixQR) {
+                // Injeta a imagem base64 conforme seu exemplo
+                pixSlot.innerHTML = `<img src="data:image/jpeg;base64,${order.pixQR}" class="w-48 h-48 rounded-lg shadow-lg border-4 border-white mx-auto">`;
+            }
+            if (order.pixCode) {
+                document.getElementById('pix-copy-paste-screen').value = order.pixCode;
+            }
+        } else {
+            pixArea.classList.add('hidden');
+        }
     });
+};
+
+// FUNÇÃO DE CÓPIA COM ANIMAÇÃO
+window.copyPixScreen = () => {
+    const input = document.getElementById('pix-copy-paste-screen');
+    const overlay = document.getElementById('copy-animation-overlay');
+    
+    if (!input || !input.value || input.value.includes("Aguardando")) return;
+
+    // Copia para a área de transferência
+    navigator.clipboard.writeText(input.value).then(() => {
+        showToast("Código PIX copiado!");
+        
+        // Mostra a animação de sucesso sobre o campo
+        if (overlay) {
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100');
+            setTimeout(() => {
+                overlay.classList.add('opacity-0', 'pointer-events-none');
+                overlay.classList.remove('opacity-100');
+            }, 2000);
+        }
+    }).catch(err => {
+        console.error("Erro ao copiar: ", err);
+    });
+};
+function iniciarContagemRegressiva(orderId) {
+    let timeLeft = 5 * 60; 
+    const timerDisplay = document.getElementById('pix-countdown-timer');
+
+    countdownInterval = setInterval(async () => {
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerDisplay.innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+            // CANCELA NO BANCO DE DADOS AUTOMATICAMENTE
+            await updateDoc(doc(db, "pedidos", orderId), { status: 'Cancelado', motivo: 'Tempo de pagamento expirado' });
+        }
+        timeLeft--;
+    }, 1000);
 }
 
-// Chame monitorarConfiguracoes() no DOMContentLoaded
-document.addEventListener('DOMContentLoaded', monitorarConfiguracoes);
 
+// Função para o botão "Voltar para o pedido" funcionar
+window.abrirUltimoPedido = () => {
+    const saved = localStorage.getItem('tropyberry_last_order');
+    if (saved) {
+        const d = JSON.parse(saved);
+        // Busca o status atual (se ele já pagou ou não) para carregar o link certo
+        const statusType = d.status === 'Pago' ? 'paid' : 'pix_pending';
+        window.openOrderScreen(d.id, statusType);
+    } else {
+        showToast("Nenhum pedido recente encontrado.", true);
+    }
+};
+
+// Chame monitorarConfiguracoes() no DOMContentLoaded
+// === CARREGAMENTO INICIAL COM PERSISTÊNCIA ===
+document.addEventListener('DOMContentLoaded', () => {
+    // Carrega o carrinho do banco local
+    const savedCart = localStorage.getItem('tropyberry_cart');
+    if (savedCart) {
+        cart = JSON.parse(savedCart);
+        
+        // Pequeno atraso para garantir que o Header Global já foi injetado no HTML
+        setTimeout(() => {
+            updateCartUI();
+            
+            // VERIFICAÇÃO DE CHECKOUT: Abre o modal se o link tiver ?action=checkout
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('action') === 'checkout' && cart.length > 0) {
+                startCheckout();
+            }
+        }, 300); // 300ms é o tempo suficiente para o Header "nascer"
+    }
+});
 function renderTicketBooster() {
     if (!configPedidos.ticketBooster || cart.length === 0) return '';
 
@@ -917,6 +1063,7 @@ function calcularFrete() {
 
     return currentDeliveryFee;
 }
+
 function renderReceipt() { const list = document.getElementById('receipt-items-list'); list.innerHTML = ''; let subtotal = 0; cart.forEach(item => { const t = item.price * item.quantity; subtotal += t; list.innerHTML += `<div class="flex justify-between items-start mb-2"><div><span class="font-bold text-gray-700">${item.quantity}x</span> <span class="text-gray-600">${item.name}</span></div><span class="text-gray-800 font-medium">R$ ${t.toFixed(2).replace('.', ',')}</span></div>`; }); document.getElementById('receipt-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; document.getElementById('receipt-total').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; }
 function toggleReceipt() { const el = document.getElementById('receipt-details'); const arr = document.getElementById('arrow-receipt'); if (el.classList.contains('hidden')) { el.classList.remove('hidden'); arr.classList.add('rotate-180'); } else { el.classList.add('hidden'); arr.classList.remove('rotate-180'); } }
 function closeOrderScreen() { document.getElementById('order-screen').classList.add('hidden'); }

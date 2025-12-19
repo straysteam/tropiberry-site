@@ -186,9 +186,9 @@
                     </div>
                     <h4 class="text-lg font-bold text-cyan-900 pb-2">Seus Dados</h4>
                     <div class="space-y-3">
-                        <input type="text" id="input-name" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="Nome Completo">
-                        <input type="tel" id="input-phone" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="WhatsApp (83) 99999-9999">
-                    </div>
+    <input type="text" id="input-name" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="Nome Completo">
+    <input type="email" id="input-email" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="E-mail (Necessário para o PIX)"> <input type="tel" id="input-phone" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="WhatsApp (83) 99999-9999">
+</div>
                     <div id="delivery-fields" class="space-y-3 pt-4">
                         <h5 class="text-lg font-bold text-cyan-900 pb-2">Endereço de Entrega</h5>
                         <input type="text" id="input-street" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="Rua / Avenida">
@@ -324,28 +324,85 @@
                 </div>
 
                 <div class="bg-white p-6 border-t border-gray-200">
-                    <div class="flex items-center gap-2 mb-4">
-                        <span class="text-xs font-bold text-gray-500">Status do pagamento:</span>
-                        <span id="status-payment-badge" class="bg-orange-100 text-orange-600 text-xs px-3 py-1 rounded-full font-bold border border-orange-200">Pendente</span>
-                    </div>
+    <div class="flex items-center gap-2 mb-4">
+        <span class="text-xs font-bold text-gray-500">Status do pagamento:</span>
+        <span id="status-payment-badge" class="bg-orange-100 text-orange-600 text-xs px-3 py-1 rounded-full font-bold border border-orange-200">Pendente</span>
+    </div>
 
-                    <a href="#" id="btn-whatsapp-status" target="_blank" class="block w-full bg-green-500 hover:bg-green-600 text-white text-center font-bold py-3 rounded-lg shadow-md transition text-sm flex items-center justify-center gap-2">
-                        <i class="fab fa-whatsapp text-lg"></i> Informe-se sobre seu pedido
-                    </a>
-                </div>
+    <div id="pix-qr-container" class="hidden py-4 text-center border-b border-dashed mb-4">
+    <p class="text-xs font-bold text-gray-400 uppercase mb-2">Escaneie o QR Code PIX</p>
+    <div id="pix-qr-image-slot" class="flex justify-center mb-4"></div> 
+    
+    <div class="relative group cursor-pointer" onclick="copyPixScreen()">
+        <input type="text" id="pix-copy-paste-screen" readonly 
+               class="w-full text-[10px] bg-gray-100 p-4 rounded-xl border-2 border-dashed border-cyan-200 text-center cursor-pointer font-mono" 
+               placeholder="Código PIX">
+        <div id="copy-animation-overlay" class="absolute inset-0 bg-cyan-600/90 opacity-0 flex items-center justify-center transition-opacity rounded-xl pointer-events-none">
+            <span class="text-white font-bold text-xs uppercase tracking-widest"><i class="fas fa-check mr-2"></i> Pix Copiado!</span>
+        </div>
+    </div>
+
+    <div id="pix-timer-area" class="mt-4 flex flex-col items-center">
+        <div class="flex items-center gap-2 text-orange-500 font-bold">
+            <i class="fas fa-clock animate-pulse"></i>
+            <span id="pix-countdown-timer" class="text-lg font-mono">05:00</span>
+        </div>
+    </div>
+</div>
+    <div class="space-y-3">
+    <a href="#" id="btn-whatsapp-status" target="_blank" 
+       class="relative overflow-hidden block w-full bg-[#25D366] hover:bg-[#1ebd5e] text-white text-center font-black py-4 rounded-2xl shadow-xl shadow-green-100 transition-all duration-300 group">
+        
+        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer"></div>
+        
+        <div class="flex items-center justify-center gap-3 relative z-10">
+            <div class="bg-white/20 p-1.5 rounded-lg">
+                <i class="fab fa-whatsapp text-2xl"></i>
+            </div>
+            <div class="text-left">
+                <span class="block text-[10px] uppercase opacity-80 font-bold tracking-widest leading-none mb-1">Suporte em tempo real</span>
+                <span class="text-base">Falar com Atendente</span>
+            </div>
+        </div>
+    </a>
+    <p class="text-[10px] text-center text-gray-400 font-medium">Nosso tempo médio de resposta é de 5 minutos</p>
+</div>
+    </a>
+</div>
             </div>
         </div>
     </div>
 
-    <style>
-    @media print {
-        body > *:not(#order-screen) { display: none; }
-        #order-screen { position: absolute; left: 0; top: 0; background: white; }
-        #final-map, button { display: none !important; }
-        #receipt-details { display: block !important; }
-        .pointer-events-none { pointer-events: auto; }
+   <style>
+@media print {
+    /* ESCONDE TUDO EXCETO A NOTA */
+    body * { visibility: hidden !important; }
+    #printable-receipt, #printable-receipt * { visibility: visible !important; }
+    #printable-receipt { 
+        position: absolute !important; left: 0 !important; top: 0 !important; 
+        width: 80mm !important; /* Tamanho padrão de cupom térmico */
+        padding: 10px !important;
+        background: white !important;
     }
-    </style>
+    /* Remove excesso de páginas */
+    html, body { height: auto !important; overflow: visible !important; }
+}
+
+/* Animação Pix Copiado */
+#copy-animation-overlay { transition: all 0.3s ease; }
+</style>
+
+<div id="printable-receipt" class="hidden">
+    <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px;">
+        <h2 style="font-size: 18px; margin: 0;">TROPYBERRY</h2>
+        <p style="font-size: 10px; margin: 5px 0;">Recibo de Pedido</p>
+    </div>
+    <div id="receipt-content-print" style="font-family: monospace; font-size: 12px; padding: 10px 0;">
+        </div>
+    <div style="border-top: 1px dashed #000; padding-top: 10px; text-align: center; font-size: 10px;">
+        <p>Obrigado pela preferência!</p>
+    </div>
+</div>
     
     <div id="quick-view-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden relative">
