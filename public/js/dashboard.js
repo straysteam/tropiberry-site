@@ -528,13 +528,26 @@ window.realizarSuprimento = () => {
 // === RENDERIZAÇÃO LISTA DE PEDIDOS ===
 function renderizarPedidosLista() {
     const container = document.getElementById('orders-list');
+    if (!container) return;
     container.innerHTML = '';
     
+    // 1. Filtra primeiro pelo método (Balcão ou Delivery)
     let filtered = allOrders.filter(o => o.method === currentServiceTab); 
+
+    // 2. Aplica o filtro de Status
     filtered = filtered.filter(o => {
-        if (currentStatusFilter === 'todos') return o.status !== 'Finalizado' && o.status !== 'Rejeitado';
-        if (currentStatusFilter === 'pendente') return o.status === 'Aguardando';
-        if (currentStatusFilter === 'em_curso') return o.status === 'Em Preparo' || o.status === 'Saiu para Entrega';
+        if (currentStatusFilter === 'todos') {
+            // Mostra tudo que está "em andamento" (Aguardando, Preparo, Saiu entrega, Pronto)
+            return o.status !== 'Finalizado' && o.status !== 'Rejeitado' && o.status !== 'Cancelado';
+        }
+        if (currentStatusFilter === 'pendente') {
+            // Mostra APENAS o que acabou de chegar
+            return o.status === 'Aguardando';
+        }
+        if (currentStatusFilter === 'finalizados') {
+            // Mostra o histórico de concluídos e cancelados
+            return o.status === 'Finalizado' || o.status === 'Rejeitado' || o.status === 'Cancelado';
+        }
         return true;
     });
 
@@ -543,53 +556,57 @@ function renderizarPedidosLista() {
         return;
     }
 
+    // 3. Renderiza os itens filtrados (Mantendo sua lógica de cores original)
     filtered.forEach(order => {
         const div = document.createElement('div');
         let borderClass = 'border-l-4 border-l-gray-300';
+        
+        // Cores da borda baseadas no status
         if(order.status === 'Aguardando') borderClass = 'border-l-4 border-l-orange-500';
         if(order.status === 'Em Preparo') borderClass = 'border-l-4 border-l-blue-500';
+        if(order.status === 'Finalizado') borderClass = 'border-l-4 border-l-green-500';
+        if(order.status === 'Cancelado' || order.status === 'Rejeitado') borderClass = 'border-l-4 border-l-red-500';
 
         div.className = `bg-white border border-gray-200 rounded-lg shadow-sm grid grid-cols-12 mb-2 items-center hover:shadow-md transition ${borderClass}`;
         
         const time = order.createdAt ? order.createdAt.toDate().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--:--';
-        let originBadge = `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] border border-gray-200">WEB</span>`;
-        if (order.origin === 'app') originBadge = `<span class="bg-purple-100 text-purple-600 px-2 py-0.5 rounded text-[10px] border border-purple-200">APP</span>`;
+        let originBadge = order.origin === 'app' ? 
+            `<span class="bg-purple-100 text-purple-600 px-2 py-0.5 rounded text-[10px] border border-purple-200">APP</span>` :
+            `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] border border-gray-200">WEB</span>`;
         
         let payStatus = order.paymentStatus === 'paid' ? 
             `<span class="bg-green-100 text-green-600 text-[10px] px-2 py-0.5 rounded font-bold">PAGO</span>` : 
             `<span class="bg-orange-100 text-orange-600 text-[10px] px-2 py-0.5 rounded font-bold cursor-pointer" onclick="abrirModalPagamento('${order.id}')">NÃO PAGO</span>`;
 
+        // Lógica de Botões de Ação
         let actions = '';
-        if(order.status === 'Aguardando') {
-            actions = `<div class="flex gap-2 justify-end">
-                <button onclick="atualizarStatus('${order.id}', 'Rejeitado')" class="border border-red-500 text-red-500 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-50">Rejeitar</button>
-                <button onclick="abrirModalPagamento('${order.id}')" class="border border-blue-500 text-blue-500 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-50">Pagar</button>
-                <button onclick="atualizarStatus('${order.id}', 'Em Preparo')" class="bg-green-500 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-600 shadow-sm">Aceitar</button>
-            </div>`;
-        } else if (order.status === 'Em Preparo') {
-             actions = `<div class="flex gap-2 justify-end">
-                <button onclick="abrirModalPagamento('${order.id}')" class="border border-blue-500 text-blue-500 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-50">Pagar</button>
-                <button onclick="atualizarStatus('${order.id}', 'Saiu para Entrega')" class="bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm">Despachar</button>
-            </div>`;
+        if (order.status === 'Finalizado' || order.status === 'Cancelado' || order.status === 'Rejeitado') {
+            actions = `<span class="text-[10px] font-bold text-gray-400 uppercase">Pedido Encerrado</span>`;
+        } else if(order.status === 'Aguardando') {
+            actions = `
+                <div class="flex gap-2 justify-end">
+                    <button onclick="atualizarStatus('${order.id}', 'Rejeitado')" class="border border-red-500 text-red-500 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-50">Rejeitar</button>
+                    <button onclick="atualizarStatus('${order.id}', 'Em Preparo')" class="bg-green-500 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-600 shadow-sm">Aceitar</button>
+                </div>`;
         } else {
-             actions = `<div class="flex gap-2 justify-end"><button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded text-xs font-bold">Concluir</button></div>`;
+            actions = `<div class="flex gap-2 justify-end"><button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="bg-cyan-900 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-cyan-800">Concluir</button></div>`;
         }
 
         div.innerHTML = `
             <div class="col-span-2 p-3 text-xs border-r">
-                <div class="font-bold text-gray-700 flex items-center gap-1">#${order.id.slice(0,4).toUpperCase()} ${originBadge}</div>
+                <div class="font-bold text-gray-700 flex items-center gap-1">#${order.id.slice(-4).toUpperCase()} ${originBadge}</div>
                 <div class="text-gray-400 mt-1"><i class="far fa-clock"></i> ${time}</div>
             </div>
             <div class="col-span-2 p-3 text-xs font-bold border-r">
-                <span class="${order.status === 'Aguardando' ? 'text-orange-600' : 'text-blue-600'} block mb-1">${order.status}</span>
+                <span class="${['Cancelado', 'Rejeitado'].includes(order.status) ? 'text-red-600' : 'text-blue-600'} block mb-1">${order.status}</span>
                 ${payStatus}
             </div>
             <div class="col-span-2 p-3 font-bold text-gray-700 border-r">R$ ${order.total.toFixed(2)}</div>
             <div class="col-span-4 p-3 text-xs border-r truncate">
-                <div class="font-bold text-gray-800">${order.customer.name}</div>
-                <div class="text-gray-500 text-[10px]">${order.items.length} itens</div>
+                <div class="font-bold text-gray-800">${order.customer?.name || 'Cliente'}</div>
+                <div class="text-gray-500 text-[10px]">${order.items?.length || 0} itens</div>
             </div>
-            <div class="col-span-2 p-3">${actions}</div>
+            <div class="col-span-2 p-3 text-right">${actions}</div>
         `;
         container.appendChild(div);
     });
@@ -615,6 +632,25 @@ window.atualizarStatus = async (id, status) => {
 
 window.filtrarStatus = (filtro) => {
     currentStatusFilter = filtro;
+
+    const botoes = {
+        'todos': document.getElementById('btn-filter-todos'),
+        'pendente': document.getElementById('btn-filter-pendente'),
+        'finalizados': document.getElementById('btn-filter-finalizados')
+    };
+
+    Object.keys(botoes).forEach(key => {
+        const btn = botoes[key];
+        if (!btn) return;
+
+        if (key === filtro) {
+            // Estilo Selecionado (Azul Cyan)
+            btn.className = "bg-cyan-600 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-cyan-600 transition-all shadow-sm";
+        } else {
+            // Estilo Inativo (Branco com borda cinza)
+            btn.className = "bg-white text-gray-600 px-4 py-1.5 rounded-full text-xs font-bold border border-gray-300 hover:bg-gray-50 transition-all";
+        }
+    });
     renderizarPedidosLista();
 }
 
@@ -691,63 +727,128 @@ window.confirmarPagamento = async (aceitarPedidoJunto) => {
 // === RENDERIZAÇÃO MESAS E PDV (MANTIDO DO ANTERIOR) ===
 window.renderizarAmbientes = () => {
     const container = document.getElementById('environments-bar');
+    if(!container) return;
     container.innerHTML = '';
-    if(!tablesConfig.environments) return;
+    
+    if(!tablesConfig.environments || tablesConfig.environments.length === 0) {
+        container.innerHTML = '<span class="text-gray-400 text-xs">Nenhum ambiente configurado</span>';
+        return;
+    }
+
+    // Garante que existe um ID selecionado
+    if (!currentEnvId) currentEnvId = tablesConfig.environments[0].id;
+
     tablesConfig.environments.forEach(env => {
         const btn = document.createElement('div');
         btn.className = `env-btn ${env.id === currentEnvId ? 'active' : ''}`;
         btn.innerHTML = `<span>${env.name}</span> <span class="bg-black/10 px-2 rounded-full text-[10px]">${env.tables.length}</span>`;
-        btn.onclick = () => { currentEnvId = env.id; renderizarAmbientes(); };
+        btn.onclick = () => { 
+            currentEnvId = env.id; 
+            renderizarAmbientes(); 
+        };
         container.appendChild(btn);
     });
+
     const addBtn = document.createElement('div');
     addBtn.className = "env-btn border-dashed text-cyan-600 hover:bg-cyan-50";
-    addBtn.innerHTML = `<i class="fas fa-plus"></i> Novo Ambiente`;
+    addBtn.innerHTML = `<i class="fas fa-plus"></i> Novo`;
     addBtn.onclick = toggleConfigModal;
     container.appendChild(addBtn);
+
     renderizarGridMesas();
 }
 
 function renderizarGridMesas() {
     const container = document.getElementById('tables-grid');
+    if(!container) return;
     container.innerHTML = '';
-    if(!tablesConfig.environments || tablesConfig.environments.length === 0) return;
+
     const env = tablesConfig.environments.find(e => e.id === currentEnvId);
-    if (!env) return;
+    if (!env) {
+        container.innerHTML = '<div class="col-span-full text-center py-10 text-gray-400">Selecione um ambiente acima</div>';
+        return;
+    }
+
     env.tables.forEach(num => {
-        const activeOrder = allOrders.find(o => o.method === 'mesa' && o.tableNumber == num && o.status !== 'Finalizado' && o.status !== 'Rejeitado');
+        // Busca pedido ativo para esta mesa
+        const activeOrder = allOrders.find(o => 
+            o.method === 'mesa' && 
+            o.tableNumber == num && 
+            !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
+        );
+
         const card = document.createElement('div');
         card.className = `table-card ${activeOrder ? 'occupied' : ''}`;
-        let content = `<span class="text-2xl font-bold text-gray-400 group-hover:text-cyan-600">${num}</span>`;
+        
+        let content = `<span class="text-2xl font-bold text-gray-400">${num}</span>`;
         if (activeOrder) {
-            content = `<span class="text-xl font-bold text-red-500">${num}</span><div class="mt-1 flex flex-col items-center"><span class="text-xs font-bold text-gray-700">R$ ${activeOrder.total.toFixed(2)}</span><span class="text-[10px] text-gray-400">Em aberto</span></div>`;
+            content = `
+                <span class="text-xl font-bold text-red-500">${num}</span>
+                <div class="mt-1 flex flex-col items-center">
+                    <span class="text-xs font-bold text-gray-700">R$ ${activeOrder.total.toFixed(2)}</span>
+                    <span class="text-[10px] text-gray-400">Ocupada</span>
+                </div>`;
         }
+        
         card.innerHTML = content;
         card.onclick = () => abrirMesaPDV(num, activeOrder); 
         container.appendChild(card);
     });
-    const addCard = document.createElement('div');
-    addCard.className = "table-card add-new";
-    addCard.innerHTML = `<i class="fas fa-plus text-2xl"></i><span class="text-xs font-bold mt-2">Nova mesa</span>`;
-    addCard.onclick = toggleConfigModal; 
-    container.appendChild(addCard);
 }
 
 // PDV Functions
 window.abrirMesaPDV = (tableNum, existingOrder) => {
+    // 1. Define a mesa atual
     currentTablePOS = tableNum;
     currentTableOrder = [];
-    document.getElementById('pos-table-title').innerText = `Mesa ${tableNum}`;
-    if (existingOrder) currentTableOrder = JSON.parse(JSON.stringify(existingOrder.items));
+    
+    // 2. Atualiza o título da mesa na barra lateral
+    const titleElem = document.getElementById('pos-table-title');
+    if (titleElem) titleElem.innerText = `Mesa ${tableNum}`;
+    
+    // 3. Se já existir pedido (mesa ocupada), carrega os itens
+    if (existingOrder) {
+        // Clona o array para não editar a referência original diretamente
+        currentTableOrder = JSON.parse(JSON.stringify(existingOrder.items));
+    }
+
+    // 4. Renderiza os botões de categorias na tela do PDV
     const catContainer = document.getElementById('pos-categories');
-    catContainer.innerHTML = `<button onclick="filtrarProdPDV('all')" class="px-4 py-2 bg-cyan-600 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap hover:bg-cyan-700 transition">Todos</button>`;
-    allCategories.forEach(cat => { catContainer.innerHTML += `<button onclick="filtrarProdPDV('${cat.slug}')" class="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-50 whitespace-nowrap transition">${cat.nome}</button>`; });
-    filtrarProdPDV('all');
-    atualizarComandaPDV();
-    document.getElementById('view-mesas').classList.add('hidden');
-    document.getElementById('view-pos').classList.remove('hidden');
-    document.getElementById('view-pos').classList.add('flex');
-}
+    if(catContainer) {
+        // Botão 'Todos'
+        catContainer.innerHTML = `<button onclick="filtrarProdPDV('all')" class="px-4 py-2 bg-cyan-600 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap hover:bg-cyan-700 transition">Todos</button>`;
+        
+        // Outras categorias (verifica se allCategories existe para não dar erro)
+        if (typeof allCategories !== 'undefined') {
+            allCategories.forEach(cat => { 
+                catContainer.innerHTML += `<button onclick="filtrarProdPDV('${cat.slug}')" class="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-50 whitespace-nowrap transition">${cat.nome}</button>`; 
+            });
+        }
+    }
+
+    // 5. Inicializa os produtos e a comanda
+    if (typeof window.filtrarProdPDV === "function") filtrarProdPDV('all');
+    if (typeof window.atualizarComandaPDV === "function") atualizarComandaPDV();
+
+    // === A CORREÇÃO IMPORTANTE ESTÁ AQUI EMBAIXO ===
+    
+    // Esconde o painel principal (agora chamado 'view-pdv-wrapper')
+    const viewMain = document.getElementById('view-pdv-wrapper');
+    if (viewMain) {
+        viewMain.classList.add('hidden');
+    } else {
+        console.error("ERRO: Elemento 'view-pdv-wrapper' não encontrado!");
+    }
+
+    // Mostra a tela da Mesa (view-pos)
+    const viewPos = document.getElementById('view-pos');
+    if (viewPos) {
+        viewPos.classList.remove('hidden');
+        viewPos.classList.add('flex');
+    } else {
+        console.error("ERRO: Elemento 'view-pos' não encontrado!");
+    }
+};
 
 window.fecharMesaPDV = () => {
     document.getElementById('view-pos').classList.add('hidden');
@@ -775,15 +876,16 @@ window.filtrarProdPDV = (cat) => {
     document.getElementById('pos-search').onkeyup = () => filtrarProdPDV(cat);
 }
 
-function addItemMesa(product) {
+window.addItemMesa = (product) => {
     const existing = currentTableOrder.find(i => i.originalId === product.id);
     if (existing) existing.quantity++;
     else currentTableOrder.push({ id: Date.now().toString(), originalId: product.id, name: product.name, price: product.price, quantity: 1, details: '' });
-    atualizarComandaPDV();
+    window.atualizarComandaPDV();
 }
 
-function atualizarComandaPDV() {
+window.atualizarComandaPDV = () => {
     const container = document.getElementById('pos-order-items');
+    if (!container) return;
     container.innerHTML = '';
     let total = 0;
     if (currentTableOrder.length === 0) container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-gray-400"><i class="fas fa-basket-shopping text-3xl mb-2 opacity-20"></i><p class="text-xs">Comanda vazia</p></div>`;
@@ -864,21 +966,20 @@ window.addNewEnv = () => {
 
 window.salvarNovaConfiguracao = async () => {
     try {
-        const cleanConfig = {
-            environments: tablesConfig.environments.map(env => ({
-                id: env.id || `env-${Date.now()}`,
-                name: env.name || 'Novo Ambiente',
-                tables: env.tables.map(t => parseInt(t) || 0)
-            }))
-        };
-        await setDoc(doc(db, "config", "loja_mesas"), cleanConfig);
-        tablesConfig = cleanConfig; 
-        alert("Configuração salva com sucesso!");
+        // Corrigido: O nome do documento deve ser o mesmo usado no carregar (loja_mesas)
+        const docRef = doc(db, "config", "loja_mesas");
+        
+        // Corrigido: Usar 'tablesConfig' que é onde os dados realmente estão
+        await setDoc(docRef, tablesConfig); 
+        
+        window.showToast("Sucesso", "Configuração de mesas salva!");
         toggleConfigModal();
-        if (!tablesConfig.environments.find(e => e.id === currentEnvId) && tablesConfig.environments.length > 0) currentEnvId = tablesConfig.environments[0].id;
-        renderizarAmbientes();
-    } catch (e) { console.error(e); alert("Erro ao salvar: " + e.message); }
-}
+        renderizarGridMesas(); // Atualiza a visualização na hora
+    } catch (e) {
+        console.error("Erro ao salvar ambientes:", e);
+        window.showToast("Erro", "Falha ao salvar configuração.", true);
+    }
+};
 // ===============================================
 // LÓGICA DO CARDÁPIO E CONFIGURAÇÕES (NOVO CÓDIGO)
 // ===============================================

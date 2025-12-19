@@ -151,9 +151,24 @@
                     </div>
                 </div>
                 <div id="view-lista" class="flex-1 overflow-hidden flex flex-col">
-                    <div class="px-6 py-4 flex justify-between items-center shrink-0">
-                        <div class="flex items-center gap-2"><button onclick="filtrarStatus('todos')" class="bg-cyan-100 text-cyan-800 px-4 py-1.5 rounded-full text-xs font-bold border border-cyan-200">Todos</button><button onclick="filtrarStatus('pendente')" class="bg-white text-gray-600 px-4 py-1.5 rounded-full text-xs font-bold border border-gray-300">Pendente</button></div>
-                    </div>
+    <div class="px-6 py-4 flex justify-between items-center shrink-0">
+    <div class="flex items-center gap-2" id="status-filter-container">
+        <button id="btn-filter-todos" onclick="filtrarStatus('todos')" 
+            class="bg-cyan-600 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-cyan-600 transition-all">
+            Todos Ativos
+        </button>
+        
+        <button id="btn-filter-pendente" onclick="filtrarStatus('pendente')" 
+            class="bg-white text-gray-600 px-4 py-1.5 rounded-full text-xs font-bold border border-gray-300 hover:bg-gray-50 transition-all">
+            Pendentes
+        </button>
+        
+        <button id="btn-filter-finalizados" onclick="filtrarStatus('finalizados')" 
+            class="bg-white text-gray-600 px-4 py-1.5 rounded-full text-xs font-bold border border-gray-300 hover:bg-gray-50 transition-all">
+            Finalizados / Cancelados
+        </button>
+    </div>
+</div>
                     <div class="px-6 pb-2 shrink-0"><div class="grid grid-cols-12 gap-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-white p-2 rounded border border-gray-200"><div class="col-span-2">Data / Origem</div><div class="col-span-2">Estado</div><div class="col-span-2">Total</div><div class="col-span-4">Cliente / Itens</div><div class="col-span-2 text-right">Ações</div></div></div>
                     <div class="flex-1 overflow-y-auto px-6 pb-6 space-y-2" id="orders-list"></div>
                 </div>
@@ -726,28 +741,55 @@
             <div>
                 <h3 class="font-bold text-gray-800 text-lg mb-2">Posso usar meu próprio número de telefone com o Chatbot do WhatsApp?</h3>
                 <p class="text-gray-400 leading-relaxed text-sm">Sim, você pode usar seu número de telefone atual. Não é necessário obter outro número.</p>
+        </div>
+    </div>
+    
+    </div> </div> </div> <div id="view-pos" class="hidden flex-col md:flex-row h-full overflow-hidden">
+    <div class="flex-1 flex flex-col bg-gray-50 overflow-hidden relative">
+        <div class="p-4 bg-white border-b flex flex-col gap-3 shadow-sm z-10">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                <input type="text" id="pos-search" placeholder="Buscar produto..." 
+                       class="w-full pl-10 pr-4 py-2 border rounded-xl outline-none focus:border-cyan-500">
             </div>
+            <div class="flex gap-2 overflow-x-auto whitespace-nowrap custom-scrollbar" id="pos-categories"></div>
+        </div>
+        <div id="pos-products-grid" class="flex-1 overflow-y-auto p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 content-start"></div>
+    </div>
+
+    <div class="w-full md:w-96 bg-white flex flex-col shadow-2xl relative border-l border-gray-200 z-20">
+        
+        <div class="p-4 bg-cyan-50 border-b border-cyan-100 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center text-cyan-700">
+                    <i class="fas fa-chair"></i>
+                </div>
+                <span class="font-bold text-gray-800 text-lg" id="pos-table-title">Mesa --</span>
+            </div>
+            <button onclick="fecharMesaPDV()" class="text-gray-400 hover:text-red-500 transition px-2">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-white" id="pos-order-items">
+            </div>
+
+        <div class="p-4 bg-gray-50 border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-30">
+            <div class="flex justify-between mb-1 text-sm text-gray-500">
+                <span>Subtotal</span>
+                <span id="pos-subtotal">R$ 0,00</span>
+            </div>
+            <div class="flex justify-between mb-4 text-xl font-bold text-gray-900 border-t border-dashed border-gray-300 pt-2">
+                <span>Total</span> 
+                <span id="pos-total">R$ 0,00</span>
+            </div>
+            <button onclick="confirmarPedidoMesa()" class="w-full py-3 rounded-lg bg-green-600 text-white font-bold text-sm hover:bg-green-700 shadow-md transition flex items-center justify-center gap-2">
+                <i class="fas fa-paper-plane"></i> Enviar Pedido
+            </button>
         </div>
     </div>
 </div>
         </main>
-
-        <div id="view-pos" class="hidden bg-gray-100 flex-col md:flex-row overflow-hidden absolute inset-0 z-30 top-0 transition-all duration-300">
-            <div class="flex-1 flex flex-col border-r border-gray-200 bg-white">
-                <div class="p-3 border-b flex items-center justify-between bg-white shadow-sm z-10">
-                    <div class="relative w-full max-w-md"><i class="fas fa-search absolute left-3 top-2.5 text-gray-400"></i><input type="text" id="pos-search" placeholder="Procurar produto..." class="w-full bg-gray-100 pl-10 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"></div>
-                    <button onclick="fecharMesaPDV()" class="bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm font-bold ml-2">Voltar</button>
-                </div>
-                <div class="flex gap-2 p-3 overflow-x-auto border-b bg-gray-50 thin-scroll" id="pos-categories"></div>
-                <div class="flex-1 overflow-y-auto p-4 bg-gray-100"><div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="pos-products-grid"></div></div>
-            </div>
-            <div class="w-full md:w-96 bg-white flex flex-col shadow-2xl relative border-l border-gray-200">
-                <div class="p-4 bg-cyan-50 border-b border-cyan-100 flex justify-between items-center"><div><div class="flex items-center gap-2"><i class="fas fa-chair text-cyan-700"></i><span class="font-bold text-gray-800 text-lg" id="pos-table-title">Mesa --</span></div></div></div>
-                <div class="flex-1 overflow-y-auto p-4 space-y-3" id="pos-order-items"></div>
-                <div class="p-4 bg-gray-50 border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                    <div class="flex justify-between mb-4 text-xl font-bold text-gray-900 border-t border-dashed border-gray-300 pt-2"><span>Total</span> <span id="pos-total">R$ 0,00</span></div>
-                    <button onclick="confirmarPedidoMesa()" class="w-full py-3 rounded-lg bg-green-600 text-white font-bold text-sm hover:bg-green-700 shadow-md">Enviar Pedido</button>
-                </div>
             </div>
         </div>
 
@@ -890,24 +932,25 @@
         </div>
     </div>
 
-    <div id="config-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm"><div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6"><h3 class="font-bold text-lg mb-4">Configurar Ambientes</h3><div id="config-content"></div><button onclick="toggleConfigModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded">Fechar</button></div></div>
-   <div id="modal-financeiro" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
-        <h3 class="font-bold text-lg mb-4 text-cyan-900">Novo Lançamento</h3>
-        <div class="space-y-3">
-            <input id="fin-desc" class="border rounded-lg p-3 w-full outline-none focus:border-cyan-500" placeholder="Descrição (Ex: Compra de Leite)">
-            <select id="fin-tipo" class="border rounded-lg p-3 w-full bg-white outline-none">
-                <option value="entrada">Entrada (+)</option>
-                <option value="saida">Saída (-)</option>
-            </select>
-            <input id="fin-valor" type="number" step="0.01" class="border rounded-lg p-3 w-full outline-none focus:border-cyan-500" placeholder="Valor R$ 0,00">
+  <div id="config-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 animate-pop-up">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+            <h3 class="font-bold text-lg text-cyan-900">Configurar Ambientes</h3>
+            <button onclick="toggleConfigModal()" class="text-gray-400 hover:text-red-500"><i class="fas fa-times"></i></button>
         </div>
-        <div class="flex gap-2 mt-6">
-            <button onclick="document.getElementById('modal-financeiro').classList.add('hidden')" class="flex-1 py-2 text-gray-500 font-bold">Cancelar</button>
-            <button onclick="salvarLancamento()" class="flex-1 bg-cyan-600 text-white py-2 rounded-lg font-bold hover:bg-cyan-700">Salvar</button>
+
+        <div id="config-content" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+            </div>
+
+        <div class="flex gap-3 mt-6 border-t pt-4">
+            <button onclick="toggleConfigModal()" class="flex-1 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold hover:bg-gray-200 transition">Cancelar</button>
+            <button onclick="salvarNovaConfiguracao()" class="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg font-bold hover:bg-cyan-700 shadow-md transition">
+                <i class="fas fa-save mr-2"></i>Salvar Alterações
+            </button>
         </div>
     </div>
 </div>
+   </main>
 
     <div id="toast" class="fixed top-4 right-4 z-[100] bg-white border-l-4 border-green-500 shadow-xl rounded px-4 py-3 hidden animate-fade-in-up">
         <p class="font-bold text-sm text-gray-800" id="toast-title">Sucesso</p>
@@ -917,8 +960,6 @@
     <div id="receipt-area" class="hidden bg-white p-2 text-black font-mono text-xs max-w-[80mm]"></div>
     <audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
-    <script type="module" src="js/notifications.js"></script>
-    <script type="module" src="js/dashboard.js"></script>
     <div id="modal-confirm-all-ready" class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
     <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-pop-up">
         <div class="flex justify-between items-center mb-4">
