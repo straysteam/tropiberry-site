@@ -234,9 +234,9 @@
         <div id="final-map" class="absolute inset-0 z-0 w-full h-full bg-gray-200"></div>
 
         <div class="absolute top-4 right-4 z-20 flex gap-2">
-            <button onclick="window.print()" class="bg-white text-gray-700 px-4 py-2 rounded shadow font-bold text-xs hover:bg-gray-100 flex items-center gap-2">
-                <i class="fas fa-print"></i> Imprimir Nota
-            </button>
+            <button onclick="prepararImpressao()" class="bg-white text-gray-700 px-4 py-2 rounded shadow font-bold text-xs hover:bg-gray-100 flex items-center gap-2">
+    <i class="fas fa-print"></i> Imprimir Nota
+</button>
             <button onclick="closeOrderScreen()" class="bg-red-500 text-white px-4 py-2 rounded shadow font-bold text-xs hover:bg-red-600">
                 <i class="fas fa-times"></i> Sair
             </button>
@@ -375,32 +375,70 @@
 
    <style>
 @media print {
-    /* ESCONDE TUDO EXCETO A NOTA */
-    body * { visibility: hidden !important; }
-    #printable-receipt, #printable-receipt * { visibility: visible !important; }
-    #printable-receipt { 
-        position: absolute !important; left: 0 !important; top: 0 !important; 
-        width: 80mm !important; /* Tamanho padrão de cupom térmico */
-        padding: 10px !important;
-        background: white !important;
-    }
-    /* Remove excesso de páginas */
-    html, body { height: auto !important; overflow: visible !important; }
-}
+    /* 1. Esconde TUDO da tela */
+    body * { display: none !important; }
+    
+    /* 2. Exibe APENAS o container de impressão e seus filhos */
+    #printable-receipt, #printable-receipt * { display: block !important; }
+    
+    /* 3. Reseta margens da página para evitar páginas extras */
+    @page { margin: 0; }
+    body { margin: 0; padding: 0; background: #fff; }
 
-/* Animação Pix Copiado */
-#copy-animation-overlay { transition: all 0.3s ease; }
+    #printable-receipt { 
+        position: absolute !important; 
+        left: 0 !important; 
+        top: 0 !important; 
+        width: 80mm !important; /* Largura padrão de impressora térmica */
+        padding: 5mm;
+        font-family: 'Courier New', Courier, monospace; /* Fonte estilo cupom */
+        color: #000;
+    }
+}
 </style>
 
 <div id="printable-receipt" class="hidden">
-    <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px;">
-        <h2 style="font-size: 18px; margin: 0;">TROPYBERRY</h2>
-        <p style="font-size: 10px; margin: 5px 0;">Recibo de Pedido</p>
+    <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px;">
+        <h2 style="font-size: 20px; font-weight: bold; margin: 0;">TROPYBERRY</h2>
+        <p style="font-size: 12px; margin: 2px 0;">O Melhor Açaí da Cidade</p>
+        <p style="font-size: 11px; margin: 0;" id="print-store-address">Av. Exemplo, 123 - João Pessoa/PB</p>
     </div>
-    <div id="receipt-content-print" style="font-family: monospace; font-size: 12px; padding: 10px 0;">
+
+    <div style="font-size: 12px; margin-bottom: 10px; line-height: 1.4;">
+        <p><strong>PEDIDO: #<span id="print-order-id"></span></strong></p>
+        <p>Data: <span id="print-order-date"></span></p>
+        <p>Cliente: <span id="print-customer-name"></span></p>
+        <p>Tel: <span id="print-customer-phone"></span></p>
+        <p>Entrega: <span id="print-customer-address"></span></p>
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 10px;">
+        <thead>
+            <tr style="border-bottom: 1px solid #000;">
+                <th style="text-align: left; padding: 5px 0;">QTD</th>
+                <th style="text-align: left; padding: 5px 0;">ITEM</th>
+                <th style="text-align: right; padding: 5px 0;">VALOR</th>
+            </tr>
+        </thead>
+        <tbody id="print-items-list">
+            </tbody>
+    </table>
+
+    <div style="border-top: 1px dashed #000; padding-top: 10px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between;">
+            <span>Subtotal:</span> <span id="print-subtotal"></span>
         </div>
-    <div style="border-top: 1px dashed #000; padding-top: 10px; text-align: center; font-size: 10px;">
-        <p>Obrigado pela preferência!</p>
+        <div style="display: flex; justify-content: space-between;">
+            <span>Frete:</span> <span id="print-delivery"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px;">
+            <span>TOTAL:</span> <span id="print-total"></span>
+        </div>
+    </div>
+
+    <div style="margin-top: 15px; text-align: center; font-size: 11px; border-top: 1px solid #000; padding-top: 10px;">
+        <p>Pagamento: <strong id="print-pay-method"></strong></p>
+        <p style="margin-top: 10px;">Obrigado pela preferência!</p>
     </div>
 </div>
     

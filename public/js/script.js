@@ -888,7 +888,7 @@ window.openOrderScreen = (orderId) => {
     if(!screen) return;
     screen.classList.remove('hidden');
 
-    // Inicializa o mapa (Leaflet) conforme seu exemplo antigo
+    // Inicializa o mapa (Leaflet)
     setTimeout(() => {
         const mapContainer = document.getElementById('final-map');
         if (mapContainer) {
@@ -899,30 +899,64 @@ window.openOrderScreen = (orderId) => {
         }
     }, 400);
 
-    // Escuta mudanças no Firebase
+    // Escuta mudanças no Firebase em tempo real
     onSnapshot(doc(db, "pedidos", orderId), (docSnap) => {
         if (!docSnap.exists()) return;
         const order = docSnap.data();
 
+        // Atualiza IDs e Nomes na tela
         document.getElementById('status-order-id').innerText = orderId.slice(-5).toUpperCase();
         document.getElementById('status-client-name').innerText = order.customer.name;
+        document.getElementById('status-client-phone').innerText = order.customer.phone;
+        document.getElementById('status-client-address').innerText = order.customer.address;
+
+        const whatsappBtn = document.getElementById('btn-whatsapp-status');
+    if (whatsappBtn) {
+        const orderIdShort = orderId.slice(-5).toUpperCase();
+        const textoMsg = `Olá! Gostaria de suporte para o meu pedido *#${orderIdShort}*.\n\n` +
+                         `*Status:* ${order.status}\n` +
+                         `*Cliente:* ${order.customer.name}\n` +
+                         `*Total:* R$ ${order.total.toFixed(2).replace('.', ',')}`;
+        
+        // Link formatado para o seu número
+        whatsappBtn.href = `https://wa.me/5583996025703?text=${encodeURIComponent(textoMsg)}`;
+    }
 
         const pixArea = document.getElementById('pix-qr-container');
         const pixSlot = document.getElementById('pix-qr-image-slot');
         
-        // Se o pedido está aguardando PIX e os dados existem
+        // Lógica do PIX e do Timer
         if (order.paymentMethod === 'pix' && order.status === 'Aguardando') {
+            // Se o createdAt ainda não subiu (estado temporário do Firebase), aguarda o próximo ciclo
+            if (!order.createdAt) return; 
+
             pixArea.classList.remove('hidden');
+            
+            // Injeta a imagem do QR Code
             if (order.pixQR) {
-                // Injeta a imagem base64 conforme seu exemplo
                 pixSlot.innerHTML = `<img src="data:image/jpeg;base64,${order.pixQR}" class="w-48 h-48 rounded-lg shadow-lg border-4 border-white mx-auto">`;
             }
+            
+            // Injeta o código Copia e Cola
             if (order.pixCode) {
                 document.getElementById('pix-copy-paste-screen').value = order.pixCode;
             }
+
+            // Inicia o timer apenas se ele não estiver rodando (evita o bug do F5)
+            if (!countdownInterval) {
+                iniciarContagemRegressiva(orderId, order.createdAt);
+            }
         } else {
+            // Se o status mudar para 'Pago' ou 'Cancelado', esconde a área do PIX e para o timer
             pixArea.classList.add('hidden');
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
         }
+        
+        // Atualiza os itens e o total no resumo da conta
+       renderReceiptFromOrder(order.items, order.total, order, orderId);
     });
 };
 
@@ -950,22 +984,51 @@ window.copyPixScreen = () => {
         console.error("Erro ao copiar: ", err);
     });
 };
-function iniciarContagemRegressiva(orderId) {
-    let timeLeft = 5 * 60; 
+function iniciarContagemRegressiva(orderId, createdAt) {
+    if (countdownInterval) clearInterval(countdownInterval);
+
     const timerDisplay = document.getElementById('pix-countdown-timer');
+    if (!timerDisplay) return;
 
-    countdownInterval = setInterval(async () => {
-        const minutes = Math.floor(timeLeft / 60);
-        const seconds = timeLeft % 60;
-        timerDisplay.innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    // 1. Calcula o tempo de expiração real (Criação + 5 min)
+    const tempoCriacao = createdAt.seconds * 1000;
+    const tempoExpiracao = tempoCriacao + (5 * 60 * 1000);
 
-        if (timeLeft <= 0) {
-            clearInterval(countdownInterval);
-            // CANCELA NO BANCO DE DADOS AUTOMATICAMENTE
-            await updateDoc(doc(db, "pedidos", orderId), { status: 'Cancelado', motivo: 'Tempo de pagamento expirado' });
+    // Função interna para atualizar a tela
+    const atualizarTela = async () => {
+        const agora = Date.now();
+        let restante = tempoExpiracao - agora;
+
+        // CORREÇÃO DO PULO PARA 7 MINUTOS:
+        // Se o relógio do usuário está atrasado e o cálculo deu mais de 5 min, trava em 5 min.
+        if (restante > (5 * 60 * 1000)) {
+            restante = (5 * 60 * 1000);
         }
-        timeLeft--;
-    }, 1000);
+
+        if (restante <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+            timerDisplay.innerText = "00:00";
+            
+            // Cancela o pedido no Firebase
+            try {
+                await updateDoc(doc(db, "pedidos", orderId), { 
+                    status: 'Cancelado', 
+                    motivo: 'Tempo de pagamento expirado' 
+                });
+                showToast("Pedido expirado!", true);
+            } catch (e) { console.error(e); }
+            return;
+        }
+
+        const minutos = Math.floor(restante / 60000);
+        const segundos = Math.floor((restante % 60000) / 1000);
+        timerDisplay.innerText = `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+    };
+
+    // Executa uma vez imediatamente para evitar o "flicker" de 05:00
+    atualizarTela(); 
+    countdownInterval = setInterval(atualizarTela, 1000);
 }
 
 
@@ -1074,3 +1137,63 @@ function saveLastOrder(id) { localStorage.setItem('tropyberry_last_order', JSON.
 function checkLastOrder() { const saved = localStorage.getItem('tropyberry_last_order'); const btn = document.getElementById('last-order-btn'); const cart = document.getElementById('cart-modal'); if (cart && !cart.classList.contains('hidden')) { if(btn) btn.classList.add('hidden'); return; } if (saved && btn) { const d = JSON.parse(saved); if ((Date.now() - d.timestamp) / 1000 / 60 < 15) btn.classList.remove('hidden'); else { btn.classList.add('hidden'); localStorage.removeItem('tropyberry_last_order'); } } else if (btn) btn.classList.add('hidden'); }
 setInterval(checkLastOrder, 60000);
 async function verificarBotaoAdmin(productId) { if (currentUserIsAdmin) { const btn = document.getElementById('admin-edit-shortcut'); if(btn) { btn.classList.remove('hidden'); btn.onclick = () => { window.location.href = `admin.html?edit_product=${productId}`; }; } } }
+
+// 1. Função que renderiza os dados tanto na tela quanto no cupom de impressão
+window.renderReceiptFromOrder = (items, total, orderData, orderId) => {
+    const printItemsList = document.getElementById('print-items-list');
+    const screenItemsList = document.getElementById('receipt-items-list');
+    
+    let html = '';
+    let subtotal = 0;
+
+    // Prepara a lista de itens para o cupom
+    items.forEach(item => {
+        const itemTotal = item.price * item.quantity;
+        subtotal += itemTotal;
+        
+        html += `
+            <tr style="border-bottom: 0.5px solid #eee;">
+                <td style="padding: 8px 0; vertical-align: top;">${item.quantity}x</td>
+                <td style="padding: 8px 0;">
+                    <div style="font-weight: bold;">${item.name}</div>
+                    <div style="font-size: 10px; color: #555;">${item.details || ''}</div>
+                </td>
+                <td style="padding: 8px 0; text-align: right; vertical-align: top;">R$ ${itemTotal.toFixed(2).replace('.', ',')}</td>
+            </tr>
+        `;
+    });
+
+    // Injeta os dados no HTML de impressão (aquele que criamos no index.html)
+    if (printItemsList) {
+        printItemsList.innerHTML = html;
+        document.getElementById('print-order-id').innerText = orderId.slice(-5).toUpperCase();
+        document.getElementById('print-order-date').innerText = new Date().toLocaleString('pt-BR');
+        document.getElementById('print-customer-name').innerText = orderData.customer.name;
+        document.getElementById('print-customer-phone').innerText = orderData.customer.phone;
+        document.getElementById('print-customer-address').innerText = orderData.customer.address;
+        document.getElementById('print-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+        document.getElementById('print-delivery').innerText = total > subtotal ? `R$ ${(total - subtotal).toFixed(2).replace('.', ',')}` : 'Grátis';
+        document.getElementById('print-total').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+        document.getElementById('print-pay-method').innerText = orderData.paymentMethod === 'pix' ? 'PIX' : 'CARTÃO';
+    }
+
+    // Atualiza também a listagem que aparece na tela do navegador
+    if (screenItemsList) {
+        let screenHtml = '';
+        items.forEach(item => {
+            screenHtml += `<div class="flex justify-between items-start mb-2"><div><span class="font-bold text-gray-700">${item.quantity}x</span> <span class="text-gray-600">${item.name}</span></div><span class="text-gray-800 font-medium">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span></div>`;
+        });
+        screenItemsList.innerHTML = screenHtml;
+        document.getElementById('receipt-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+        document.getElementById('receipt-total').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+    }
+};
+
+window.prepararImpressao = () => {
+    window.print();
+};
+// 2. Função chamada pelo botão de imprimir
+window.prepararImpressao = () => {
+    // Apenas dispara o print. O CSS @media print cuidará de esconder o resto.
+    window.print();
+};
