@@ -140,27 +140,44 @@ window.navegarPara = (telaId) => {
 // === MONITORAMENTO DE PEDIDOS ===
 function iniciarMonitoramentoPedidos() {
     const q = query(collection(db, "pedidos"), orderBy("createdAt", "desc"));
+    
     onSnapshot(q, (snapshot) => {
         allOrders = [];
         let counts = { retirada: 0, delivery: 0, mesa: 0, pendente: 0, curso: 0 };
         let total = 0;
+
+        // LÓGICA DO SOM: Toca sempre que um novo documento entra no banco
+        snapshot.docChanges().forEach(change => {
+            if (change.type === "added") {
+                // snapshot.metadata.hasPendingWrites é falso quando o dado vem do servidor (pedido novo real)
+                if (!snapshot.metadata.fromCache && notificationSound) {
+                    notificationSound.play().catch(e => console.log("Aguardando interação para tocar som:", e));
+                    // Mostra um aviso visual também para garantir
+                    if (typeof window.showToast === "function") {
+                        window.showToast("Novo Pedido", "Um novo pedido acabou de chegar!", false);
+                    }
+                }
+            }
+        });
 
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
             const order = { id: docSnap.id, ...data };
             allOrders.push(order);
 
-            if (data.status !== 'Finalizado' && data.status !== 'Rejeitado') {
+            // Contabiliza apenas pedidos que não foram finalizados ou rejeitados para os badges
+            if (data.status !== 'Finalizado' && data.status !== 'Rejeitado' && data.status !== 'Cancelado') {
                 if (data.method === 'retirada') counts.retirada++;
                 if (data.method === 'delivery') counts.delivery++;
                 if (data.method === 'mesa') counts.mesa++;
+                
                 if (data.status === 'Aguardando') counts.pendente++;
                 if (data.status === 'Em Preparo' || data.status === 'Saiu para Entrega') counts.curso++;
                 total += (data.total || 0);
             }
         });
 
-        // Atualiza Badges
+        // Atualiza Badges (Números em cima das abas)
         updateBadge('badge-retirada', counts.retirada);
         updateBadge('badge-delivery', counts.delivery);
         updateBadge('badge-mesa', counts.mesa);
@@ -169,12 +186,18 @@ function iniciarMonitoramentoPedidos() {
         if(countPendente) countPendente.innerText = counts.pendente;
         const countCurso = document.getElementById('count-curso');
         if(countCurso) countCurso.innerText = counts.curso;
+        
         const totalDia = document.getElementById('total-dia');
         if(totalDia) totalDia.innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
 
-        // Atualiza tela ativa
-        if (!document.getElementById('view-lista').classList.contains('hidden')) renderizarPedidosLista();
-        if (!document.getElementById('view-mesas').classList.contains('hidden')) renderizarGridMesas();
+        // Renderiza a lista se a visão de lista estiver ativa
+        if (!document.getElementById('view-lista').classList.contains('hidden')) {
+            renderizarPedidosLista();
+        }
+        // Renderiza as mesas se a visão de mesas estiver ativa
+        if (!document.getElementById('view-mesas').classList.contains('hidden')) {
+            renderizarGridMesas();
+        }
     });
 }
 
@@ -574,14 +597,20 @@ function renderizarPedidosLista() {
 
 window.atualizarStatus = async (id, status) => {
     try { 
-        await updateDoc(doc(db, "pedidos", id), { status }); 
+        await updateDoc(doc(db, "pedidos", id), { 
+            status: status,
+            updatedAt: serverTimestamp() // Isso força o onSnapshot do cliente a disparar
+        }); 
         
+        // Notificação opcional no Dashboard
+        window.showToast("Status Atualizado", `Pedido #${id.slice(0,4)} movido para ${status}`);
+
         // GATILHO DO BOT: Dispara a mensagem automática conforme o novo status
         if (typeof window.enviarNotificacaoWhats === "function") {
             window.enviarNotificacaoWhats(id, status);
         }
         
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("Erro ao atualizar status:", e); }
 }
 
 window.filtrarStatus = (filtro) => {

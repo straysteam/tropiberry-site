@@ -856,15 +856,17 @@ async function processPayment() {
         }
 
         const docRef = await addDoc(collection(db, "pedidos"), {
-            customer: currentOrder.customer,
-            items: cart,
-            total: totalFinal,
-            paymentMethod: payMethod,
-            status: 'Aguardando',
-            pixCode: pixData.qr_code,
-            pixQR: pixData.qr_code_base64,
-            createdAt: serverTimestamp()
-        });
+    customer: currentOrder.customer,
+    items: cart,
+    total: totalFinal,
+    paymentMethod: payMethod,
+    method: currentOrder.method, // ESTA LINHA ESTAVA FALTANDO! (delivery ou retirada)
+    status: 'Aguardando',
+    paymentStatus: 'pending',    // Adicionado para o dashboard reconhecer como "NÃO PAGO"
+    pixCode: pixData.qr_code,
+    pixQR: pixData.qr_code_base64,
+    createdAt: serverTimestamp()
+});
         
         saveLastOrder(docRef.id);
         cart = [];
@@ -883,12 +885,12 @@ async function processPayment() {
 }
 let countdownInterval = null;
 
-window.openOrderScreen = (orderId) => {
+   window.openOrderScreen = (orderId) => {
     const screen = document.getElementById('order-screen');
     if(!screen) return;
     screen.classList.remove('hidden');
 
-    // Inicializa o mapa (Leaflet)
+    // Inicializa o mapa (Leaflet) - MANTIDO
     setTimeout(() => {
         const mapContainer = document.getElementById('final-map');
         if (mapContainer) {
@@ -899,55 +901,81 @@ window.openOrderScreen = (orderId) => {
         }
     }, 400);
 
-    // Escuta mudanças no Firebase em tempo real
+    // Escuta mudanças no Firebase em tempo real - MANTIDO
     onSnapshot(doc(db, "pedidos", orderId), (docSnap) => {
         if (!docSnap.exists()) return;
         const order = docSnap.data();
 
-        // Atualiza IDs e Nomes na tela
+        // Atualiza IDs e Nomes na tela - MANTIDO
         document.getElementById('status-order-id').innerText = orderId.slice(-5).toUpperCase();
         document.getElementById('status-client-name').innerText = order.customer.name;
         document.getElementById('status-client-phone').innerText = order.customer.phone;
         document.getElementById('status-client-address').innerText = order.customer.address;
 
+        // === INSERÇÃO: LÓGICA DA BARRA DE PROGRESSO (ÍCONES) ===
+        const steps = document.querySelectorAll('#order-screen .relative.z-10.flex.flex-col.items-center');
+        const setStepActive = (index, active) => {
+            if (!steps[index]) return;
+            const circle = steps[index].querySelector('.w-8.h-8');
+            if (active) {
+                steps[index].classList.remove('opacity-40');
+                circle.classList.add('bg-green-500', 'text-white');
+                circle.classList.remove('bg-gray-200', 'text-gray-500');
+            } else {
+                steps[index].classList.add('opacity-40');
+                circle.classList.remove('bg-green-500', 'text-white');
+                circle.classList.add('bg-gray-200', 'text-gray-500');
+            }
+        };
+        setStepActive(0, true); // Recebido
+        setStepActive(1, ['Em Preparo', 'Pronto', 'Saiu para Entrega', 'Finalizado'].includes(order.status));
+        setStepActive(2, ['Saiu para Entrega', 'Finalizado'].includes(order.status));
+        setStepActive(3, order.status === 'Finalizado');
+
+        // === INSERÇÃO: ATUALIZAÇÃO DO BADGE DE PAGAMENTO ===
+        const payBadge = document.getElementById('status-payment-badge');
+        if (payBadge) {
+            if (order.status === 'Cancelado' || order.status === 'Rejeitado') {
+                payBadge.innerText = 'CANCELADO';
+                payBadge.className = "bg-red-100 text-red-600 text-xs px-3 py-1 rounded-full font-bold border border-red-200";
+            } else if (order.paymentStatus === 'paid') {
+                payBadge.innerText = 'PAGO';
+                payBadge.className = "bg-green-100 text-green-600 text-xs px-3 py-1 rounded-full font-bold border border-green-200";
+            } else {
+                payBadge.innerText = 'PENDENTE';
+                payBadge.className = "bg-orange-100 text-orange-600 text-xs px-3 py-1 rounded-full font-bold border border-orange-200";
+            }
+        }
+
+        // WhatsApp Button - MANTIDO
         const whatsappBtn = document.getElementById('btn-whatsapp-status');
-    if (whatsappBtn) {
-        const orderIdShort = orderId.slice(-5).toUpperCase();
-        const textoMsg = `Olá! Gostaria de suporte para o meu pedido *#${orderIdShort}*.\n\n` +
-                         `*Status:* ${order.status}\n` +
-                         `*Cliente:* ${order.customer.name}\n` +
-                         `*Total:* R$ ${order.total.toFixed(2).replace('.', ',')}`;
-        
-        // Link formatado para o seu número
-        whatsappBtn.href = `https://wa.me/5583996025703?text=${encodeURIComponent(textoMsg)}`;
-    }
+        if (whatsappBtn) {
+            const orderIdShort = orderId.slice(-5).toUpperCase();
+            const textoMsg = `Olá! Gostaria de suporte para o meu pedido *#${orderIdShort}*.\n\n` +
+                             `*Status:* ${order.status}\n` +
+                             `*Cliente:* ${order.customer.name}\n` +
+                             `*Total:* R$ ${order.total.toFixed(2).replace('.', ',')}`;
+            whatsappBtn.href = `https://wa.me/5583996025703?text=${encodeURIComponent(textoMsg)}`;
+        }
 
         const pixArea = document.getElementById('pix-qr-container');
         const pixSlot = document.getElementById('pix-qr-image-slot');
         
-        // Lógica do PIX e do Timer
-        if (order.paymentMethod === 'pix' && order.status === 'Aguardando') {
-            // Se o createdAt ainda não subiu (estado temporário do Firebase), aguarda o próximo ciclo
+        // Lógica do PIX e do Timer - MANTIDO
+        if (order.paymentMethod === 'pix' && order.status === 'Aguardando' && order.paymentStatus !== 'paid') {
             if (!order.createdAt) return; 
 
             pixArea.classList.remove('hidden');
-            
-            // Injeta a imagem do QR Code
             if (order.pixQR) {
                 pixSlot.innerHTML = `<img src="data:image/jpeg;base64,${order.pixQR}" class="w-48 h-48 rounded-lg shadow-lg border-4 border-white mx-auto">`;
             }
-            
-            // Injeta o código Copia e Cola
             if (order.pixCode) {
                 document.getElementById('pix-copy-paste-screen').value = order.pixCode;
             }
-
-            // Inicia o timer apenas se ele não estiver rodando (evita o bug do F5)
             if (!countdownInterval) {
                 iniciarContagemRegressiva(orderId, order.createdAt);
             }
         } else {
-            // Se o status mudar para 'Pago' ou 'Cancelado', esconde a área do PIX e para o timer
             pixArea.classList.add('hidden');
             if (countdownInterval) {
                 clearInterval(countdownInterval);
@@ -955,8 +983,8 @@ window.openOrderScreen = (orderId) => {
             }
         }
         
-        // Atualiza os itens e o total no resumo da conta
-       renderReceiptFromOrder(order.items, order.total, order, orderId);
+        // Atualiza os itens e o total no resumo da conta - MANTIDO E CORRIGIDO
+        renderReceiptFromOrder(order.items, order.total, order, orderId);
     });
 };
 
