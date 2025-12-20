@@ -1242,43 +1242,23 @@ function monitorarInfoLoja() {
 }
 
 function aplicarDadosLojaNoSite(data) {
-    // 1. Atualiza Endereço
-    const endereco = data.endereco || "Endereço não configurado";
-    if(document.getElementById('info-address')) document.getElementById('info-address').innerText = endereco;
-    if(document.getElementById('footer-address')) document.getElementById('footer-address').innerText = endereco;
-    
-    // Atualiza endereço de impressão (se existir o elemento oculto de cupom)
-    if(document.getElementById('print-store-address')) document.getElementById('print-store-address').innerText = endereco;
-
-    // 2. Atualiza Telefone / WhatsApp
-    const whats = data.whatsapp || "";
-    if(document.getElementById('info-phone')) document.getElementById('info-phone').innerText = whats;
-    if(document.getElementById('footer-phone')) document.getElementById('footer-phone').innerText = whats;
-
-    // 3. Atualiza Horários (Formata o objeto para texto legível)
-    if(document.getElementById('info-hours') && data.horarios) {
-        const h = data.horarios;
-        // Exemplo simples de formatação: Seg-Sex e Sab-Dom
-        // Você pode sofisticar isso se quiser listar dia a dia
-        let textoHorario = '';
-        
-        if(h.seg && h.seg.aberto) textoHorario += `Seg a Sex: ${h.seg.inicio} às ${h.seg.fim}<br>`;
-        if(h.sab && h.sab.aberto) textoHorario += `Sáb: ${h.sab.inicio} às ${h.sab.fim}<br>`;
-        if(h.dom && h.dom.aberto) textoHorario += `Dom: ${h.dom.inicio} às ${h.dom.fim}`;
-        
-        document.getElementById('info-hours').innerHTML = textoHorario || "Horários não configurados";
+    // 1. Imagem da Fachada (Resolve a imagem quebrada)
+    const facadeImg = document.querySelector('#info-modal img');
+    if(facadeImg && data.facadeUrl) {
+        facadeImg.src = data.facadeUrl;
+        facadeImg.style.opacity = "1"; // Deixa a foto nítida
     }
 
-    // 4. Se configurado para esconder endereço
-    if(data.esconderEndereco) {
-        if(document.getElementById('footer-address')) document.getElementById('footer-address').classList.add('hidden');
-        if(document.getElementById('info-address')) document.getElementById('info-address').parentElement.classList.add('hidden');
-    } else {
-        if(document.getElementById('footer-address')) document.getElementById('footer-address').classList.remove('hidden');
-        if(document.getElementById('info-address')) document.getElementById('info-address').parentElement.classList.remove('hidden');
+    // 2. Horários (Usa o texto que você digitou no Dashboard)
+    const hoursEl = document.getElementById('info-hours');
+    if(hoursEl) {
+        hoursEl.innerHTML = data.horarioTexto ? data.horarioTexto.replace(/\n/g, '<br>') : "Consulte nossos horários";
     }
+
+    // 3. Outros campos
+    if(document.getElementById('info-address')) document.getElementById('info-address').innerText = data.endereco || "";
+    if(document.getElementById('info-phone')) document.getElementById('info-phone').innerText = data.whatsapp || "";
 }
-
 // Chame esta função na inicialização
 document.addEventListener('DOMContentLoaded', () => {
     monitorarInfoLoja();

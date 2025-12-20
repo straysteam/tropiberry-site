@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, updateDoc, orderBy, query, getDoc, setDoc, addDoc, serverTimestamp, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, doc, updateDoc, orderBy, query, getDoc, setDoc, addDoc, serverTimestamp, getDocs, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { monitorarEstadoAuth, verificarAdminNoBanco, db as authDb, fazerLogout } from './auth.js';
 
@@ -102,20 +102,22 @@ window.toggleSubmenu = (id) => {
     arrow.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
+const originalNavPara = window.navegarPara;
 window.navegarPara = (telaId) => {
-    // 1. Salva a tela atual no navegador
+    // 1. Salva a tela atual para o F5
     localStorage.setItem('painel_ultima_tela', telaId);
 
-    // 2. Lista de todas as telas do sistema
+    // 2. Lista COMPLETA de todas as telas (não falta nenhuma aqui)
     const telas = [
         'view-pdv-wrapper', 'view-pos', 'view-historico', 'view-relatorios', 
         'view-financeiro', 'view-caixa', 'view-nfce', 
         'view-produtos', 'view-boasvindas', 'view-config-pedidos',
-        'view-kitchen', 'view-inventory', 'view-chatbot', 'view-config-business', 
-        'view-config-team'
+        'view-kitchen', 'view-inventory', 'view-chatbot', 
+        'view-config-business', 'view-config-team', 
+        'view-config-printers', 'view-config-interactions'
     ];
     
-    // 3. Esconde todas
+    // 3. Esconde todas e trata classes específicas
     telas.forEach(id => {
         const el = document.getElementById(id);
         if(el) {
@@ -124,52 +126,48 @@ window.navegarPara = (telaId) => {
         }
     });
 
-    // 4. Mostra a tela desejada
+    // 4. Mostra a tela alvo
     const target = document.getElementById(telaId);
     if(target) {
         target.classList.remove('hidden');
         if(telaId === 'view-pos') target.classList.add('flex');
     }
     
-    // 5. Atualiza o menu lateral (Visual ativo)
+    // 5. Menu Lateral (Marca o botão como ativo)
     document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
-    // Tenta encontrar o botão que leva para esta tela e marca como ativo
     const activeBtn = document.querySelector(`[onclick="navegarPara('${telaId}')"]`);
-    if(activeBtn && activeBtn.classList.contains('sidebar-item')) activeBtn.classList.add('active');
+    if(activeBtn) activeBtn.classList.add('active');
 
-    // 6. GATILHOS DE CARREGAMENTO (Isso recupera seus dados do banco!)
+    // 6. GATILHOS DE CARREGAMENTO (AQUI RESOLVE O CAIXA E OS PRODUTOS)
+    if(telaId === 'view-caixa') iniciarTelaCaixa(); // Chama saldo + histórico
+    if(telaId === 'view-produtos') renderizarListaProdutos();
     if(telaId === 'view-historico') carregarHistorico();
     if(telaId === 'view-relatorios') renderizarRelatorios();
-    if(telaId === 'view-financeiro') carregarFinanceiro();
-    if(telaId === 'view-caixa') carregarEstadoCaixa();
-    if(telaId === 'view-produtos') renderizarListaProdutos();
+    if(telaId === 'view-financeiro') renderizarFinanceiro();
     if(telaId === 'view-boasvindas') carregarConfigLoja();
     if(telaId === 'view-config-pedidos') carregarConfigPedidos();
     if(telaId === 'view-kitchen') iniciarMonitorCozinha(); 
     if(telaId === 'view-inventory') renderizarInventario(); 
-    if(telaId === 'view-config-printers') carregarConfigImpressao();
-    
-    // AQUI ESTÁ O SEGREDO DO "MEU NEGÓCIO":
     if(telaId === 'view-config-business') carregarConfigNegocio();
     if(telaId === 'view-config-team') renderizarEquipe();
+    if(telaId === 'view-config-printers') carregarConfigImpressao();
+    if(telaId === 'view-config-interactions') carregarCredenciaisIfood();
 }
 
 // === MONITORAMENTO DE PEDIDOS ===
 function iniciarMonitoramentoPedidos() {
     const q = query(collection(db, "pedidos"), orderBy("createdAt", "desc"));
     
+    // MONITOR DE PEDIDOS (Lógica original mantida 100%)
     onSnapshot(q, (snapshot) => {
         allOrders = [];
         let counts = { retirada: 0, delivery: 0, mesa: 0, pendente: 0, curso: 0 };
         let total = 0;
 
-        // LÓGICA DO SOM: Toca sempre que um novo documento entra no banco
         snapshot.docChanges().forEach(change => {
             if (change.type === "added") {
-                // snapshot.metadata.hasPendingWrites é falso quando o dado vem do servidor (pedido novo real)
                 if (!snapshot.metadata.fromCache && notificationSound) {
-                    notificationSound.play().catch(e => console.log("Aguardando interação para tocar som:", e));
-                    // Mostra um aviso visual também para garantir
+                    notificationSound.play().catch(e => console.log("Erro som:", e));
                     if (typeof window.showToast === "function") {
                         window.showToast("Novo Pedido", "Um novo pedido acabou de chegar!", false);
                     }
@@ -182,38 +180,34 @@ function iniciarMonitoramentoPedidos() {
             const order = { id: docSnap.id, ...data };
             allOrders.push(order);
 
-            // Contabiliza apenas pedidos que não foram finalizados ou rejeitados para os badges
             if (data.status !== 'Finalizado' && data.status !== 'Rejeitado' && data.status !== 'Cancelado') {
                 if (data.method === 'retirada') counts.retirada++;
                 if (data.method === 'delivery') counts.delivery++;
                 if (data.method === 'mesa') counts.mesa++;
-                
                 if (data.status === 'Aguardando') counts.pendente++;
                 if (data.status === 'Em Preparo' || data.status === 'Saiu para Entrega') counts.curso++;
                 total += (data.total || 0);
             }
         });
 
-        // Atualiza Badges (Números em cima das abas)
         updateBadge('badge-retirada', counts.retirada);
         updateBadge('badge-delivery', counts.delivery);
         updateBadge('badge-mesa', counts.mesa);
         
-        const countPendente = document.getElementById('count-pendente');
-        if(countPendente) countPendente.innerText = counts.pendente;
-        const countCurso = document.getElementById('count-curso');
-        if(countCurso) countCurso.innerText = counts.curso;
-        
-        const totalDia = document.getElementById('total-dia');
-        if(totalDia) totalDia.innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+        if(document.getElementById('count-pendente')) document.getElementById('count-pendente').innerText = counts.pendente;
+        if(document.getElementById('count-curso')) document.getElementById('count-curso').innerText = counts.curso;
+        if(document.getElementById('total-dia')) document.getElementById('total-dia').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
 
-        // Renderiza a lista se a visão de lista estiver ativa
-        if (!document.getElementById('view-lista').classList.contains('hidden')) {
-            renderizarPedidosLista();
-        }
-        // Renderiza as mesas se a visão de mesas estiver ativa
-        if (!document.getElementById('view-mesas').classList.contains('hidden')) {
-            renderizarGridMesas();
+        if (!document.getElementById('view-lista').classList.contains('hidden')) renderizarPedidosLista();
+        if (!document.getElementById('view-mesas').classList.contains('hidden')) renderizarGridMesas();
+    });
+
+    // MONITOR DE PRODUTOS (Separado para não bugar a memória e os produtos aparecerem!)
+    onSnapshot(collection(db, "produtos"), (snapshot) => {
+        allProducts = [];
+        snapshot.forEach(d => allProducts.push({id: d.id, ...d.data()}));
+        if(!document.getElementById('view-produtos').classList.contains('hidden')) {
+            renderizarListaProdutos();
         }
     });
 }
@@ -1008,186 +1002,100 @@ window.salvarNovaConfiguracao = async () => {
         window.showToast("Erro", "Falha ao salvar configuração.", true);
     }
 };
-// ===============================================
-// LÓGICA DO CARDÁPIO E CONFIGURAÇÕES (NOVO CÓDIGO)
-// ===============================================
-
-// 1. GERENCIAR PRODUTOS
-// ===============================================
-// FUNÇÕES NOVAS (CARDÁPIO, LOJA, ENTREGAS)
-// ===============================================
-
-// 1. GERENCIAMENTO DE PRODUTOS
-function renderizarListaProdutos() {
-    const container = document.getElementById('products-list-container');
-    if(!container) return; // Proteção
-    container.innerHTML = '';
-    
-    if(allProducts.length === 0) {
-        container.innerHTML = '<div class="text-center text-gray-400 py-10">Nenhum produto cadastrado.</div>';
-        return;
-    }
-    
-    allProducts.forEach(p => {
-        container.innerHTML += `
-            <div class="bg-white border rounded-lg p-4 flex items-center justify-between shadow-sm hover:shadow-md transition mb-3">
-                <div class="flex items-center gap-4">
-                    <img src="${p.image || 'https://via.placeholder.com/100'}" class="w-16 h-16 rounded object-cover bg-gray-100 border">
-                    <div>
-                        <h4 class="font-bold text-gray-800">${p.name}</h4>
-                        <div class="flex gap-2 text-xs text-gray-500">
-                            <span class="bg-gray-100 px-2 py-0.5 rounded">${p.category}</span>
-                        </div>
-                        <p class="font-bold text-cyan-900 mt-1">R$ ${p.price.toFixed(2)}</p>
-                    </div>
-                </div>
-                <button onclick="abrirModalEdicao('${p.id}')" class="text-gray-400 hover:text-cyan-600 p-2 border rounded hover:bg-cyan-50">
-                    <i class="fas fa-edit text-lg"></i>
-                </button>
-            </div>
-        `;
-    });
-}
-
-// Controle de Abas do Modal Produto
-window.mudarAba = (aba) => {
-    document.getElementById('tab-btn-sobre').className = "flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 border-b-2 border-transparent";
-    document.getElementById('tab-btn-complementos').className = "flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 border-b-2 border-transparent";
-    document.getElementById('tab-sobre').classList.add('hidden');
-    document.getElementById('tab-complementos').classList.add('hidden');
-    
-    document.getElementById(`tab-btn-${aba}`).className = "flex-1 py-3 text-sm font-bold text-cyan-700 border-b-2 border-cyan-700 bg-cyan-50";
-    document.getElementById(`tab-${aba}`).classList.remove('hidden');
-}
-
-window.abrirModalNovoProduto = () => {
-    document.getElementById('form-produto').reset();
-    document.getElementById('edit-id').value = '';
-    document.getElementById('edit-image-url').value = '';
-    document.getElementById('preview-image').classList.add('hidden');
-    document.getElementById('modal-product-title').innerText = "Novo Produto";
-    
-    // Popula categorias
-    const select = document.getElementById('edit-category');
-    select.innerHTML = '';
-    allCategories.forEach(cat => { select.innerHTML += `<option value="${cat.slug}">${cat.nome}</option>`; });
-
-    mudarAba('sobre');
-    document.getElementById('product-modal').classList.remove('hidden');
-}
-
-window.abrirModalEdicao = (id) => {
-    const p = allProducts.find(x => x.id === id);
-    if(!p) return;
-    
-    // Popula categorias
-    const select = document.getElementById('edit-category');
-    select.innerHTML = '';
-    allCategories.forEach(cat => { select.innerHTML += `<option value="${cat.slug}">${cat.nome}</option>`; });
-
-    document.getElementById('edit-id').value = p.id;
-    document.getElementById('edit-name').value = p.name;
-    document.getElementById('edit-price').value = p.price;
-    document.getElementById('edit-desc').value = p.description || '';
-    document.getElementById('edit-category').value = p.category;
-    document.getElementById('edit-image-url').value = p.image || '';
-    
-    if(p.image) {
-        document.getElementById('preview-image').src = p.image;
-        document.getElementById('preview-image').classList.remove('hidden');
-    } else {
-        document.getElementById('preview-image').classList.add('hidden');
-    }
-    
-    document.getElementById('modal-product-title').innerText = "Editar Produto";
-    mudarAba('sobre');
-    document.getElementById('product-modal').classList.remove('hidden');
-}
 
 window.fecharModalProduto = () => document.getElementById('product-modal').classList.add('hidden');
 
-window.handleImageUpload = async (input) => {
-    if(input.files && input.files[0]) {
+// 2. CONFIGURAÇÕES DA LOJA (BOAS-VINDAS)
+window.handleFacadeUpload = async (input) => {
+    if (input.files && input.files[0]) {
         const file = input.files[0];
-        // Mostra status visual simples
-        const btn = input.parentElement; 
-        btn.style.opacity = '0.5';
-        
+        const loading = document.getElementById('facade-upload-loading');
+        loading.classList.remove('hidden');
+
         try {
-            const storageRef = ref(storage, `produtos/${Date.now()}_${file.name}`);
+            const storageRef = ref(storage, `config/fachada_loja_${Date.now()}`);
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
-            document.getElementById('edit-image-url').value = url;
-            document.getElementById('preview-image').src = url;
-            document.getElementById('preview-image').classList.remove('hidden');
-        } catch(e) { console.error(e); alert('Erro no upload da imagem'); }
-        finally { btn.style.opacity = '1'; }
+            
+            document.getElementById('facade-preview').src = url;
+            document.getElementById('facade-preview').classList.remove('hidden');
+            document.getElementById('facade-placeholder').classList.add('hidden');
+            document.getElementById('info-facade-url').value = url;
+            
+            showToast("Sucesso", "Imagem da fachada carregada!");
+        } catch (error) {
+            console.error(error);
+            showToast("Erro", "Falha ao subir imagem", true);
+        } finally {
+            loading.classList.add('hidden');
+        }
     }
 }
 
-window.salvarProduto = async () => {
-    const id = document.getElementById('edit-id').value;
-    const data = {
-        name: document.getElementById('edit-name').value,
-        price: parseFloat(document.getElementById('edit-price').value) || 0,
-        description: document.getElementById('edit-desc').value,
-        category: document.getElementById('edit-category').value,
-        image: document.getElementById('edit-image-url').value
-    };
-    
-    if(!data.name) return alert("Nome é obrigatório");
-
-    try {
-        if(id) await updateDoc(doc(db, "produtos", id), data);
-        else await addDoc(collection(db, "produtos"), data);
-        
-        fecharModalProduto();
-        // Recarregar lista
-        const pSnap = await getDocs(collection(db, "produtos"));
-        allProducts = [];
-        pSnap.forEach(d => allProducts.push({id: d.id, ...d.data()}));
-        renderizarListaProdutos();
-        alert("Salvo com sucesso!");
-    } catch(e) { console.error(e); alert("Erro ao salvar"); }
-}
-
-window.deletarProduto = async () => {
-    const id = document.getElementById('edit-id').value;
-    if(!id) return;
-    if(!confirm("Tem certeza que deseja excluir?")) return;
-    try {
-        await deleteDoc(doc(db, "produtos", id));
-        fecharModalProduto();
-        const pSnap = await getDocs(collection(db, "produtos"));
-        allProducts = [];
-        pSnap.forEach(d => allProducts.push({id: d.id, ...d.data()}));
-        renderizarListaProdutos();
-    } catch(e) { console.error(e); alert("Erro ao excluir"); }
-}
-
-// 2. CONFIGURAÇÕES DA LOJA (BOAS-VINDAS)
+// 2. Carregar os dados (Sincronizando as duas tabelas)
 window.carregarConfigLoja = async () => {
     try {
-        const docSnap = await getDoc(doc(db, "config", "loja"));
-        if(docSnap.exists()) {
-            const d = docSnap.data();
+        // Pega Banner e Status
+        const snapLoja = await getDoc(doc(db, "config", "loja"));
+        if(snapLoja.exists()) {
+            const d = snapLoja.data();
             document.getElementById('store-title').value = d.titulo || '';
             document.getElementById('store-desc').value = d.descricao || '';
-            document.getElementById('store-phone').value = d.whatsapp || '';
             document.getElementById('store-toggle').checked = d.aberto || false;
+            
+            const iconBg = document.getElementById('status-icon-bg');
+            if(d.aberto) iconBg.className = "w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-green-100 text-green-600";
+            else iconBg.className = "w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-red-100 text-red-600";
+        }
+
+        // Pega Info do Modal (Endereço, WhatsApp e Imagem)
+        const snapInfo = await getDoc(doc(db, "config", "loja_info"));
+        if(snapInfo.exists()) {
+            const d = snapInfo.data();
+            document.getElementById('info-address-input').value = d.endereco || '';
+            document.getElementById('info-phone-input').value = d.whatsapp || '';
+            document.getElementById('info-hours-input').value = d.horarioTexto || ''; // Texto editável do modal
+            
+            if(d.facadeUrl) {
+                document.getElementById('facade-preview').src = d.facadeUrl;
+                document.getElementById('facade-preview').classList.remove('hidden');
+                document.getElementById('facade-placeholder').classList.add('hidden');
+                document.getElementById('info-facade-url').value = d.facadeUrl;
+            }
         }
     } catch(e) { console.error(e); }
 }
+window.salvarTudoBoasVindas = async () => {
+    const btn = document.querySelector('button[onclick="salvarTudoBoasVindas()"]');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
 
-window.salvarConfigLoja = async () => {
-    const data = {
-        titulo: document.getElementById('store-title').value,
-        descricao: document.getElementById('store-desc').value,
-        whatsapp: document.getElementById('store-phone').value,
-        aberto: document.getElementById('store-toggle').checked
-    };
-    await setDoc(doc(db, "config", "loja"), data);
-    alert("Configurações salvas!");
+    try {
+        const dadosBanner = {
+            titulo: document.getElementById('store-title').value,
+            descricao: document.getElementById('store-desc').value,
+            aberto: document.getElementById('store-toggle').checked
+        };
+
+        const dadosInfo = {
+            endereco: document.getElementById('info-address-input').value,
+            whatsapp: document.getElementById('info-phone-input').value,
+            horarioTexto: document.getElementById('info-hours-input').value, // Salva o texto que você digitou
+            facadeUrl: document.getElementById('info-facade-url').value
+        };
+
+        await setDoc(doc(db, "config", "loja"), dadosBanner, { merge: true });
+        await setDoc(doc(db, "config", "loja_info"), dadosInfo, { merge: true });
+
+        showToast("Sucesso", "Site atualizado com sucesso!");
+        carregarConfigLoja();
+    } catch (e) {
+        showToast("Erro", "Falha ao salvar", true);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
 }
 
 // 3. CONFIGURAÇÕES DE PEDIDOS
@@ -1952,65 +1860,6 @@ window.removerUsuarioEquipe = async (emailId) => {
 };
 
 // Adicionar um gancho para carregar a equipe sempre que abrir a tela
-const originalNavPara = window.navegarPara;
-window.navegarPara = (telaId) => {
-    // 1. Salva na memória para o F5
-    localStorage.setItem('painel_ultima_tela', telaId);
-
-    // 2. Lista COMPLETA de telas (Verifique se view-produtos está aqui)
-    const telas = [
-        'view-pdv-wrapper', 'view-pos', 'view-historico', 'view-relatorios', 
-        'view-financeiro', 'view-caixa', 'view-nfce', 
-        'view-produtos', // <--- ESSA É A TELA QUE TINHA SUMIDO
-        'view-boasvindas', 'view-config-pedidos',
-        'view-kitchen', 'view-inventory', 'view-chatbot', 
-        'view-config-business', 'view-config-team', 
-        'view-config-printers', 'view-config-interactions'
-    ];
-    
-    // 3. Esconde todas e mostra a alvo
-    telas.forEach(id => {
-        const el = document.getElementById(id);
-        if(el) {
-            el.classList.add('hidden');
-            // Remove classe flex especifica do POS se existir
-            if(id === 'view-pos') el.classList.remove('flex');
-        }
-    });
-
-    const target = document.getElementById(telaId);
-    if(target) {
-        target.classList.remove('hidden');
-        if(telaId === 'view-pos') target.classList.add('flex');
-    }
-    
-    // 4. Menu Lateral (Visual Ativo)
-    document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
-    const activeBtn = document.querySelector(`[onclick="navegarPara('${telaId}')"]`);
-    if(activeBtn) activeBtn.classList.add('active');
-
-    // ==================================================
-    // 5. GATILHOS DE CARREGAMENTO (AQUI ESTÁ A CORREÇÃO)
-    // ==================================================
-    
-    // >>> ESTA LINHA TRAZ SEUS PRODUTOS DE VOLTA <<<
-    if(telaId === 'view-produtos') renderizarListaProdutos(); 
-    
-    if(telaId === 'view-historico') carregarHistorico();
-    if(telaId === 'view-relatorios') renderizarRelatorios();
-    if(telaId === 'view-financeiro') carregarFinanceiro();
-    if(telaId === 'view-caixa') carregarEstadoCaixa();
-    if(telaId === 'view-boasvindas') carregarConfigLoja();
-    if(telaId === 'view-config-pedidos') carregarConfigPedidos();
-    if(telaId === 'view-kitchen') iniciarMonitorCozinha(); 
-    if(telaId === 'view-inventory') renderizarInventario(); 
-    
-    // Telas Novas
-    if(telaId === 'view-config-business') carregarConfigNegocio();
-    if(telaId === 'view-config-team') renderizarEquipe();
-    if(telaId === 'view-config-printers') carregarConfigImpressao();
-    if(telaId === 'view-config-interactions') carregarCredenciaisIfood();
-}
 let horariosConfig = {}; 
 
 // 1. CARREGAR DADOS (Atualizada)
@@ -2659,6 +2508,136 @@ async function confirmarRecebimentoEventos(eventos) {
         body: JSON.stringify(eventsToAck)
     });
 }
+// Função que desenha os produtos na aba "Produtos" do Dashboard
+window.renderizarListaProdutos = () => {
+    const container = document.getElementById('products-list-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    if (allProducts.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-10">
+                <p class="text-gray-500">Nenhum produto encontrado no banco de dados.</p>
+                <button onclick="navegarPara('view-config-business')" class="text-cyan-600 underline text-sm">Verificar configurações</button>
+            </div>`;
+        return;
+    }
+
+    allProducts.forEach(p => {
+        const div = document.createElement('div');
+        div.className = "bg-white border rounded-lg p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition";
+        
+        div.innerHTML = `
+            <img src="${p.image || 'https://via.placeholder.com/100'}" class="w-16 h-16 rounded-lg object-cover bg-gray-100">
+            <div class="flex-1">
+                <h4 class="font-bold text-gray-800">${p.name}</h4>
+                <p class="text-xs text-gray-500 line-clamp-1">${p.description || 'Sem descrição'}</p>
+                <div class="mt-1">
+                    <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-600 uppercase font-bold">${p.category}</span>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="font-bold text-cyan-700">R$ ${parseFloat(p.price).toFixed(2).replace('.', ',')}</p>
+                <button onclick="abrirModalEdicaoDash('${p.id}')" class="text-xs text-blue-600 font-bold hover:underline">Editar</button>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// Atalho para abrir o modal de edição que já existe no HTML
+window.abrirModalEdicaoDash = (id) => {
+    const p = allProducts.find(x => x.id === id);
+    if (!p) return;
+
+    // Preenche os campos básicos
+    document.getElementById('edit-id').value = p.id;
+    document.getElementById('edit-name').value = p.name;
+    document.getElementById('edit-category').value = p.category || '';
+    document.getElementById('edit-price').value = p.price;
+    document.getElementById('edit-original-price').value = p.originalPrice || '';
+    document.getElementById('edit-desc').value = p.description || '';
+    
+    // Preenche campos de tamanho/peso
+    if(document.getElementById('edit-serves')) document.getElementById('edit-serves').value = p.serves || '1';
+    if(document.getElementById('edit-weight')) document.getElementById('edit-weight').value = p.weight || '';
+    if(document.getElementById('edit-unit')) document.getElementById('edit-unit').value = p.unit || 'ml';
+
+    // Gerencia a pré-visualização da imagem
+    const preview = document.getElementById('preview-image');
+    const icon = document.getElementById('icon-image');
+    const inputUrl = document.getElementById('edit-image-url');
+
+    if(p.image) {
+        preview.src = p.image;
+        preview.classList.remove('hidden');
+        icon.classList.add('hidden');
+        inputUrl.value = p.image;
+    } else {
+        preview.classList.add('hidden');
+        icon.classList.remove('hidden');
+        inputUrl.value = '';
+    }
+
+    // Altera o título do modal e mostra
+    document.getElementById('modal-title').innerText = "Editar Produto";
+    document.getElementById('product-modal').classList.remove('hidden');
+    
+    // Garante que comece na aba "Sobre"
+    if (typeof window.mudarAba === 'function') window.mudarAba('sobre');
+};
+// Função para Salvar/Atualizar o produto no Firebase (usada pelo botão do modal)
+window.salvarProduto = async function() {
+    const id = document.getElementById('edit-id').value;
+    const priceInput = document.getElementById('edit-price').value;
+
+    const produto = {
+        name: document.getElementById('edit-name').value,
+        category: document.getElementById('edit-category').value,
+        price: parseFloat(priceInput),
+        originalPrice: document.getElementById('edit-original-price').value ? parseFloat(document.getElementById('edit-original-price').value) : null,
+        description: document.getElementById('edit-desc').value,
+        image: document.getElementById('edit-image-url').value,
+        serves: document.getElementById('edit-serves').value,
+        weight: document.getElementById('edit-weight').value,
+        unit: document.getElementById('edit-unit').value
+    };
+
+    if (!produto.name || isNaN(produto.price)) {
+        return showToast("Erro", "Nome e Preço são obrigatórios.", true);
+    }
+
+    try {
+        if (id) {
+            await updateDoc(doc(db, "produtos", id), produto);
+            showToast("Atualizado", "Produto salvo com sucesso!");
+        } else {
+            await addDoc(collection(db, "produtos"), produto);
+            showToast("Criado", "Novo produto adicionado!");
+        }
+        document.getElementById('product-modal').classList.add('hidden');
+    } catch (e) {
+        console.error(error);
+        showToast("Erro", "Falha ao salvar no banco de dados.", true);
+    }
+};
+
+// Função para Excluir o produto (usada pelo botão do modal)
+window.deletarProduto = async function() {
+    const id = document.getElementById('edit-id').value;
+    if(!id) return;
+    if(!confirm("Deseja excluir este produto permanentemente?")) return;
+
+    try {
+        await deleteDoc(doc(db, "produtos", id));
+        showToast("Excluído", "Produto removido com sucesso.");
+        document.getElementById('product-modal').classList.add('hidden');
+    } catch(e) {
+        console.error(e);
+        showToast("Erro", "Erro ao excluir produto.", true);
+    }
+};
 
 window.desconectarIfood = () => {
     ifoodToken = null;
