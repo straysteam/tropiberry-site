@@ -1225,3 +1225,61 @@ window.prepararImpressao = () => {
     // Apenas dispara o print. O CSS @media print cuidará de esconder o resto.
     window.print();
 };
+// ============================================================
+//  CARREGAR INFO DA LOJA (ENDEREÇO, HORÁRIOS) NO SITE
+// ============================================================
+
+function monitorarInfoLoja() {
+    if(!db) return;
+    
+    // Escuta em tempo real o documento 'config/loja_info'
+    onSnapshot(doc(db, "config", "loja_info"), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            aplicarDadosLojaNoSite(data);
+        }
+    });
+}
+
+function aplicarDadosLojaNoSite(data) {
+    // 1. Atualiza Endereço
+    const endereco = data.endereco || "Endereço não configurado";
+    if(document.getElementById('info-address')) document.getElementById('info-address').innerText = endereco;
+    if(document.getElementById('footer-address')) document.getElementById('footer-address').innerText = endereco;
+    
+    // Atualiza endereço de impressão (se existir o elemento oculto de cupom)
+    if(document.getElementById('print-store-address')) document.getElementById('print-store-address').innerText = endereco;
+
+    // 2. Atualiza Telefone / WhatsApp
+    const whats = data.whatsapp || "";
+    if(document.getElementById('info-phone')) document.getElementById('info-phone').innerText = whats;
+    if(document.getElementById('footer-phone')) document.getElementById('footer-phone').innerText = whats;
+
+    // 3. Atualiza Horários (Formata o objeto para texto legível)
+    if(document.getElementById('info-hours') && data.horarios) {
+        const h = data.horarios;
+        // Exemplo simples de formatação: Seg-Sex e Sab-Dom
+        // Você pode sofisticar isso se quiser listar dia a dia
+        let textoHorario = '';
+        
+        if(h.seg && h.seg.aberto) textoHorario += `Seg a Sex: ${h.seg.inicio} às ${h.seg.fim}<br>`;
+        if(h.sab && h.sab.aberto) textoHorario += `Sáb: ${h.sab.inicio} às ${h.sab.fim}<br>`;
+        if(h.dom && h.dom.aberto) textoHorario += `Dom: ${h.dom.inicio} às ${h.dom.fim}`;
+        
+        document.getElementById('info-hours').innerHTML = textoHorario || "Horários não configurados";
+    }
+
+    // 4. Se configurado para esconder endereço
+    if(data.esconderEndereco) {
+        if(document.getElementById('footer-address')) document.getElementById('footer-address').classList.add('hidden');
+        if(document.getElementById('info-address')) document.getElementById('info-address').parentElement.classList.add('hidden');
+    } else {
+        if(document.getElementById('footer-address')) document.getElementById('footer-address').classList.remove('hidden');
+        if(document.getElementById('info-address')) document.getElementById('info-address').parentElement.classList.remove('hidden');
+    }
+}
+
+// Chame esta função na inicialização
+document.addEventListener('DOMContentLoaded', () => {
+    monitorarInfoLoja();
+});

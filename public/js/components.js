@@ -8,7 +8,7 @@ export function renderizarHeaderGlobal() {
         <div class="container mx-auto px-4 py-4 flex justify-between items-center relative z-10">
             <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='index.html'">
                 <div class="bg-yellow-400 p-2 rounded-full text-cyan-800"><i class="fas fa-ice-cream text-2xl"></i></div>
-                <h1 class="hidden md:block text-3xl font-bold tracking-wide brand-font text-yellow-300 drop-shadow-md">TROPYBERRY</h1>
+                <h1 class="hidden md:block text-3xl font-bold tracking-wide brand-font text-yellow-300 drop-shadow-md">TROPIBERRY</h1>
             </div>
             
             <div class="flex items-center gap-3 relative">
