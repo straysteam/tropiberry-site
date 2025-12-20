@@ -7,10 +7,12 @@ export function renderizarHeaderGlobal() {
     <header class="bg-cyan-600 text-white relative shadow-lg z-40 pb-16 sticky top-0 transition-all duration-300">
         <div class="container mx-auto px-4 py-4 flex justify-between items-center relative z-10">
             <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='index.html'">
-                <div class="bg-yellow-400 p-2 rounded-full text-cyan-800"><i class="fas fa-ice-cream text-2xl"></i></div>
+                
+                <img src="img/logosf.png" alt="Logo" class="h-20 w-auto object-contain">
+
                 <h1 class="hidden md:block text-3xl font-bold tracking-wide brand-font text-yellow-300 drop-shadow-md">TROPIBERRY</h1>
             </div>
-            
+
             <div class="flex items-center gap-3 relative">
                 <div id="auth-buttons-container" class="flex items-center gap-2 mr-2"></div>
                 
