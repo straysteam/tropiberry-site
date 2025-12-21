@@ -44,7 +44,9 @@
             <div class="w-24 h-1.5 bg-yellow-400 mx-auto mt-4 rounded-full"></div>
         </div>
         
-        <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10"></div>
+       <div id="category-filters" class="flex flex-nowrap gap-3 overflow-x-auto pb-4 px-4 -mx-4 md:mx-0 md:flex-wrap md:justify-center no-scrollbar touch-pan-x mb-8">
+    </div>
+<div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10"></div>
         
         <div class="text-center pb-20">
             <a href="cardapio.html" class="inline-block bg-white border-2 border-cyan-600 text-cyan-600 px-8 py-3 rounded-full font-bold hover:bg-cyan-600 hover:text-white transition shadow-md">
@@ -529,6 +531,26 @@
              <p class="text-gray-500">Para editar, use o painel principal em <a href="admin.html" class="text-cyan-600 underline">Painel Admin</a></p>
         </div>
     </div>
+    <div id="my-orders-modal" class="fixed inset-0 bg-gray-900 bg-opacity-90 hidden z-[80] flex items-center justify-center p-0 md:p-4 backdrop-blur-sm font-sans">
+    <div class="bg-white w-full h-full md:h-auto md:max-w-2xl md:rounded-2xl shadow-2xl flex flex-col overflow-hidden relative animate-pop-up">
+        
+        <div class="bg-cyan-600 p-5 border-b flex justify-between items-center text-white shrink-0">
+            <h3 class="font-bold text-lg flex items-center gap-2">
+                <i class="fas fa-history"></i> Meus Pedidos
+            </h3>
+            <button onclick="fecharMeusPedidos()" class="hover:text-yellow-300 transition text-xl">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div id="my-orders-list" class="flex-grow overflow-y-auto p-4 bg-gray-50 space-y-4">
+            <div class="text-center py-10">
+                <i class="fas fa-spinner fa-spin text-cyan-600 text-3xl"></i>
+                <p class="text-gray-500 mt-2">Carregando seus pedidos...</p>
+            </div>
+        </div>
+    </div>
+</div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbW_ZTCs-k6OW034Ee93IYf4IZpHKFzno&libraries=geometry,places"></script>

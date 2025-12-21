@@ -10,7 +10,8 @@ import {
     serverTimestamp, 
     query, 
     orderBy, 
-    getDocs 
+    getDocs,
+    where
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 import { monitorarEstadoAuth, fazerLogout, verificarAdminNoBanco, db as authDb } from './auth.js'; 
@@ -33,6 +34,7 @@ let configPedidos = {};
 let currentDeliveryFee = 0;
 let freteGoogleCalculado = 0; 
 let googleDebounceTimer = null;
+
 
 // CACHE GLOBAL DE COMPLEMENTOS
 let globalComplements = {}; 
@@ -102,47 +104,68 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 2. Monitora o Login e preenche os botões no Header
     monitorarEstadoAuth(async (user) => {
-        const container = document.getElementById('auth-buttons-container');
-        if(!container) return;
+        const desktopAuthArea = document.getElementById('desktop-auth-area');
+        
+        // Elementos do Menu Dropdown/Modal
+        const menuName = document.getElementById('menu-user-name');
+        const menuEmail = document.getElementById('menu-user-email');
+        const guestOptions = document.getElementById('menu-guest-options');
+        const loggedOptions = document.getElementById('menu-logged-options');
+        const adminLinks = document.getElementById('menu-admin-links');
 
         if (user) {
             currentUserIsAdmin = await verificarAdminNoBanco(user.email);
             
-            // --- AQUI ESTÁ A MUDANÇA ---
-            let adminButtons = '';
-            if (currentUserIsAdmin) {
-                adminButtons = `
-                    <div class="hidden md:flex gap-2 ml-2">
-                        <a href="dashboard.html" class="bg-cyan-900 border border-cyan-400 text-white text-[10px] px-3 py-1 rounded-lg font-bold uppercase shadow-sm hover:bg-cyan-800 flex items-center gap-1">
-                            <i class="fas fa-columns"></i> Dashboard
-                        </a>
-                        <a href="admin.html" class="bg-cyan-700 border border-cyan-400 text-yellow-400 text-[10px] px-3 py-1 rounded-lg font-bold uppercase shadow-sm hover:bg-cyan-600">
-                            Painel Admin
-                        </a>
+            // 1. Atualiza Header Desktop (Mostra Ícone e Nome)
+            if(desktopAuthArea) {
+                desktopAuthArea.innerHTML = `
+                    <div class="flex items-center gap-3 cursor-pointer hover:bg-cyan-700 p-2 rounded-lg transition" onclick="toggleUserMenu()">
+                        <div class="text-right hidden lg:block">
+                            <p class="text-xs font-bold text-white leading-none">${user.displayName || 'Cliente'}</p>
+                            <p class="text-[10px] text-cyan-200 leading-none">Minha Conta</p>
+                        </div>
+                        <div class="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white border border-white/30">
+                            <i class="fas fa-user"></i>
+                        </div>
                     </div>
                 `;
             }
-            // ---------------------------
+
+            // 2. Atualiza o Menu Dropdown/Modal (Conteúdo)
+            if(menuName) menuName.innerText = user.displayName || 'Cliente TropyBerry';
+            if(menuEmail) menuEmail.innerText = user.email;
             
-            container.innerHTML = `
-                <div class="flex items-center">
-                    <span class="text-xs font-bold text-white hidden md:block mr-2">Olá, ${user.displayName || user.email.split('@')[0]}</span>
-                    ${adminButtons}
-                    <button onclick="fazerLogout()" class="bg-red-500/80 hover:bg-red-500 text-white text-xs px-3 py-1 ml-2 rounded-full font-bold transition">Sair</button>
-                </div>`;
-                
+            if(guestOptions) guestOptions.classList.add('hidden');
+            if(loggedOptions) loggedOptions.classList.remove('hidden');
+            
+            // Mostra opções de admin se for admin
+            if(adminLinks) {
+                if(currentUserIsAdmin) adminLinks.classList.remove('hidden');
+                else adminLinks.classList.add('hidden');
+            }
+
             atualizarInteratividadeBotaoLoja();
-            atualizarElementosAdminUI();
             if(currentProductDetail) verificarBotaoAdmin(currentProductDetail.id);
+
         } else {
-            // ... (código de quando não está logado continua igual) ...
             currentUserIsAdmin = false;
-            container.innerHTML = `
-                <a href="login.html" class="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1 rounded-full font-bold transition">Entrar</a>
-                <a href="cadastro.html" class="bg-yellow-400 hover:bg-yellow-300 text-cyan-900 text-xs px-3 py-1 rounded-full font-bold transition">Cadastrar</a>
-            `;
+
+            // 1. Header Desktop (Mostra botões Entrar/Cadastrar)
+            if(desktopAuthArea) {
+                desktopAuthArea.innerHTML = `
+                    <a href="login.html" class="text-sm font-bold text-white hover:text-yellow-300 transition">Entrar</a>
+                    <a href="cadastro.html" class="bg-white text-cyan-900 text-sm px-4 py-2 rounded-full font-bold hover:bg-gray-100 transition shadow-sm">Criar Conta</a>
+                `;
+            }
+
+            // 2. Menu Dropdown (Modo Visitante)
+            if(menuName) menuName.innerText = "Visitante";
+            if(menuEmail) menuEmail.innerText = "Faça login para aproveitar";
+            
+            if(guestOptions) guestOptions.classList.remove('hidden');
+            if(loggedOptions) loggedOptions.classList.add('hidden');
+            
             atualizarInteratividadeBotaoLoja();
-            atualizarElementosAdminUI();
         }
     });
 
@@ -665,12 +688,21 @@ async function carregarCategoriasSite() {
     } catch(e) { console.error("Erro categorias:", e); }
 }
 function renderizarBotoesCategorias() {
-    const container = document.querySelector('section .flex.flex-wrap'); 
+    // 1. Alterado para buscar o novo ID que criamos no HTML
+    const container = document.getElementById('category-filters'); 
+    
     if(!container) return;
-    let html = `<button onclick="renderProducts('product-grid', null)" class="btn-filter px-4 py-2 bg-cyan-600 text-white rounded-full text-sm font-bold hover:bg-cyan-700 transition" data-cat="all">Todos</button>`;
-    categories.forEach(cat => { html += `<button onclick="renderProducts('product-grid', '${cat.slug}')" class="btn-filter px-4 py-2 bg-white border border-cyan-600 text-cyan-600 rounded-full text-sm font-bold hover:bg-cyan-50 transition" data-cat="${cat.slug}">${cat.nome}</button>`; });
+
+    // 2. Adicionado 'whitespace-nowrap' e 'flex-shrink-0' para o scroll funcionar no celular
+    let html = `<button onclick="renderProducts('product-grid', null)" class="btn-filter px-6 py-2 bg-cyan-600 text-white rounded-full text-sm font-bold hover:bg-cyan-700 transition shadow-md whitespace-nowrap flex-shrink-0" data-cat="all">Todos</button>`;
+    
+    // 3. Loop mantido idêntico, apenas atualizando as classes CSS dos botões gerados
+    categories.forEach(cat => { 
+        html += `<button onclick="renderProducts('product-grid', '${cat.slug}')" class="btn-filter px-6 py-2 bg-white border border-cyan-600 text-cyan-600 rounded-full text-sm font-bold hover:bg-cyan-50 transition whitespace-nowrap flex-shrink-0" data-cat="${cat.slug}">${cat.nome}</button>`; 
+    });
+    
     container.innerHTML = html;
-}
+}   
 function monitorarStatusLojaNoBanco() {
     if(!db) return;
     try {
@@ -795,6 +827,21 @@ function updateCartUI() {
         cartCountBadge.innerText = totalItems;
         cartCountBadge.classList.toggle('hidden', totalItems === 0);
     }
+    const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
+
+// Atualiza Desktop
+const badgeDesk = document.getElementById('cart-count-desktop'); // Mudei o ID no HTML acima
+if(badgeDesk) {
+    badgeDesk.innerText = totalItems;
+    badgeDesk.classList.toggle('hidden', totalItems === 0);
+}
+
+// Atualiza Mobile
+const badgeMob = document.getElementById('cart-count-mobile');
+if(badgeMob) {
+    badgeMob.innerText = totalItems;
+    badgeMob.classList.toggle('hidden', totalItems === 0);
+}
 }
 function startCheckout() {
     if (cart.length === 0) return showToast("Carrinho vazio!");
@@ -1561,4 +1608,149 @@ window.calcularDistanciaGoogle = () => {
             renderReceipt();
         }
     });
+};
+// Função para abrir/fechar o Menu de Perfil (Unificado PC/Mobile)
+window.toggleUserMenu = () => {
+    const overlay = document.getElementById('user-menu-overlay');
+    const menu = document.getElementById('user-menu-content');
+    
+    if (menu.classList.contains('hidden')) {
+        // Abrir
+        menu.classList.remove('hidden');
+        if(window.innerWidth < 768) {
+            // Animação Mobile (Sobe de baixo)
+            menu.classList.add('animate-slide-up');
+            overlay.classList.remove('hidden');
+        } else {
+            // Desktop (Dropdown simples, sem overlay escuro obrigatório, mas opcional)
+            menu.classList.add('animate-fade-in'); 
+            // overlay.classList.remove('hidden'); // Descomente se quiser fundo escuro no PC também
+        }
+    } else {
+        // Fechar
+        menu.classList.add('hidden');
+        overlay.classList.add('hidden');
+        menu.classList.remove('animate-slide-up', 'animate-fade-in');
+    }
+};
+// =========================================
+// MÓDULO MEUS PEDIDOS (CLIENTE)
+// =========================================
+
+// Variável para guardar o email do usuário logado (será preenchida no monitorarEstadoAuth)
+let loggedUserEmail = null;
+
+// Atualize o monitorarEstadoAuth no início do arquivo para salvar o email
+// (Procure onde tem 'monitorarEstadoAuth' no seu código e adicione a linha marcada abaixo)
+/* monitorarEstadoAuth(async (user) => {
+        if (user) {
+            loggedUserEmail = user.email; // <--- ADICIONE ISSO NA SUA FUNÇÃO EXISTENTE
+            // ... resto do código
+        }
+    });
+*/
+
+window.abrirMeusPedidos = async () => {
+    // Fecha o menu de perfil para não atrapalhar
+    const userMenu = document.getElementById('user-menu-content');
+    const overlay = document.getElementById('user-menu-overlay');
+    if(userMenu) userMenu.classList.add('hidden');
+    if(overlay) overlay.classList.add('hidden');
+
+    const modal = document.getElementById('my-orders-modal');
+    const list = document.getElementById('my-orders-list');
+    
+    if(!modal) return;
+    modal.classList.remove('hidden');
+
+    if (!loggedUserEmail) {
+        list.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-10 text-gray-400">
+                <i class="fas fa-user-lock text-4xl mb-3"></i>
+                <p>Faça login para ver seus pedidos.</p>
+                <button onclick="window.location.href='login.html'" class="mt-4 bg-cyan-600 text-white px-4 py-2 rounded-lg font-bold">Fazer Login</button>
+            </div>`;
+        return;
+    }
+
+    try {
+        // Busca pedidos onde 'customer.email' é igual ao email do usuário logado
+        // Importante: Requer índice composto no Firebase (Se der erro no console, clique no link que o Firebase gerar)
+        const q = query(
+            collection(db, "pedidos"), 
+            where("customer.email", "==", loggedUserEmail),
+            orderBy("createdAt", "desc") // Ordena do mais recente para o antigo
+        );
+
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+            list.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-10 text-gray-400">
+                    <i class="fas fa-receipt text-4xl mb-3"></i>
+                    <p>Você ainda não fez nenhum pedido.</p>
+                    <button onclick="fecharMeusPedidos()" class="mt-4 text-cyan-600 font-bold hover:underline">Ir para o Cardápio</button>
+                </div>`;
+            return;
+        }
+
+        let html = '';
+        querySnapshot.forEach((doc) => {
+            const order = doc.data();
+            const date = order.createdAt ? order.createdAt.toDate().toLocaleDateString('pt-BR') + ' às ' + order.createdAt.toDate().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 'Data desc.';
+            
+            // Definição de cores por status
+            let statusColor = 'bg-gray-100 text-gray-600';
+            let statusIcon = 'fa-clock';
+            
+            if(order.status === 'Aguardando') { statusColor = 'bg-orange-100 text-orange-600'; statusIcon = 'fa-hourglass-half'; }
+            if(order.status === 'Em Preparo') { statusColor = 'bg-blue-100 text-blue-600'; statusIcon = 'fa-fire'; }
+            if(order.status === 'Saiu para Entrega') { statusColor = 'bg-purple-100 text-purple-600'; statusIcon = 'fa-motorcycle'; }
+            if(order.status === 'Finalizado') { statusColor = 'bg-green-100 text-green-600'; statusIcon = 'fa-check-circle'; }
+            if(order.status === 'Cancelado' || order.status === 'Rejeitado') { statusColor = 'bg-red-100 text-red-600'; statusIcon = 'fa-times-circle'; }
+
+            // Lista de itens resumida
+            let itemsHtml = order.items.map(i => `<span class="block text-gray-600 text-xs">• ${i.quantity}x ${i.name}</span>`).join('');
+
+            html += `
+                <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition">
+                    <div class="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
+                        <div>
+                            <span class="text-xs font-bold text-gray-400">#${doc.id.slice(-5).toUpperCase()}</span>
+                            <p class="text-xs text-gray-500">${date}</p>
+                        </div>
+                        <div class="${statusColor} px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                            <i class="fas ${statusIcon}"></i> ${order.status}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3 pl-2 border-l-2 border-gray-100">
+                        ${itemsHtml}
+                    </div>
+
+                    <div class="flex justify-between items-center mt-2 pt-2 border-t border-dashed border-gray-200">
+                        <span class="text-sm font-bold text-gray-700">Total: R$ ${parseFloat(order.total).toFixed(2).replace('.', ',')}</span>
+                        
+                        <button onclick="openOrderScreen('${doc.id}')" class="text-cyan-600 text-xs font-bold hover:bg-cyan-50 px-3 py-1.5 rounded transition border border-cyan-200">
+                            Ver Detalhes
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        list.innerHTML = html;
+
+    } catch (e) {
+        console.error("Erro ao carregar pedidos:", e);
+        // Tratamento especial para o erro de índice do Firebase
+        if(e.message.includes("requires an index")) {
+            console.warn("⚠️ NECESSÁRIO CRIAR ÍNDICE NO FIREBASE. VEJA O LINK NO CONSOLE.");
+        }
+        list.innerHTML = '<p class="text-center text-red-500 py-4">Erro ao carregar pedidos. Tente novamente.</p>';
+    }
+};
+
+window.fecharMeusPedidos = () => {
+    document.getElementById('my-orders-modal').classList.add('hidden');
 };
