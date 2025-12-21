@@ -209,8 +209,22 @@ function renderProducts(containerId, filterCategory) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const filtered = filterCategory ? products.filter(p => p.category === filterCategory) : products;
+    // 1. Filtra por categoria (Lógica que já existia)
+    let listaParaExibir = filterCategory ? products.filter(p => p.category === filterCategory) : products;
 
+    // === 2. NOVO: FILTRO DE ESTOQUE (A MÁGICA ACONTECE AQUI) ===
+    listaParaExibir = listaParaExibir.filter(p => {
+        // Se o controle de estoque estiver ligado E o estoque for 0 ou menor -> ESCONDE
+        if (p.stockControl === true && (p.stock || 0) <= 0) return false;
+        
+        // Se estiver marcado manualmente como indisponível -> ESCONDE
+        if (p.available === false) return false;
+
+        return true; // Mostra o resto
+    });
+    // ============================================================
+
+    // Atualiza botões de filtro (Visual)
     if(window.location.pathname.includes('cardapio.html')) {
         document.querySelectorAll('.btn-filter').forEach(btn => {
             const btnCat = btn.getAttribute('data-cat');
@@ -219,41 +233,35 @@ function renderProducts(containerId, filterCategory) {
         });
     }
 
-    if (filtered.length === 0) {
-        // Se a lista estiver vazia (mas o array products tem itens), significa que o filtro não achou nada
+    // Se não sobrou nenhum produto após os filtros
+    if (listaParaExibir.length === 0) {
         if (products.length > 0) {
-             container.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400">Nenhum produto nesta categoria.</div>`;
+             container.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400">Nenhum produto disponível nesta categoria.</div>`;
         } else {
-             // Se products estiver vazio mesmo, é pq ainda está carregando ou não tem nada no banco
              container.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 flex flex-col items-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600 mb-2"></div>Carregando cardápio...</div>`;
         }
         return;
     }
 
-    container.innerHTML = filtered.map(product => {
+    // Renderiza o HTML (Usei 'listaParaExibir' em vez de 'filtered')
+    container.innerHTML = listaParaExibir.map(product => {
         // === LÓGICA DO PREÇO INTELIGENTE (FILTRO EMBALAGEM) ===
         const hasComplements = product.complementIds && product.complementIds.length > 0;
         let prefixPrice = hasComplements ? '<span class="text-[10px] text-gray-500 font-normal mr-1 block">A partir de</span>' : '';
         
         let displayPrice = parseFloat(product.price);
 
-        // Se o preço for 0, busca o custo da EMBALAGEM
         if (displayPrice === 0 && hasComplements) {
             let minPackagingCost = 0;
-            product.complementIds.forEach(grpId => {
-                const group = globalComplements[grpId];
-                
-                // SÓ SOMA SE FOR OBRIGATÓRIO E A CATEGORIA FOR 'EMBALAGEM'
-                if (group && group.required && group.internalCategory === 'embalagem' && group.options && group.options.length > 0) {
-                    // Pega o menor preço dentro deste grupo
-                    const cheapestOption = group.options.reduce((min, opt) => (opt.price < min ? opt.price : min), Infinity);
-                    if (cheapestOption !== Infinity) {
-                        minPackagingCost += cheapestOption;
+            if(globalComplements) { // Verificação de segurança
+                product.complementIds.forEach(grpId => {
+                    const group = globalComplements[grpId];
+                    if (group && group.required && group.internalCategory === 'embalagem' && group.options && group.options.length > 0) {
+                        const cheapestOption = group.options.reduce((min, opt) => (opt.price < min ? opt.price : min), Infinity);
+                        if (cheapestOption !== Infinity) minPackagingCost += cheapestOption;
                     }
-                }
-            });
-            
-            // Se achou custo de embalagem, usa ele
+                });
+            }
             if (minPackagingCost > 0) displayPrice = minPackagingCost;
         }
 
@@ -278,8 +286,16 @@ function renderProducts(containerId, filterCategory) {
         if(product.serves && product.serves > 1) extraInfo += `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded mr-2"><i class="fas fa-user-friends text-cyan-600"></i> Serve ${product.serves}</span>`;
         if(product.weight) extraInfo += `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded"><i class="fas fa-weight-hanging text-cyan-600"></i> ${product.weight}${product.unit}</span>`;
 
+        // === PEQUENO DETALHE: MOSTRAR SE TEM POUCO ESTOQUE (OPCIONAL) ===
+        // Se quiser mostrar "Últimas unidades" para o cliente:
+        let stockAlert = '';
+        if (product.stockControl && product.stock <= 5 && product.stock > 0) {
+            stockAlert = `<span class="absolute top-2 left-2 bg-red-500 text-white text-[10px] px-2 py-1 rounded font-bold animate-pulse z-10">Restam ${product.stock}</span>`;
+        }
+
         return `
         <div onclick="window.location.href='produto.html?id=${product.id}'" class="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group flex flex-col h-full border border-gray-100 relative cursor-pointer">
+            ${stockAlert}
             <div class="h-40 relative overflow-hidden">
                 <img src="${product.image || 'https://via.placeholder.com/300'}" alt="${product.name}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110">
                 <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -306,7 +322,7 @@ function renderProducts(containerId, filterCategory) {
             </div>
         </div>
     `}).join('');
-}
+}   
 
 // === LÓGICA DO MODAL RÁPIDO & PÁGINA DE PRODUTO ===
 async function carregarDadosProduto(id, containerPrefix) {
