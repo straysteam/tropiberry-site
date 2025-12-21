@@ -629,5 +629,6 @@ window.criarPedidoViaBot = async (dadosCliente, itens) => {
     } catch (e) { console.error("Erro ao salvar pedido do bot:", e); }
 };
 
+
 // Mesclando as listas de mensagens para garantir que todas funcionem
 Object.assign(BOT_CONTENT, BOT_CONTENT_EXTENDED);

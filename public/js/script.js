@@ -31,6 +31,8 @@ let selectedOptions = {};
 let currentQtd = 1;
 let configPedidos = {};
 let currentDeliveryFee = 0;
+let freteGoogleCalculado = 0; 
+let googleDebounceTimer = null;
 
 // CACHE GLOBAL DE COMPLEMENTOS
 let globalComplements = {}; 
@@ -72,6 +74,7 @@ window.adicionarAoCarrinhoDetalhado = adicionarAoCarrinhoDetalhado;
 window.toggleOption = toggleOption;
 window.abrirModalRapido = abrirModalRapido;
 window.fecharModalRapido = fecharModalRapido;
+window.toggleReceipt = toggleReceipt;
 
 // === INICIALIZAÇÃO ===
 document.addEventListener('DOMContentLoaded', async () => {
@@ -90,6 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await carregarCategoriasSite();
+    await carregarConfiguracoesSite();
     
     // Inicia monitoramento
     monitorarComplementosGlobal(); 
@@ -619,12 +623,22 @@ function adicionarAoCarrinhoDetalhado() {
         details: complementsDescription.join(', ') 
     };
 
+    // 1. Adiciona ao array do carrinho
     cart.push(cartItem);
+    
+    // 2. Atualiza a interface (badge, lista interna)
     updateCartUI();
+    
+    // 3. DISPARA A ANIMAÇÃO DO COPINHO (Wesley, aqui está a mágica!)
+    animarVooParaCarrinho(window.event);
+
+    // 4. Mostra o aviso de sucesso
     showToast("Adicionado ao pedido!");
     
+    // 5. Fecha o modal (se estiver aberto)
     fecharModalRapido();
-    setTimeout(() => toggleCart(), 500);
+
+    // OBS: A linha do toggleCart foi removida para o carrinho não abrir sozinho.
 }
 
 function carregarProdutosDoBanco() {
@@ -731,10 +745,22 @@ function updateCartUI() {
                 <p class="text-sm font-medium">Seu carrinho está vazio</p>
             </div>`;
     } else {
-        // 2. Renderiza cada item do carrinho
+        // === NOVO: BOTÃO DE LIMPAR CARRINHO ===
+        // Inserimos o cabeçalho com o botão antes de listar os itens
+        const headerHtml = `
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Itens do Pedido</span>
+                <button onclick="limparCarrinho()" class="text-[10px] font-black text-red-500 hover:text-red-700 transition flex items-center gap-1 bg-red-50 px-2 py-1 rounded-lg">
+                    <i class="fas fa-trash-alt"></i> LIMPAR TUDO
+                </button>
+            </div>
+        `;
+        cartItemsContainer.innerHTML = headerHtml;
+
+        // 2. Renderiza cada item do carrinho (MANTIDO)
         cart.forEach(item => {
             const itemHtml = `
-                <div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm group">
+                <div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm group mb-2">
                     <img src="${item.image || 'https://via.placeholder.com/100'}" class="w-16 h-16 object-cover rounded-lg border">
                     <div class="flex-1">
                         <div class="flex justify-between items-start">
@@ -757,13 +783,13 @@ function updateCartUI() {
             cartItemsContainer.insertAdjacentHTML('beforeend', itemHtml);
         });
     }
+
+    // Mantendo a lógica de persistência e totais que seu script já possuía
     localStorage.setItem('tropyberry_cart', JSON.stringify(cart));
 
-    // 3. Cálculo e atualização do Total
     const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
     cartTotalElement.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
 
-    // 4. Atualiza o Badge do carrinho (número vermelho no topo)
     if (cartCountBadge) {
         const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
         cartCountBadge.innerText = totalItems;
@@ -788,7 +814,15 @@ function startCheckout() {
 }
 function closeCheckout() { document.getElementById('checkout-modal').classList.add('hidden'); }
 function showStep(stepId) { ['step-service', 'step-address', 'step-payment-method'].forEach(id => document.getElementById(id).classList.add('hidden')); document.getElementById(stepId).classList.remove('hidden'); if (stepId === 'step-address') checkSavedAddress(); }
-function selectService(type) { currentOrder.method = type; const f = document.getElementById('delivery-fields'); if (type === 'retirada') f.classList.add('hidden'); else f.classList.remove('hidden'); showStep('step-address'); }
+function selectService(type) { 
+    currentOrder.method = type; 
+    const f = document.getElementById('delivery-fields'); 
+    if (type === 'retirada') f.classList.add('hidden'); 
+    else f.classList.remove('hidden'); 
+    
+    showStep('step-address'); 
+    renderReceipt(); // ADICIONE ESSA LINHA AQUI para atualizar o frete ao selecionar
+}
 function checkSavedAddress() { const s = localStorage.getItem('tropyberry_user'); if (s) { const d = JSON.parse(s); document.getElementById('input-name').value = d.name || ''; document.getElementById('input-phone').value = d.phone || ''; document.getElementById('input-street').value = d.street || ''; document.getElementById('input-number').value = d.number || ''; document.getElementById('input-district').value = d.district || ''; document.getElementById('input-comp').value = d.comp || ''; if(d.street) { document.getElementById('saved-address-card').classList.remove('hidden'); document.getElementById('saved-address-card').classList.add('flex'); document.getElementById('saved-address-text').innerText = `${d.street}, ${d.number}`; } } }
 function useSavedAddress() { goToPaymentMethod(); }
 function goToPaymentMethod() {
@@ -815,13 +849,27 @@ function goToPaymentMethod() {
     showStep('step-payment-method');
 }
 document.getElementById('input-district')?.addEventListener('input', () => {
-    updateCartUI();     
+    updateCartUI();
+    renderReceipt();     
 });
 async function processPayment() {
     const payMethod = document.querySelector('input[name="pay-method"]:checked')?.value;
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const frete = (typeof calcularFrete === 'function') ? calcularFrete() : 0;
     const totalFinal = subtotal + frete;
+    const triggerGoogleCalc = () => {
+    // Se o modo for Google Maps
+    if (configPedidos && configPedidos.deliveryMode === 'google') {
+        clearTimeout(googleDebounceTimer);
+        googleDebounceTimer = setTimeout(() => {
+            window.calcularDistanciaGoogle(); // Chama a API
+        }, 1000); // Espera 1 segundo após parar de digitar
+    } 
+    // Se for modo Bairro ou Fixo
+    else {
+        renderReceipt(); // Recalcula na hora
+    }
+};
 
     if (!payMethod) return showToast("Selecione um método de pagamento", true);
 
@@ -1128,31 +1176,75 @@ function renderTicketBooster() {
     `;
 }
 function calcularFrete() {
-    if (currentOrder.method !== 'delivery') {
+    // Se não for delivery, é zero
+    if (!currentOrder.method || currentOrder.method !== 'delivery') {
         currentDeliveryFee = 0;
         return 0;
     }
 
+    // Se as configurações não carregaram, usa um valor de segurança (ex: 5.00) ou 0
+    if (!configPedidos || !configPedidos.deliveryMode) {
+        console.warn("Configurações de entrega não carregadas.");
+        return 0; 
+    }
+
     const mode = configPedidos.deliveryMode;
     
+    // --- IMPLEMENTAÇÃO DO MODO GOOGLE (ADICIONADO AQUI) ---
+    if (mode === 'google') {
+        currentDeliveryFee = freteGoogleCalculado;
+        return currentDeliveryFee;
+    }
+    // -----------------------------------------------------
+
+    // 1. MODO: FIXO (Mais simples)
     if (mode === 'fixed') {
-        currentDeliveryFee = configPedidos.deliveryFixedPrice || 0;
+        currentDeliveryFee = parseFloat(configPedidos.deliveryFixedPrice) || 0;
     } 
+    // 2. MODO: POR BAIRRO (Recomendado para você)
     else if (mode === 'district') {
-        const bairroCliente = document.getElementById('input-district').value.trim().toLowerCase();
-        const infoBairro = configPedidos.deliveryDistricts?.find(b => b.nome.toLowerCase() === bairroCliente);
+        const inputBairro = document.getElementById('input-district');
+        // Normaliza o texto: remove espaços extras e acentos (ex: "Jardim América" vira "jardim america")
+        const bairroCliente = inputBairro ? removerAcentos(inputBairro.value.trim().toLowerCase()) : "";
         
+        // Procura na sua lista de bairros cadastrados
+        const infoBairro = configPedidos.deliveryDistricts?.find(b => 
+            removerAcentos(b.nome.toLowerCase()) === bairroCliente
+        );
+        
+        // Se achou o bairro, cobra o valor dele. Se não achou, cobra uma taxa padrão ou avisa.
+        // Aqui coloquei 0, mas você pode definir um "valor padrão para bairros desconhecidos" no admin
+        currentDeliveryFee = infoBairro ? parseFloat(infoBairro.custo) : 0;
+    } 
+    // 3. MODO: IFOOD / DISTÂNCIA
+    else if (mode === 'ifood' || mode === 'distance') {
+        // ATENÇÃO: Como seu site não tem GPS, este modo não funciona automaticamente.
+        // TENTATIVA DE SALVAMENTO: Vamos ver se o cliente digitou um bairro que você cadastrou.
+        // Isso permite você usar a tabela "iFood" mas cobrar pelo Bairro se o GPS falhar.
+        
+        const inputBairro = document.getElementById('input-district');
+        const bairroCliente = inputBairro ? removerAcentos(inputBairro.value.trim().toLowerCase()) : "";
+        
+        // Tenta achar o bairro na lista de distritos (caso você tenha cadastrado)
+        const infoBairro = configPedidos.deliveryDistricts?.find(b => 
+            removerAcentos(b.nome.toLowerCase()) === bairroCliente
+        );
+
         if (infoBairro) {
-            currentDeliveryFee = infoBairro.custo;
+            currentDeliveryFee = parseFloat(infoBairro.custo);
         } else {
-            // Se não achar o bairro, você pode definir um padrão ou avisar
-            currentDeliveryFee = 0; 
+            // Se não achou bairro e não tem GPS, cobra uma TAXA MÍNIMA em vez de Grátis
+            // Cobra R$ 5,00 (ou o valor da primeira faixa da tabela ifood) para não sair perdendo
+            currentDeliveryFee = 5.99; // Valor de segurança
         }
     } else {
         currentDeliveryFee = 0;
     }
 
     return currentDeliveryFee;
+}
+function removerAcentos(str) {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function renderReceipt() { const list = document.getElementById('receipt-items-list'); list.innerHTML = ''; let subtotal = 0; cart.forEach(item => { const t = item.price * item.quantity; subtotal += t; list.innerHTML += `<div class="flex justify-between items-start mb-2"><div><span class="font-bold text-gray-700">${item.quantity}x</span> <span class="text-gray-600">${item.name}</span></div><span class="text-gray-800 font-medium">R$ ${t.toFixed(2).replace('.', ',')}</span></div>`; }); document.getElementById('receipt-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; document.getElementById('receipt-total').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; }
@@ -1174,7 +1266,7 @@ window.renderReceiptFromOrder = (items, total, orderData, orderId) => {
     let html = '';
     let subtotal = 0;
 
-    // Prepara a lista de itens para o cupom
+    // Prepara a lista de itens para o cupom de impressão
     items.forEach(item => {
         const itemTotal = item.price * item.quantity;
         subtotal += itemTotal;
@@ -1191,7 +1283,7 @@ window.renderReceiptFromOrder = (items, total, orderData, orderId) => {
         `;
     });
 
-    // Injeta os dados no HTML de impressão (aquele que criamos no index.html)
+    // Injeta os dados no HTML de impressão
     if (printItemsList) {
         printItemsList.innerHTML = html;
         document.getElementById('print-order-id').innerText = orderId.slice(-5).toUpperCase();
@@ -1205,18 +1297,55 @@ window.renderReceiptFromOrder = (items, total, orderData, orderId) => {
         document.getElementById('print-pay-method').innerText = orderData.paymentMethod === 'pix' ? 'PIX' : 'CARTÃO';
     }
 
-    // Atualiza também a listagem que aparece na tela do navegador
+    // Atualiza a listagem que aparece na tela (Resumo da Conta)
     if (screenItemsList) {
         let screenHtml = '';
         items.forEach(item => {
-            screenHtml += `<div class="flex justify-between items-start mb-2"><div><span class="font-bold text-gray-700">${item.quantity}x</span> <span class="text-gray-600">${item.name}</span></div><span class="text-gray-800 font-medium">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span></div>`;
+            const itemTotal = item.price * item.quantity;
+            screenHtml += `
+                <div class="flex justify-between items-start mb-2 border-b border-gray-100 pb-2">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-cyan-700">${item.quantity}x</span> 
+                            <span class="text-gray-800 font-semibold text-xs">${item.name}</span>
+                        </div>
+                        <p class="text-[10px] text-gray-400 italic leading-tight">${item.details || ''}</p>
+                    </div>
+                    <span class="text-gray-800 font-bold text-xs">R$ ${itemTotal.toFixed(2).replace('.', ',')}</span>
+                </div>`;
         });
         screenItemsList.innerHTML = screenHtml;
+
+        // --- CORREÇÃO DO FRETE NA TELA ---
+        const valorFrete = total - subtotal;
+        const deliveryEl = document.getElementById('receipt-delivery');
+        
+        if (deliveryEl) {
+            if (valorFrete > 0) {
+                deliveryEl.innerText = `R$ ${valorFrete.toFixed(2).replace('.', ',')}`;
+                deliveryEl.classList.remove('text-green-600');
+                deliveryEl.classList.add('text-gray-800');
+            } else {
+                deliveryEl.innerText = 'Grátis';
+                deliveryEl.classList.add('text-green-600');
+            }
+        }
+
         document.getElementById('receipt-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
         document.getElementById('receipt-total').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
     }
 };
-
+window.toggleReceipt = () => {
+    const el = document.getElementById('receipt-details');
+    const arr = document.getElementById('arrow-receipt');
+    if (el.classList.contains('hidden')) {
+        el.classList.remove('hidden');
+        arr.classList.add('rotate-180');
+    } else {
+        el.classList.add('hidden');
+        arr.classList.remove('rotate-180');
+    }
+};
 window.prepararImpressao = () => {
     window.print();
 };
@@ -1263,3 +1392,173 @@ function aplicarDadosLojaNoSite(data) {
 document.addEventListener('DOMContentLoaded', () => {
     monitorarInfoLoja();
 });
+function animarVooParaCarrinho(event) {
+    // 1. Identifica o ponto de partida (onde o usuário clicou)
+    const startX = event.clientX;
+    const startY = event.clientY + window.scrollY;
+
+    // 2. Identifica o destino (Ícone do carrinho no cabeçalho)
+    // Certifique-se de que o ícone do carrinho tenha a classe 'cart-icon-target' ou ID 'cart-btn'
+    const cartBtn = document.querySelector('.fa-shopping-cart') || document.querySelector('#cart-btn');
+    if (!cartBtn) return;
+
+    const cartRect = cartBtn.getBoundingClientRect();
+    const targetX = cartRect.left + (cartRect.width / 2);
+    const targetY = cartRect.top + window.scrollY + (cartRect.height / 2);
+
+    // 3. Cria o "Flyer" (Cópia do SVG que você mandou)
+    const flyer = document.createElement('div');
+    flyer.className = 'acai-flyer';
+    flyer.style.left = `${startX - 20}px`;
+    flyer.style.top = `${startY - 25}px`;
+
+    // Variáveis CSS para o destino
+    flyer.style.setProperty('--tx', `${targetX - startX}px`);
+    flyer.style.setProperty('--ty', `${targetY - startY}px`);
+
+    // Injeta o SVG do TropiBerry que você forneceu
+    flyer.innerHTML = `
+        <svg viewBox="0 0 64 80" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:100%;">
+            <ellipse cx="32" cy="74" rx="16" ry="3" fill="black" fillOpacity="0.1" />
+            <path d="M14 18L20 70C20.5 73 23 75 26 75H38C41 75 43.5 73 44 70L50 18" fill="#E1F5F9" fillOpacity="0.8" stroke="#00838F" strokeWidth="1.5" />
+            <path d="M20.5 65L21.5 71C21.8 73.5 24 75 26.5 75H37.5C40 75 42.2 73.5 42.5 71L43.5 65H20.5Z" fill="#00838F" />
+            <path d="M19.5 55L20.5 65H43.5L44.5 55H19.5Z" fill="#F0FDFF" />
+            <path d="M13 18C13 10 22 6 32 6C42 6 51 10 51 18H13Z" fill="white" fillOpacity="0.4" stroke="#00838F" strokeWidth="1" />
+        </svg>
+    `;
+
+    document.body.appendChild(flyer);
+
+    // 4. Feedback no ícone do carrinho ao "chegar"
+    setTimeout(() => {
+        cartBtn.classList.add('animate-cart-pulse');
+        setTimeout(() => cartBtn.classList.remove('animate-cart-pulse'), 400);
+        flyer.remove();
+    }, 800);
+}
+window.adicionarAoCarrinhoRapido = function(event, produtoId) {
+    event.stopPropagation(); // Impede de abrir a página do produto
+    
+    // Busca o produto na lista global
+    const produto = products.find(p => p.id === produtoId);
+    if (!produto) return;
+
+    // Se o produto tiver complementos obrigatórios, obrigamos a abrir o modal
+    const temObrigatorios = produto.complementIds && produto.complementIds.length > 0;
+    if (temObrigatorios) {
+        abrirModalRapido(produtoId);
+        return;
+    }
+
+    // Cria o item para o carrinho
+    const cartItem = {
+        id: `${produto.id}-${Date.now()}`,
+        originalId: produto.id,
+        name: produto.name,
+        price: produto.price,
+        image: produto.image,
+        quantity: 1,
+        details: ""
+    };
+
+    // Adiciona ao carrinho global
+    cart.push(cartItem);
+    
+    // Atualiza a interface
+    updateCartUI();
+    
+    // DISPARA A ANIMAÇÃO!
+    animarVooParaCarrinho(event);
+    
+    showToast("Adicionado!");
+};
+// Função para Limpar todo o Carrinho
+window.limparCarrinho = function() {
+    // Se o carrinho já estiver vazio, não faz nada
+    if (cart.length === 0) return;
+
+    // 1. LIMPA TUDO (Sem janelas de confirmação/alert)
+    cart = []; 
+    localStorage.removeItem('tropyberry_cart'); 
+    
+    // 2. ATUALIZA A TELA (Mostra "Carrinho vazio")
+    updateCartUI(); 
+    
+    // 3. FEEDBACK VISUAL (Usa o seu sistema de Toast)
+    showToast("Carrinho esvaziado!");
+
+    // 4. FECHA O CARRINHO (Opcional - dá um tempo para o usuário ver que limpou)
+    setTimeout(() => {
+        const modal = document.getElementById('cart-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            toggleCart();
+        }
+    }, 800);
+};  
+async function carregarConfiguracoesSite() {
+    const docSnap = await getDoc(doc(db, "config", "pedidos"));
+    if (docSnap.exists()) {
+        configPedidos = docSnap.data(); // Agora contém delivMin, delivServiceFee, etc.
+    }
+}
+// --- CÁLCULO VIA GOOGLE MAPS ---
+window.calcularDistanciaGoogle = () => {
+    // 1. Pega os dados
+    const rua = document.getElementById('input-street').value;
+    const num = document.getElementById('input-number').value;
+    const bairro = document.getElementById('input-district').value;
+    
+    // Se faltar dados, não calcula
+    if(!rua || !num || !bairro) return;
+
+    // 2. Monta os endereços
+    // DICA: No "origin", coloque o endereço fixo da sua loja para ser mais preciso
+    const origin = "Av. Exemplo, 123, João Pessoa, PB"; 
+    const destination = `${rua}, ${num} - ${bairro}, João Pessoa, PB`;
+
+    // Mostra que está pensando...
+    const labelFrete = document.getElementById('receipt-delivery');
+    if(labelFrete) {
+        labelFrete.innerText = "Calculando...";
+        labelFrete.classList.remove('text-green-600');
+        labelFrete.classList.add('text-orange-500', 'animate-pulse');
+    }
+
+    // 3. Chama o Google
+    const service = new google.maps.DistanceMatrixService();
+    service.getDistanceMatrix({
+        origins: [origin],
+        destinations: [destination],
+        travelMode: 'DRIVING',
+        unitSystem: google.maps.UnitSystem.METRIC
+    }, (response, status) => {
+        if (status === 'OK' && response.rows[0].elements[0].status === 'OK') {
+            
+            // 4. Sucesso: Pega a distância
+            const distanciaMetros = response.rows[0].elements[0].distance.value;
+            const distanciaKm = distanciaMetros / 1000;
+            
+            // Pega o preço por KM configurado (ou usa 1.50 como padrão)
+            const precoPorKm = configPedidos.deliveryPricePerKm || 1.50;
+            
+            // CÁLCULO FINAL
+            let valorFrete = distanciaKm * precoPorKm;
+
+            // Aplica um valor mínimo (ex: nunca ser menos que R$ 5,00)
+            const valorMinimo = configPedidos.delivMin || 5.00;
+            if (valorFrete < valorMinimo) valorFrete = valorMinimo;
+
+            freteGoogleCalculado = valorFrete;
+            console.log(`Google: ${distanciaKm}km = R$ ${valorFrete}`);
+
+            // Atualiza a tela
+            renderReceipt(); 
+
+        } else {
+            console.error("Erro Google Maps:", status);
+            // Se der erro (endereço não achado), cobra um valor fixo de segurança
+            freteGoogleCalculado = configPedidos.deliveryFixedPrice || 10.00; 
+            renderReceipt();
+        }
+    });
+};

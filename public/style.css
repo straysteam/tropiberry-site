@@ -90,10 +90,13 @@ h1, h2, h3, .brand-font {
 
 /* Estilo do Toast (Notificação) */
 #toast-notification {
-    transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55), opacity 0.3s ease;
+    z-index: 9999 !important; /* Valor bem alto para passar o Header */
+    top: 110px !important;    /* Ajusta a distância do topo para não ficar colado ao header */
 }
-#toast-notification.error {
-    border-left-color: #ef4444; /* Vermelho do Tailwind */
+
+/* Se estiver a usar o sistema de erro/sucesso do script.js */
+.toast-notification.error {
+    border-left-color: #ef4444 !important;
 }
 
 #toast-notification.error .text-green-500 {
@@ -269,4 +272,50 @@ h1, h2, h3, .brand-font {
     border-radius: 8px;
     font-size: 12px;
     font-weight: 600;
+}
+/* Animação de Voo para o Carrinho */
+@keyframes flyToCart {
+    0% {
+        transform: translate(0, 0) scale(1) rotate(0deg);
+        opacity: 1;
+    }
+    40% {
+        transform: translate(0, -80px) scale(1.6) rotate(15deg);
+    }
+    100% {
+        transform: translate(var(--tx), var(--ty)) scale(0.2) rotate(360deg);
+        opacity: 0;
+    }
+}
+
+.acai-flyer {
+    position: absolute;
+    width: 40px;
+    height: 50px;
+    pointer-events: none;
+    z-index: 9999;
+    animation: flyToCart 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Feedback visual no ícone do carrinho (Pulse) */
+@keyframes cartPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); color: #00838F; }
+    100% { transform: scale(1); }
+}
+
+.animate-cart-pulse {
+    animation: cartPulse 0.4s ease-in-out;
+}
+/* Botão de Limpar Carrinho */
+button[onclick="limparCarrinho()"] {
+    background: rgba(239, 68, 68, 0.1);
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+button[onclick="limparCarrinho()"]:hover {
+    background: #ef4444;
+    color: white !important;
 }

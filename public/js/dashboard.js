@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, updateDoc, orderBy, query, getDoc, setDoc, addDoc, serverTimestamp, getDocs, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, doc, updateDoc, orderBy, query, getDoc, setDoc, addDoc, serverTimestamp, getDocs, deleteDoc, limit, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { monitorarEstadoAuth, verificarAdminNoBanco, db as authDb, fazerLogout } from './auth.js';
 
@@ -13,9 +13,8 @@ let allProducts = [];
 let allCategories = [];
 let tablesConfig = { environments: [] };
 
-// UI Control
 let currentServiceTab = 'retirada'; 
-let currentStatusFilter = 'todos';
+let currentStatusFilter = 'todos';  
 let currentEnvId = null;
 let currentTablePOS = null; 
 let currentTableOrder = []; 
@@ -29,17 +28,15 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = 'index.html'; 
             return;
         }
-        
-        // Carrega infos do usuário no topo
         if(document.getElementById('header-user-name')) document.getElementById('header-user-name').innerText = user.displayName || 'Admin';
         if(document.getElementById('header-user-email')) document.getElementById('header-user-email').innerText = user.email;
 
-        // Inicia monitores globais
+        // Gatilhos Iniciais
+        await carregarProdutosECategorias(); 
         iniciarMonitoramentoPedidos();
         
-        // RECUPERA A ÚLTIMA TELA ABERTA (Correção do F5)
         const ultimaTela = localStorage.getItem('painel_ultima_tela') || 'view-pdv-wrapper';
-        navegarPara(ultimaTela);
+        window.navegarPara(ultimaTela);
     });
 });
 
@@ -61,14 +58,12 @@ async function carregarConfigMesas() {
 }
 
 async function carregarProdutosECategorias() {
-    try {
-        const pSnap = await getDocs(collection(db, "produtos"));
-        allProducts = [];
-        pSnap.forEach(d => allProducts.push({id: d.id, ...d.data()}));
-        const cSnap = await getDocs(query(collection(db, "categorias"), orderBy("nome")));
-        allCategories = [];
-        cSnap.forEach(d => allCategories.push(d.data()));
-    } catch(e) { console.error("Erro produtos:", e); }
+    const pSnap = await getDocs(collection(db, "produtos"));
+    allProducts = [];
+    pSnap.forEach(d => allProducts.push({id: d.id, ...d.data()}));
+    const cSnap = await getDocs(query(collection(db, "categorias"), orderBy("nome")));
+    allCategories = [];
+    cSnap.forEach(d => allCategories.push(d.data()));
 }
 
 // === NAVEGAÇÃO ===
@@ -102,7 +97,6 @@ window.toggleSubmenu = (id) => {
     arrow.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
-const originalNavPara = window.navegarPara;
 window.navegarPara = (telaId) => {
     // 1. Salva a tela atual para o F5
     localStorage.setItem('painel_ultima_tela', telaId);
@@ -818,114 +812,11 @@ function renderizarGridMesas() {
     });
 }
 
-// PDV Functions
-window.abrirMesaPDV = (tableNum, existingOrder) => {
-    // 1. Define a mesa atual
-    currentTablePOS = tableNum;
-    currentTableOrder = [];
-    
-    // 2. Atualiza o título da mesa na barra lateral
-    const titleElem = document.getElementById('pos-table-title');
-    if (titleElem) titleElem.innerText = `Mesa ${tableNum}`;
-    
-    // 3. Se já existir pedido (mesa ocupada), carrega os itens
-    if (existingOrder) {
-        // Clona o array para não editar a referência original diretamente
-        currentTableOrder = JSON.parse(JSON.stringify(existingOrder.items));
-    }
-
-    // 4. Renderiza os botões de categorias na tela do PDV
-    const catContainer = document.getElementById('pos-categories');
-    if(catContainer) {
-        // Botão 'Todos'
-        catContainer.innerHTML = `<button onclick="filtrarProdPDV('all')" class="px-4 py-2 bg-cyan-600 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap hover:bg-cyan-700 transition">Todos</button>`;
-        
-        // Outras categorias (verifica se allCategories existe para não dar erro)
-        if (typeof allCategories !== 'undefined') {
-            allCategories.forEach(cat => { 
-                catContainer.innerHTML += `<button onclick="filtrarProdPDV('${cat.slug}')" class="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-50 whitespace-nowrap transition">${cat.nome}</button>`; 
-            });
-        }
-    }
-
-    // 5. Inicializa os produtos e a comanda
-    if (typeof window.filtrarProdPDV === "function") filtrarProdPDV('all');
-    if (typeof window.atualizarComandaPDV === "function") atualizarComandaPDV();
-
-    // === A CORREÇÃO IMPORTANTE ESTÁ AQUI EMBAIXO ===
-    
-    // Esconde o painel principal (agora chamado 'view-pdv-wrapper')
-    const viewMain = document.getElementById('view-pdv-wrapper');
-    if (viewMain) {
-        viewMain.classList.add('hidden');
-    } else {
-        console.error("ERRO: Elemento 'view-pdv-wrapper' não encontrado!");
-    }
-
-    // Mostra a tela da Mesa (view-pos)
-    const viewPos = document.getElementById('view-pos');
-    if (viewPos) {
-        viewPos.classList.remove('hidden');
-        viewPos.classList.add('flex');
-    } else {
-        console.error("ERRO: Elemento 'view-pos' não encontrado!");
-    }
-};
-
-window.fecharMesaPDV = () => {
-    document.getElementById('view-pos').classList.add('hidden');
-    document.getElementById('view-pos').classList.remove('flex');
-    document.getElementById('view-mesas').classList.remove('hidden');
-    currentTablePOS = null;
-}
-
-window.filtrarProdPDV = (cat) => {
-    const container = document.getElementById('pos-products-grid');
-    container.innerHTML = '';
-    const term = document.getElementById('pos-search').value.toLowerCase();
-    const filtered = allProducts.filter(p => {
-        const matchCat = cat === 'all' || p.category === cat;
-        const matchSearch = p.name.toLowerCase().includes(term);
-        return matchCat && matchSearch;
-    });
-    filtered.forEach(p => {
-        const el = document.createElement('div');
-        el.className = "bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:border-cyan-500 transition flex flex-col items-center text-center h-full";
-        el.onclick = () => addItemMesa(p);
-        el.innerHTML = `<img src="${p.image || 'https://via.placeholder.com/100'}" class="w-20 h-20 rounded-md object-cover mb-2 bg-gray-100"><h4 class="text-xs font-bold text-gray-800 line-clamp-2 leading-tight">${p.name}</h4><span class="text-cyan-700 font-bold text-sm mt-auto pt-2">R$ ${p.price.toFixed(2)}</span>`;
-        container.appendChild(el);
-    });
-    document.getElementById('pos-search').onkeyup = () => filtrarProdPDV(cat);
-}
-
-window.addItemMesa = (product) => {
-    const existing = currentTableOrder.find(i => i.originalId === product.id);
-    if (existing) existing.quantity++;
-    else currentTableOrder.push({ id: Date.now().toString(), originalId: product.id, name: product.name, price: product.price, quantity: 1, details: '' });
-    window.atualizarComandaPDV();
-}
-
-window.atualizarComandaPDV = () => {
-    const container = document.getElementById('pos-order-items');
-    if (!container) return;
-    container.innerHTML = '';
-    let total = 0;
-    if (currentTableOrder.length === 0) container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-gray-400"><i class="fas fa-basket-shopping text-3xl mb-2 opacity-20"></i><p class="text-xs">Comanda vazia</p></div>`;
-    currentTableOrder.forEach((item, idx) => {
-        const itemTotal = item.price * item.quantity;
-        total += itemTotal;
-        container.innerHTML += `<div class="flex justify-between items-start border-b border-gray-100 pb-2 mb-2"><div class="flex-1"><div class="font-bold text-gray-800 text-sm">${item.name}</div><div class="text-xs text-gray-400">R$ ${item.price.toFixed(2)} un.</div></div><div class="flex items-center gap-2"><div class="flex items-center bg-gray-100 rounded"><button onclick="changePosQtd(${idx}, -1)" class="px-2 text-red-500 font-bold hover:bg-gray-200 rounded-l">-</button><span class="text-xs font-bold w-6 text-center">${item.quantity}</span><button onclick="changePosQtd(${idx}, 1)" class="px-2 text-green-500 font-bold hover:bg-gray-200 rounded-r">+</button></div><span class="text-sm font-bold text-gray-700 w-16 text-right">R$ ${itemTotal.toFixed(2)}</span></div></div>`;
-    });
-    document.getElementById('pos-subtotal').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
-    document.getElementById('pos-total').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
-}
-
 window.changePosQtd = (idx, delta) => {
-    const item = currentTableOrder[idx];
-    item.quantity += delta;
-    if (item.quantity <= 0) currentTableOrder.splice(idx, 1);
-    atualizarComandaPDV();
-}
+    currentTableOrder[idx].quantity += delta;
+    if(currentTableOrder[idx].quantity <= 0) currentTableOrder.splice(idx, 1);
+    window.atualizarComandaPDV();
+};
 
 window.confirmarPedidoMesa = async () => {
     if (currentTableOrder.length === 0) return alert("Adicione itens antes de enviar.");
@@ -1098,91 +989,166 @@ window.salvarTudoBoasVindas = async () => {
     }
 }
 
-// 3. CONFIGURAÇÕES DE PEDIDOS
+// ===============================================
+// BLOCO UNIFICADO: CONFIGURAÇÕES DE PEDIDOS E DELIVERY
+// ===============================================
+
+// 1. Função para atualizar o texto do rótulo (Ex: "Sem preço" -> "Preço Fixo")
+window.atualizarLabelPrecoDelivery = function(modo) {
+    const label = document.getElementById('delivery-price-label');
+    if (!label) return;
+
+    const modos = {
+        'free': 'Frete Grátis',
+        'fixed': 'Preço Fixo',
+        'district': 'Por Bairro',
+        'distance': 'Por Distância',
+        'ifood': 'Tabela iFood'
+    };
+
+    label.innerText = modos[modo] || 'Sem preço';
+};
+
+// 2. Carregar todas as configurações (Pedidos + Endereço da Empresa)
 window.carregarConfigPedidos = async () => {
     try {
+        // Sincroniza Endereço
+        const infoSnap = await getDoc(doc(db, "config", "loja_info"));
+        if (infoSnap.exists()) {
+            const bizAddress = infoSnap.data().endereco || "Endereço não configurado";
+            const el = document.getElementById('biz-address');
+            if (el) el.innerText = bizAddress;
+        }
+
+        // Busca Regras de Pedido
         const docSnap = await getDoc(doc(db, "config", "pedidos"));
         if(docSnap.exists()) {
             const d = docSnap.data();
+            
+            // Switches
             if(document.getElementById('cfg-delivery-active')) document.getElementById('cfg-delivery-active').checked = d.delivery !== false;
+            if(document.getElementById('cfg-pickup-active')) document.getElementById('cfg-pickup-active').checked = d.pickup !== false;
             if(document.getElementById('cfg-accept-orders')) document.getElementById('cfg-accept-orders').checked = d.accept !== false;
-            if(document.getElementById('cfg-whatsapp-number')) document.getElementById('cfg-whatsapp-number').value = d.whatsapp || '';
             
-            // Label de preço de entrega
-            const labels = { 'free': 'Sem preço', 'fixed': 'Preço fixo', 'district': 'Por Bairro', 'distance': 'Por Distância' };
-            if(d.deliveryMode && document.getElementById('delivery-price-label')) {
-                document.getElementById('delivery-price-label').innerText = labels[d.deliveryMode] || 'Sem preço';
-            }
+            // Valores Avançados
+            if(document.getElementById('cfg-deliv-min')) document.getElementById('cfg-deliv-min').value = d.delivMin || 0;
+            if(document.getElementById('cfg-deliv-free')) document.getElementById('cfg-deliv-free').value = d.delivFreeAbove || 0;
+            if(document.getElementById('cfg-deliv-service')) document.getElementById('cfg-deliv-service').value = d.delivServiceFee || 0;
             
-            aplicarEstiloImpressao(d.paperSize);
+            // Checkboxes
+            if(document.getElementById('cfg-deliv-extra')) document.getElementById('cfg-deliv-extra').checked = d.askExtraInfo || false;
+            if(document.getElementById('cfg-deliv-comp')) document.getElementById('cfg-deliv-comp').checked = d.mandatoryComplement || false;
+            if(document.getElementById('cfg-deliv-sched')) document.getElementById('cfg-deliv-sched').checked = d.allowScheduled || false;
+
+            window.atualizarLabelPrecoDelivery(d.deliveryMode);
         }
     } catch(e) { console.error(e); }
-}
+};
 
+// 3. Salvar todas as configurações de uma vez
 window.salvarConfigPedidos = async () => {
     const data = {
-        accept: document.getElementById('cfg-accept-orders')?.checked,
-        receiveMode: document.querySelector('input[name="receive-mode"]:checked')?.value,
-        whatsapp: document.getElementById('cfg-whatsapp-number')?.value,
-        entryStatus: document.querySelector('input[name="entry-status"]:checked')?.value,
-        
-        ticketBooster: document.getElementById('cfg-ticket-booster')?.checked,
-        
         delivery: document.getElementById('cfg-delivery-active')?.checked,
         pickup: document.getElementById('cfg-pickup-active')?.checked,
+        accept: document.getElementById('cfg-accept-orders')?.checked,
         
-        localService: {
-            active: document.getElementById('cfg-local-active')?.checked,
-            qrType: document.querySelector('input[name="qr-type"]:checked')?.value,
-            askName: document.getElementById('cfg-ask-name')?.checked,
-            scheduled: document.getElementById('cfg-scheduled-orders')?.checked
-        },
+        delivMin: parseFloat(document.getElementById('cfg-deliv-min')?.value) || 0,
+        delivFreeAbove: parseFloat(document.getElementById('cfg-deliv-free')?.value) || 0,
+        delivServiceFee: parseFloat(document.getElementById('cfg-deliv-service')?.value) || 0,
         
-        tableService: {
-            feeActive: document.getElementById('cfg-table-service-fee')?.checked,
-            feeValue: parseFloat(document.getElementById('cfg-table-fee-value')?.value) || 0
-        },
+        askExtraInfo: document.getElementById('cfg-deliv-extra')?.checked,
+        mandatoryComplement: document.getElementById('cfg-deliv-comp')?.checked,
+        allowScheduled: document.getElementById('cfg-deliv-sched')?.checked,
+        
         updatedAt: serverTimestamp()
     };
 
     try {
         await setDoc(doc(db, "config", "pedidos"), data, { merge: true });
-        alert("Configurações salvas com sucesso!");
-    } catch(e) { 
-        console.error(e); 
-        alert("Erro ao salvar configurações.");
-    }
-}
+        window.showToast("Sucesso", "Configurações salvas!");
+    } catch(e) { window.showToast("Erro", "Falha ao salvar", true); }
+};
+window.renderizarListaBairrosConfig = () => {
+    const container = document.getElementById('lista-bairros-config');
+    if(!container) return;
+    
+    container.innerHTML = '';
+    // Pega do seu objeto global de configuração (carregado do banco)
+    const bairros = configEntregaAtual?.deliveryDistricts || []; 
 
-// 4. CONFIGURAÇÃO DE ENTREGA (MODAL)
-window.selectDeliveryOption = (el, type) => {
+    if(bairros.length === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-center text-sm py-4">Nenhum bairro cadastrado.</p>';
+        return;
+    }
+
+    bairros.forEach((b, idx) => {
+        container.innerHTML += `
+            <div class="flex justify-between items-center bg-gray-50 p-2 rounded mb-2 border">
+                <span class="text-sm font-bold text-gray-700">${b.nome}</span>
+                <div class="flex items-center gap-3">
+                    <span class="text-green-600 font-bold text-sm">R$ ${parseFloat(b.custo).toFixed(2)}</span>
+                    <button onclick="removerBairro(${idx})" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+        `;
+    });
+};
+
+// 4. Seleção visual no Modal de Delivery
+window.selectDeliveryOption = (element, mode) => {
+    // 1. Atualiza visualmente qual card está selecionado
     document.querySelectorAll('.delivery-option-card').forEach(c => c.classList.remove('selected'));
-    el.classList.add('selected');
-    el.dataset.selectedType = type;
+    element.classList.add('selected');
 
-    // Abre o sub-modal específico conforme a escolha (Img 3 e 4)
-    if (type === 'fixed') {
+    // 2. Lógica para abrir o modal correto
+    if (mode === 'fixed') {
+        // Abre o modal de Preço Fixo
         document.getElementById('modal-fixed-price').classList.remove('hidden');
-    } else if (type === 'district') {
+    } 
+    else if (mode === 'district') {
+        // Abre o modal de Preço por Bairro
         document.getElementById('modal-neighborhood-price').classList.remove('hidden');
-        // Carrega os bairros já salvos para edição
-        if (configPedidos.deliveryDistricts) {
-            localBairros = [...configPedidos.deliveryDistricts];
-            renderListaBairros();
-        }
+        renderizarListaBairrosConfig(); // Garante que a lista apareça
     }
-}
+    // Para 'free', 'ifood' ou 'distance', apenas salva a seleção na memória
+    else {
+        console.log("Modo selecionado: " + mode);
+    }
+    
+    // (Opcional) Salva o modo escolhido numa variável global para depois enviar ao banco
+    window.currentDeliveryMode = mode;
+};;
+
+
+window.atualizarLabelPrecoDelivery = function(modo) {
+    const label = document.getElementById('delivery-price-label');
+    if (!label) return;
+
+    const modos = {
+        'free': 'Frete Grátis',
+        'fixed': 'Preço Fixo',
+        'district': 'Por Bairro',
+        'distance': 'Por Distância',
+        'ifood': 'Tabela iFood'
+    };
+    label.innerText = modos[modo] || 'Sem preço';
+};
 
 window.salvarConfigEntrega = async () => {
     const selected = document.querySelector('.delivery-option-card.selected');
     if(!selected) return;
     
     const type = selected.dataset.selectedType;
-    await setDoc(doc(db, "config", "pedidos"), { deliveryMode: type }, { merge: true });
-    
-    document.getElementById('delivery-settings-modal').classList.add('hidden');
-    carregarConfigPedidos(); 
-    alert("Configuração de entrega salva!");
+    try {
+        await setDoc(doc(db, "config", "pedidos"), { deliveryMode: type }, { merge: true });
+        document.getElementById('delivery-settings-modal').classList.add('hidden');
+        
+        // Recarrega para atualizar o label "Sem preço" para o novo modo
+        carregarConfigPedidos(); 
+        showToast("Sucesso", "Modo de entrega atualizado!");
+    } catch(e) {
+        showToast("Erro", "Falha ao salvar modo de entrega.", true);
+    }
 }
 
 function aplicarEstiloImpressao(size) {
@@ -1198,27 +1164,6 @@ function aplicarEstiloImpressao(size) {
     }
 }
 // dashboard.js
-window.salvarConfigPedidos = async () => {
-    const data = {
-        accept: document.getElementById('cfg-accept-orders')?.checked,
-        delivery: document.getElementById('cfg-delivery-active')?.checked,
-        pickup: document.getElementById('cfg-pickup-active')?.checked,
-        // Opções avançadas
-        delivMin: parseFloat(document.getElementById('cfg-deliv-min').value) || 0,
-        delivFreeAbove: parseFloat(document.getElementById('cfg-deliv-free').value) || 0,
-        pickupSched: document.getElementById('cfg-pick-sched').checked,
-        tableFee: parseFloat(document.getElementById('cfg-table-fee-value')?.value) || 0,
-        updatedAt: serverTimestamp()
-    };
-
-    try {
-        await setDoc(doc(db, "config", "pedidos"), data, { merge: true });
-        // TIREI O ALERT E COLOQUEI O TOAST (Img 2)
-        showToast("Sucesso", "Configurações salvas com sucesso!");
-    } catch(e) { 
-        showToast("Erro", "Não foi possível salvar.", true);
-    }
-}
 
 // CORREÇÃO DO NOTIFY TOGGLE (Img 5)
 window.showToast = (title, msg, isError = false) => {
@@ -1303,29 +1248,33 @@ window.salvarPrecoFixo = async () => {
 };
 
 // --- PREÇO POR BAIRRO ---
-let localBairros = [];
+window.localBairros = [];
 
 window.adicionarBairroLista = () => {
     const nome = document.getElementById('bairro-nome').value;
     const custo = parseFloat(document.getElementById('bairro-custo').value) || 0;
-    
     if(!nome) return;
     
-    localBairros.push({ nome, custo });
+    window.localBairros.push({ nome, custo });
     renderListaBairros();
     document.getElementById('bairro-nome').value = '';
     document.getElementById('bairro-custo').value = '';
 };
+window.removerBairroLista = (idx) => {
+    window.localBairros.splice(idx, 1);
+    renderListaBairros();
+};
 
 function renderListaBairros() {
     const container = document.getElementById('lista-bairros-config');
-    container.innerHTML = localBairros.map((b, idx) => `
+    if(!container) return;
+    container.innerHTML = window.localBairros.map((b, idx) => `
         <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg border mb-2">
             <span class="font-bold text-sm text-gray-700">${b.nome}</span>
             <div class="flex items-center gap-4">
                 <span class="font-bold text-cyan-700">R$ ${b.custo.toFixed(2)}</span>
-                <button onclick="localBairros.splice(${idx}, 1); renderListaBairros();" class="text-red-500">
-                    <i class="fas fa-times"></i>
+                <button onclick="removerBairroLista(${idx})" class="text-red-500 p-2 hover:bg-red-50 rounded-lg transition">
+                    <i class="fas fa-trash-alt"></i>
                 </button>
             </div>
         </div>
@@ -1340,6 +1289,16 @@ window.salvarBairrosBanco = async () => {
         }, { merge: true });
         showToast("Sucesso", "Tabela de bairros salva!");
         document.getElementById('modal-neighborhood-price').classList.add('hidden');
+    } catch (e) { console.error(e); }
+};
+window.salvarModoIfood = async () => {
+    try {
+        await setDoc(doc(db, "config", "pedidos"), { 
+            deliveryMode: 'ifood' 
+        }, { merge: true });
+        showToast("Sucesso", "Tabela de preços iFood ativada!");
+        document.getElementById('delivery-settings-modal').classList.add('hidden');
+        carregarConfigPedidos();
     } catch (e) { console.error(e); }
 };
 // --- MÓDULO FINANCEIRO (Adicione ao final do js/dashboard.js) ---
@@ -2588,6 +2547,46 @@ window.abrirModalEdicaoDash = (id) => {
     if (typeof window.mudarAba === 'function') window.mudarAba('sobre');
 };
 // Função para Salvar/Atualizar o produto no Firebase (usada pelo botão do modal)
+// Função que faz o upload da imagem do produto para o Firebase Storage
+window.handleImageUpload = async (input) => {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const loading = document.getElementById('upload-loading');
+        
+        if(loading) loading.classList.remove('hidden');
+
+        try {
+            // Cria uma referência única no Storage
+            const storageRef = ref(storage, `produtos/${Date.now()}_${file.name}`);
+            
+            // Faz o upload
+            await uploadBytes(storageRef, file);
+            
+            // Pega a URL para salvar no banco
+            const url = await getDownloadURL(storageRef);
+            
+            // Atualiza a visualização no modal
+            const preview = document.getElementById('preview-image');
+            const icon = document.getElementById('icon-image');
+            const inputHidden = document.getElementById('edit-image-url');
+
+            if(preview) {
+                preview.src = url;
+                preview.classList.remove('hidden');
+            }
+            if(icon) icon.classList.add('hidden');
+            if(inputHidden) inputHidden.value = url;
+            
+            showToast("Sucesso", "Imagem carregada!");
+
+        } catch (error) {
+            console.error("Erro no upload da imagem:", error);
+            showToast("Erro", "Falha ao enviar imagem.", true);
+        } finally {
+            if(loading) loading.classList.add('hidden');
+        }
+    }
+};  
 window.salvarProduto = async function() {
     const id = document.getElementById('edit-id').value;
     const priceInput = document.getElementById('edit-price').value;
@@ -2617,8 +2616,11 @@ window.salvarProduto = async function() {
             showToast("Criado", "Novo produto adicionado!");
         }
         document.getElementById('product-modal').classList.add('hidden');
+        // Atualiza a lista após salvar
+        renderizarListaProdutos(); 
     } catch (e) {
-        console.error(error);
+        // O ERRO ESTAVA AQUI: você usava 'error' mas declarou 'e'
+        console.error("Erro ao salvar produto:", e); 
         showToast("Erro", "Falha ao salvar no banco de dados.", true);
     }
 };
@@ -2638,6 +2640,7 @@ window.deletarProduto = async function() {
         showToast("Erro", "Erro ao excluir produto.", true);
     }
 };
+
 
 window.desconectarIfood = () => {
     ifoodToken = null;
