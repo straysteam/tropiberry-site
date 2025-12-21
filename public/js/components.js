@@ -102,7 +102,7 @@ export function renderizarHeaderGlobal() {
         </button>
     </nav>
     <div class="md:hidden h-20"></div>
-    `;
+    `;  
 
     headerPlaceholder.innerHTML = headerHTML;
 }

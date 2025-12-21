@@ -2640,6 +2640,36 @@ window.deletarProduto = async function() {
         showToast("Erro", "Erro ao excluir produto.", true);
     }
 };
+// Função para abrir o simulador
+window.abrirSimuladorMobile = function() {
+    const modal = document.getElementById('modal-simulador-mobile');
+    const iframe = document.getElementById('iframe-mobile');
+    
+    if (modal && iframe) {
+        // Define a URL apenas ao abrir para recarregar o conteúdo
+        iframe.src = 'index.html'; 
+        
+        modal.classList.remove('hidden');
+        modal.classList.add('flex'); // Garante flex para centralizar
+        document.body.style.overflow = 'hidden'; // Trava o scroll do dashboard
+    }
+}
+
+// Função para fechar o simulador
+window.fecharSimuladorMobile = function() {
+    const modal = document.getElementById('modal-simulador-mobile');
+    const iframe = document.getElementById('iframe-mobile');
+    
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        
+        // Limpa o src para parar vídeos ou sons se houver
+        if(iframe) iframe.src = '';
+        
+        document.body.style.overflow = ''; // Destrava o scroll
+    }
+}
 
 
 window.desconectarIfood = () => {
