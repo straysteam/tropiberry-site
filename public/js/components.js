@@ -106,3 +106,73 @@ export function renderizarHeaderGlobal() {
 
     headerPlaceholder.innerHTML = headerHTML;
 }
+// js/components.js
+
+export function MesaCard(mesa) {
+    // Define estilos baseados no status
+    let statusStyles = {
+        bg: 'bg-white',
+        border: 'border-gray-200',
+        icon: '<i class="fas fa-chair text-gray-300 text-3xl"></i>',
+        text: 'text-green-600',
+        label: 'Livre',
+        extra: ''
+    };
+
+    if (mesa.status === 'ocupada') {
+        statusStyles = {
+            bg: 'bg-red-50',
+            border: 'border-red-500',
+            icon: '<i class="fas fa-utensils text-red-500 text-3xl"></i>',
+            text: 'text-red-600',
+            label: 'Ocupada',
+            extra: `
+                <div class="text-center mt-2 w-full pt-2 border-t border-red-200">
+                    <p class="text-sm font-bold text-gray-800">R$ ${mesa.total ? mesa.total.toFixed(2) : '0.00'}</p>
+                    <p class="text-[10px] text-gray-500 flex items-center justify-center gap-1">
+                        <i class="far fa-clock"></i> ${mesa.tempo || '0min'}
+                    </p>
+                </div>`
+        };
+    } else if (mesa.status === 'pagamento') {
+        statusStyles = {
+            bg: 'bg-yellow-50',
+            border: 'border-yellow-400',
+            icon: '<i class="fas fa-hand-holding-usd text-yellow-600 text-3xl animate-bounce"></i>',
+            text: 'text-yellow-700',
+            label: 'Pagando...',
+            extra: '<p class="text-[10px] text-yellow-600 mt-2 font-bold">Aguardando fechamento</p>'
+        };
+    }
+
+    // Retorna o HTML do cartão
+    return `
+        <div onclick="window.abrirMesaPDV(${mesa.id}, '${mesa.nome}')" 
+             class="table-card relative p-4 rounded-2xl border-2 ${statusStyles.border} ${statusStyles.bg} flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition transform hover:-translate-y-1 h-48">
+            
+            <div class="absolute top-2 left-3 font-bold text-gray-400 text-[10px] uppercase tracking-wider">${mesa.ambiente || 'Salão'}</div>
+            <div class="absolute top-2 right-3 font-bold text-gray-800 text-sm">#${mesa.id}</div>
+            
+            <div class="mb-3">${statusStyles.icon}</div>
+            
+            <h4 class="font-bold text-gray-700 text-lg mb-1">${mesa.nome}</h4>
+            <span class="text-xs font-bold ${statusStyles.text} uppercase tracking-wider bg-white/50 px-2 py-1 rounded-full">
+                ${statusStyles.label}
+            </span>
+
+            ${statusStyles.extra}
+        </div>
+    `;
+}
+
+export function BotaoNovaMesa() {
+    return `
+        <div onclick="alert('Funcionalidade: Adicionar nova mesa ao mapa')" 
+             class="h-48 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-400 hover:text-cyan-600 transition group">
+            <div class="w-12 h-12 rounded-full bg-gray-100 group-hover:bg-cyan-100 flex items-center justify-center mb-2 transition">
+                <i class="fas fa-plus text-xl"></i>
+            </div>
+            <span class="text-xs font-bold">Adicionar Mesa</span>
+        </div>
+    `;
+}

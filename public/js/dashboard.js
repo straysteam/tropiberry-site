@@ -3,6 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebas
 import { getFirestore, collection, onSnapshot, doc, updateDoc, orderBy, query, getDoc, setDoc, addDoc, serverTimestamp, getDocs, deleteDoc, limit, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { monitorarEstadoAuth, verificarAdminNoBanco, db as authDb, fazerLogout } from './auth.js';
+import { MesaCard, BotaoNovaMesa } from './components.js';
 const db = authDb;
 const storage = getStorage(authDb.app);
 const notificationSound = document.getElementById('notif-sound');
@@ -2670,6 +2671,7 @@ window.fecharSimuladorMobile = function() {
         document.body.style.overflow = ''; // Destrava o scroll
     }
 }
+
 
 
 window.desconectarIfood = () => {

@@ -1,10 +1,10 @@
 const functions = require("firebase-functions");
-const { MercadoPagoConfig, Payment } = require("mercadopago");
+const { MercadoPagoConfig, Payment, Preference } = require("mercadopago"); // Adicionei Preference aqui no topo
 const cors = require("cors")({ origin: true });
 
-// --- ATENÇÃO: COLE SUA CHAVE AQUI DENTRO DAS ASPAS ---
+// --- ATENÇÃO: SUA CHAVE JÁ ESTÁ CONFIGURADA ---
 const client = new MercadoPagoConfig({ 
-    accessToken: 'APP_USR-2318711496313017-121623-db65575ab8e0daaccfadfa4a14fdee51-333898620', // <--- MUDE ISSO PELA SUA CHAVE "APP_USR-..."
+    accessToken: 'APP_USR-2318711496313017-121623-db65575ab8e0daaccfadfa4a14fdee51-333898620', 
     options: { timeout: 5000 }
 });
 
@@ -15,12 +15,14 @@ exports.criarPagamento = functions.https.onRequest((req, res) => {
         }
 
         try {
-            // Adicionamos 'items' e 'method' na recepção dos dados
             const { items, playerInfo, total, method } = req.body;
 
             console.log(`Iniciando pagamento via ${method.toUpperCase()} para:`, playerInfo.email || "cliente@tropyberry.com");
+            
+            // Debug: Ver o que chegou
+            console.log("Itens recebidos:", JSON.stringify(items));
 
-            // --- LÓGICA PARA PIX (Transparente) ---
+            // --- LÓGICA PARA PIX ---
             if (method === 'pix') {
                 const payment = new Payment(client);
                 const result = await payment.create({
@@ -29,7 +31,7 @@ exports.criarPagamento = functions.https.onRequest((req, res) => {
                         description: `Pedido Tropyberry - ${playerInfo.name}`,
                         payment_method_id: 'pix',
                         payer: {
-                            email: 'cliente@tropyberry.com',
+                            email: playerInfo.email || 'cliente@tropyberry.com',
                             first_name: playerInfo.name.split(" ")[0],
                             last_name: playerInfo.name.split(" ").slice(1).join(" ") || "Cliente",
                             identification: { type: "CPF", number: "19119119100" } // CPF Genérico
@@ -51,17 +53,23 @@ exports.criarPagamento = functions.https.onRequest((req, res) => {
                 }
             } 
             
-            // --- LÓGICA PARA CARTÃO (Link Seguro - Checkout Pro) ---
+            // --- LÓGICA PARA CARTÃO ---
             else if (method === 'card') {
-                const { Preference } = require("mercadopago");
                 const preference = new Preference(client);
 
-                 // Prepara os itens para a preferência
+                 // ========================================================
+                 // AQUI ESTAVA O ERRO! CORREÇÃO ABAIXO:
+                 // ========================================================
                  const mpItems = items.map(i => ({
-                    id: String(i.id), title: i.name, quantity: Number(i.quantity), unit_price: Number(i.price)
+                    id: String(i.id),
+                    title: i.title,           // <--- MUDADO DE i.name PARA i.title
+                    quantity: Number(i.quantity),
+                    unit_price: Number(i.unit_price), // <--- MUDADO DE i.price PARA i.unit_price
+                    currency_id: 'BRL',
+                    description: i.description || 'Produto'
                 }));
+                // ========================================================
 
-                // !!! IMPORTANTE: TROQUE "SEU-SITE.web.app" PELO SEU LINK REAL DO FIREBASE !!!
                 const siteUrl = "https://tropiberry.web.app"; 
 
                 const result = await preference.create({
@@ -69,6 +77,7 @@ exports.criarPagamento = functions.https.onRequest((req, res) => {
                         items: mpItems,
                         payer: {
                             name: playerInfo.name,
+                            email: playerInfo.email || 'cliente@tropyberry.com',
                             phone: { area_code: "83", number: playerInfo.phone }
                         },
                         back_urls: {
@@ -78,8 +87,8 @@ exports.criarPagamento = functions.https.onRequest((req, res) => {
                         },
                         auto_return: "approved",
                         payment_methods: {
-                            excluded_payment_types: [{ id: "ticket" }, { id: "atm" }], // Força cartão
-                            excluded_payment_methods: [{ id: "pix" }] // Exclui pix daqui pois já temos separado
+                            excluded_payment_types: [{ id: "ticket" }, { id: "atm" }], 
+                            excluded_payment_methods: [{ id: "pix" }]
                         }
                     }
                 });
@@ -87,7 +96,8 @@ exports.criarPagamento = functions.https.onRequest((req, res) => {
                 res.status(200).json({
                     success: true,
                     type: 'card_link',
-                    link: result.init_point
+                    init_point: result.init_point, // Garante envio correto
+                    sandbox_init_point: result.sandbox_init_point // Garante envio correto
                 });
             } else {
                 res.status(400).json({ error: "Método de pagamento inválido." });
@@ -98,4 +108,4 @@ exports.criarPagamento = functions.https.onRequest((req, res) => {
             res.status(500).json({ error: error.message || "Erro desconhecido no servidor." });
         }
     });
-});
+}); 

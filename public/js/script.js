@@ -6,7 +6,7 @@ import {
     getDoc, 
     setDoc, 
     addDoc, 
-    updateDoc, // ADICIONE ISSO AQUI
+    updateDoc, 
     serverTimestamp, 
     query, 
     orderBy, 
@@ -78,6 +78,9 @@ window.abrirModalRapido = abrirModalRapido;
 window.fecharModalRapido = fecharModalRapido;
 window.toggleReceipt = toggleReceipt;
 
+// Variável para guardar o email do usuário logado
+let loggedUserEmail = null;
+
 // === INICIALIZAÇÃO ===
 document.addEventListener('DOMContentLoaded', async () => {
 
@@ -101,6 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     monitorarComplementosGlobal(); 
     carregarProdutosDoBanco();
     monitorarStatusLojaNoBanco();
+    monitorarInfoLoja();
     
     // 2. Monitora o Login e preenche os botões no Header
     monitorarEstadoAuth(async (user) => {
@@ -114,6 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const adminLinks = document.getElementById('menu-admin-links');
 
         if (user) {
+            loggedUserEmail = user.email;
             currentUserIsAdmin = await verificarAdminNoBanco(user.email);
             
             // 1. Atualiza Header Desktop (Mostra Ícone e Nome)
@@ -149,6 +154,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         } else {
             currentUserIsAdmin = false;
+            loggedUserEmail = null;
 
             // 1. Header Desktop (Mostra botões Entrar/Cadastrar)
             if(desktopAuthArea) {
@@ -209,22 +215,17 @@ function renderProducts(containerId, filterCategory) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    // 1. Filtra por categoria (Lógica que já existia)
+    // 1. Filtra por categoria
     let listaParaExibir = filterCategory ? products.filter(p => p.category === filterCategory) : products;
 
-    // === 2. NOVO: FILTRO DE ESTOQUE (A MÁGICA ACONTECE AQUI) ===
+    // 2. FILTRO DE ESTOQUE
     listaParaExibir = listaParaExibir.filter(p => {
-        // Se o controle de estoque estiver ligado E o estoque for 0 ou menor -> ESCONDE
         if (p.stockControl === true && (p.stock || 0) <= 0) return false;
-        
-        // Se estiver marcado manualmente como indisponível -> ESCONDE
         if (p.available === false) return false;
-
-        return true; // Mostra o resto
+        return true;
     });
-    // ============================================================
 
-    // Atualiza botões de filtro (Visual)
+    // Atualiza botões de filtro
     if(window.location.pathname.includes('cardapio.html')) {
         document.querySelectorAll('.btn-filter').forEach(btn => {
             const btnCat = btn.getAttribute('data-cat');
@@ -233,7 +234,6 @@ function renderProducts(containerId, filterCategory) {
         });
     }
 
-    // Se não sobrou nenhum produto após os filtros
     if (listaParaExibir.length === 0) {
         if (products.length > 0) {
              container.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400">Nenhum produto disponível nesta categoria.</div>`;
@@ -243,9 +243,8 @@ function renderProducts(containerId, filterCategory) {
         return;
     }
 
-    // Renderiza o HTML (Usei 'listaParaExibir' em vez de 'filtered')
+    // Renderiza o HTML
     container.innerHTML = listaParaExibir.map(product => {
-        // === LÓGICA DO PREÇO INTELIGENTE (FILTRO EMBALAGEM) ===
         const hasComplements = product.complementIds && product.complementIds.length > 0;
         let prefixPrice = hasComplements ? '<span class="text-[10px] text-gray-500 font-normal mr-1 block">A partir de</span>' : '';
         
@@ -253,7 +252,7 @@ function renderProducts(containerId, filterCategory) {
 
         if (displayPrice === 0 && hasComplements) {
             let minPackagingCost = 0;
-            if(globalComplements) { // Verificação de segurança
+            if(globalComplements) {
                 product.complementIds.forEach(grpId => {
                     const group = globalComplements[grpId];
                     if (group && group.required && group.internalCategory === 'embalagem' && group.options && group.options.length > 0) {
@@ -266,12 +265,10 @@ function renderProducts(containerId, filterCategory) {
         }
 
         let priceValueHtml = `R$ ${displayPrice.toFixed(2).replace('.',',')}`;
-
         let priceHtml = product.originalPrice && product.originalPrice > product.price 
             ? `<div class="flex flex-col items-end"><span class="text-xs text-gray-400 line-through">R$ ${parseFloat(product.originalPrice).toFixed(2).replace('.',',')}</span><span class="text-lg font-extrabold text-green-600 flex flex-col items-end leading-none">${prefixPrice}${priceValueHtml}</span></div>`
             : `<div class="flex flex-col items-end leading-none">${prefixPrice}<span class="text-lg font-extrabold text-cyan-900">${priceValueHtml}</span></div>`;
 
-        // Tags
         let tagsHtml = '';
         if (product.tags && product.tags.length > 0) {
             tagsHtml = '<div class="flex flex-wrap gap-1 mt-2 mb-1">'; 
@@ -286,8 +283,6 @@ function renderProducts(containerId, filterCategory) {
         if(product.serves && product.serves > 1) extraInfo += `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded mr-2"><i class="fas fa-user-friends text-cyan-600"></i> Serve ${product.serves}</span>`;
         if(product.weight) extraInfo += `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded"><i class="fas fa-weight-hanging text-cyan-600"></i> ${product.weight}${product.unit}</span>`;
 
-        // === PEQUENO DETALHE: MOSTRAR SE TEM POUCO ESTOQUE (OPCIONAL) ===
-        // Se quiser mostrar "Últimas unidades" para o cliente:
         let stockAlert = '';
         if (product.stockControl && product.stock <= 5 && product.stock > 0) {
             stockAlert = `<span class="absolute top-2 left-2 bg-red-500 text-white text-[10px] px-2 py-1 rounded font-bold animate-pulse z-10">Restam ${product.stock}</span>`;
@@ -371,19 +366,17 @@ async function carregarDadosProduto(id, containerPrefix) {
             infoContainer.innerHTML = infoHtml;
         }
 
-        // --- CÁLCULO DE COMPLEMENTOS E PREÇO (FILTRO EMBALAGEM) ---
+        // --- CÁLCULO DE COMPLEMENTOS E PREÇO ---
         const compsContainer = document.getElementById(`${containerPrefix}-complements`) || document.getElementById('complements-section');
-        let minPackagingCost = 0; // Valor a somar apenas se for embalagem
+        let minPackagingCost = 0; 
 
         if (currentProductDetail.complementIds && currentProductDetail.complementIds.length > 0) {
-            // Carrega visualmente E calcula o preço da embalagem
             minPackagingCost = await carregarComplementosDoProduto(currentProductDetail.complementIds, compsContainer, containerPrefix);
         } else {
             if(compsContainer) compsContainer.innerHTML = '';
         }
 
         // Define Preço para Exibição
-        // Se o preço base for 0, usamos o mínimo APENAS das embalagens
         let basePriceDisplay = currentProductDetail.price;
         if (basePriceDisplay === 0 && minPackagingCost > 0) {
             basePriceDisplay = minPackagingCost;
@@ -460,7 +453,7 @@ async function carregarComplementosDoProduto(ids, containerElement, prefix) {
     if(!containerElement) return 0;
     containerElement.innerHTML = '';
     currentComplements = [];
-    let packagingMinPrice = 0; // Soma apenas embalagens
+    let packagingMinPrice = 0; 
 
     for (const groupId of ids) {
         try {
@@ -470,7 +463,6 @@ async function carregarComplementosDoProduto(ids, containerElement, prefix) {
                 currentComplements.push(group);
                 renderizarGrupoComplemento(group, containerElement, prefix);
 
-                // AQUI A MÁGICA: Só soma ao "A partir de" se for 'embalagem'
                 if (group.required && group.internalCategory === 'embalagem' && group.options && group.options.length > 0) {
                     const cheapestOption = group.options.reduce((min, opt) => (opt.price < min.price ? opt : min), group.options[0]);
                     packagingMinPrice += (cheapestOption.price || 0);
@@ -586,7 +578,6 @@ function atualizarTotalDetalhe(prefix) {
     const btn = document.getElementById(`${prefix}-total-btn`);
     if(btn) btn.innerText = `R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
     
-    // Atualiza botão mobile se estiver na página
     if(prefix === 'detail') {
         const btnMob = document.getElementById('detail-total-mobile');
         if(btnMob) btnMob.innerText = `R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
@@ -665,19 +656,17 @@ function adicionarAoCarrinhoDetalhado() {
     // 1. Adiciona ao array do carrinho
     cart.push(cartItem);
     
-    // 2. Atualiza a interface (badge, lista interna)
+    // 2. Atualiza a interface
     updateCartUI();
     
-    // 3. DISPARA A ANIMAÇÃO DO COPINHO (Wesley, aqui está a mágica!)
+    // 3. Animação
     animarVooParaCarrinho(window.event);
 
-    // 4. Mostra o aviso de sucesso
+    // 4. Aviso de sucesso
     showToast("Adicionado ao pedido!");
     
-    // 5. Fecha o modal (se estiver aberto)
+    // 5. Fecha o modal
     fecharModalRapido();
-
-    // OBS: A linha do toggleCart foi removida para o carrinho não abrir sozinho.
 }
 
 function carregarProdutosDoBanco() {
@@ -704,15 +693,12 @@ async function carregarCategoriasSite() {
     } catch(e) { console.error("Erro categorias:", e); }
 }
 function renderizarBotoesCategorias() {
-    // 1. Alterado para buscar o novo ID que criamos no HTML
     const container = document.getElementById('category-filters'); 
     
     if(!container) return;
 
-    // 2. Adicionado 'whitespace-nowrap' e 'flex-shrink-0' para o scroll funcionar no celular
     let html = `<button onclick="renderProducts('product-grid', null)" class="btn-filter px-6 py-2 bg-cyan-600 text-white rounded-full text-sm font-bold hover:bg-cyan-700 transition shadow-md whitespace-nowrap flex-shrink-0" data-cat="all">Todos</button>`;
     
-    // 3. Loop mantido idêntico, apenas atualizando as classes CSS dos botões gerados
     categories.forEach(cat => { 
         html += `<button onclick="renderProducts('product-grid', '${cat.slug}')" class="btn-filter px-6 py-2 bg-white border border-cyan-600 text-cyan-600 rounded-full text-sm font-bold hover:bg-cyan-50 transition whitespace-nowrap flex-shrink-0" data-cat="${cat.slug}">${cat.nome}</button>`; 
     });
@@ -774,8 +760,9 @@ function showToast(message, isError = false) {
         toast.classList.remove('translate-x-full', 'opacity-0', 'pointer-events-none'); setTimeout(() => { toast.classList.add('translate-x-full', 'opacity-0', 'pointer-events-none'); }, 3000);
     }
 }
-function addToCart(id) { /* Função legada, agora usamos adicionarAoCarrinhoDetalhado */ }
+function addToCart(id) { /* Função legada */ }
 function changeQuantity(id, delta) { const item = cart.find(i => i.id === id); if (item) { item.quantity += delta; if (item.quantity <= 0) cart = cart.filter(i => i.id !== id); updateCartUI(); } }
+
 function updateCartUI() {
     const cartItemsContainer = document.getElementById('cart-items');
     const cartTotalElement = document.getElementById('cart-total');
@@ -783,7 +770,6 @@ function updateCartUI() {
 
     if (!cartItemsContainer || !cartTotalElement) return;
 
-    // 1. Limpa o container antes de renderizar
     cartItemsContainer.innerHTML = '';
     
     if (cart.length === 0) {
@@ -793,8 +779,6 @@ function updateCartUI() {
                 <p class="text-sm font-medium">Seu carrinho está vazio</p>
             </div>`;
     } else {
-        // === NOVO: BOTÃO DE LIMPAR CARRINHO ===
-        // Inserimos o cabeçalho com o botão antes de listar os itens
         const headerHtml = `
             <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Itens do Pedido</span>
@@ -805,7 +789,6 @@ function updateCartUI() {
         `;
         cartItemsContainer.innerHTML = headerHtml;
 
-        // 2. Renderiza cada item do carrinho (MANTIDO)
         cart.forEach(item => {
             const itemHtml = `
                 <div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm group mb-2">
@@ -832,7 +815,25 @@ function updateCartUI() {
         });
     }
 
-    // Mantendo a lógica de persistência e totais que seu script já possuía
+    // === ADIÇÃO: BOTÃO "VOLTAR PARA PEDIDO" DENTRO DO CARRINHO ===
+    // Verifica se existe um pedido recente
+    const savedOrder = localStorage.getItem('tropyberry_last_order');
+    if (savedOrder) {
+        const orderData = JSON.parse(savedOrder);
+        // Só mostra se for recente (< 30 min)
+        if ((Date.now() - orderData.timestamp) / 1000 / 60 < 30) {
+            const backBtnHtml = `
+                <div class="mt-4 pt-2 border-t border-gray-100 text-center animate-fade-in-up">
+                    <button onclick="abrirUltimoPedido()" class="w-full bg-yellow-100 text-yellow-700 border border-yellow-300 rounded-lg py-2 text-sm font-bold flex items-center justify-center gap-2 hover:bg-yellow-200 transition">
+                        <i class="fas fa-bell animate-pulse"></i> Acompanhar Pedido Anterior
+                    </button>
+                </div>
+            `;
+            cartItemsContainer.insertAdjacentHTML('beforeend', backBtnHtml);
+        }
+    }
+    // =============================================================
+
     localStorage.setItem('tropyberry_cart', JSON.stringify(cart));
 
     const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
@@ -845,19 +846,19 @@ function updateCartUI() {
     }
     const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
 
-// Atualiza Desktop
-const badgeDesk = document.getElementById('cart-count-desktop'); // Mudei o ID no HTML acima
-if(badgeDesk) {
-    badgeDesk.innerText = totalItems;
-    badgeDesk.classList.toggle('hidden', totalItems === 0);
-}
+    // Atualiza Desktop
+    const badgeDesk = document.getElementById('cart-count-desktop'); 
+    if(badgeDesk) {
+        badgeDesk.innerText = totalItems;
+        badgeDesk.classList.toggle('hidden', totalItems === 0);
+    }
 
-// Atualiza Mobile
-const badgeMob = document.getElementById('cart-count-mobile');
-if(badgeMob) {
-    badgeMob.innerText = totalItems;
-    badgeMob.classList.toggle('hidden', totalItems === 0);
-}
+    // Atualiza Mobile
+    const badgeMob = document.getElementById('cart-count-mobile');
+    if(badgeMob) {
+        badgeMob.innerText = totalItems;
+        badgeMob.classList.toggle('hidden', totalItems === 0);
+    }
 }
 function startCheckout() {
     if (cart.length === 0) return showToast("Carrinho vazio!");
@@ -866,12 +867,10 @@ function startCheckout() {
     const checkoutModal = document.getElementById('checkout-modal');
     
     if (!checkoutModal) {
-        // Se o modal não existe nesta página (ex: produto.html), vai para a home
         window.location.href = 'index.html?action=checkout';
         return;
     }
 
-    // Se estiver na index.html, abre o modal direto
     checkoutModal.classList.remove('hidden');
     showStep('step-service');
 }
@@ -884,18 +883,17 @@ function selectService(type) {
     else f.classList.remove('hidden'); 
     
     showStep('step-address'); 
-    renderReceipt(); // ADICIONE ESSA LINHA AQUI para atualizar o frete ao selecionar
+    renderReceipt(); 
 }
 function checkSavedAddress() { const s = localStorage.getItem('tropyberry_user'); if (s) { const d = JSON.parse(s); document.getElementById('input-name').value = d.name || ''; document.getElementById('input-phone').value = d.phone || ''; document.getElementById('input-street').value = d.street || ''; document.getElementById('input-number').value = d.number || ''; document.getElementById('input-district').value = d.district || ''; document.getElementById('input-comp').value = d.comp || ''; if(d.street) { document.getElementById('saved-address-card').classList.remove('hidden'); document.getElementById('saved-address-card').classList.add('flex'); document.getElementById('saved-address-text').innerText = `${d.street}, ${d.number}`; } } }
 function useSavedAddress() { goToPaymentMethod(); }
 function goToPaymentMethod() {
     const n = document.getElementById('input-name').value; 
     const p = document.getElementById('input-phone').value; 
-    const e = document.getElementById('input-email').value; // Captura o email que você adicionou no HTML
+    const e = document.getElementById('input-email').value;
 
     if (!n || !p || !e) return showToast("Preencha Nome, Telefone e E-mail.");
 
-    // Armazena os dados do cliente
     currentOrder.customer = { name: n, phone: p, email: e };
 
     if (currentOrder.method === 'delivery') {
@@ -913,30 +911,145 @@ function goToPaymentMethod() {
 }
 document.getElementById('input-district')?.addEventListener('input', () => {
     updateCartUI();
-    renderReceipt();     
+    renderReceipt();      
 });
+
+// === PROCESSAMENTO DE PAGAMENTO (CORRIGIDO) ===
 async function processPayment() {
     const payMethod = document.querySelector('input[name="pay-method"]:checked')?.value;
-    const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
+    // Recalcula totais
+    const subtotal = cart.reduce((acc, item) => {
+        let p = item.price;
+        if (typeof p === 'string') p = parseFloat(p.replace('R$', '').replace(',', '.').trim());
+        return acc + (p * item.quantity);
+    }, 0);
+
     const frete = (typeof calcularFrete === 'function') ? calcularFrete() : 0;
     const totalFinal = subtotal + frete;
-    const triggerGoogleCalc = () => {
-    // Se o modo for Google Maps
-    if (configPedidos && configPedidos.deliveryMode === 'google') {
-        clearTimeout(googleDebounceTimer);
-        googleDebounceTimer = setTimeout(() => {
-            window.calcularDistanciaGoogle(); // Chama a API
-        }, 1000); // Espera 1 segundo após parar de digitar
-    } 
-    // Se for modo Bairro ou Fixo
-    else {
-        renderReceipt(); // Recalcula na hora
-    }
-};
 
     if (!payMethod) return showToast("Selecione um método de pagamento", true);
 
     const btn = document.getElementById('btn-generate-pay');
+
+    // =================================================================
+    // CARTÃO DE CRÉDITO
+    // =================================================================
+    if (payMethod === 'card') {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+        try {
+            // 1. LIMPEZA ABSOLUTA DOS DADOS
+            const cleanItems = cart.map(item => {
+                // Passo A: Converte tudo para string primeiro
+                let strPrice = String(item.price);
+                
+                // Passo B: Remove tudo que não for número, ponto ou vírgula
+                strPrice = strPrice.replace(/[^0-9.,]/g, '');
+
+                // Passo C: Normaliza vírgula para ponto
+                strPrice = strPrice.replace(',', '.');
+
+                // Passo D: Converte para FLOAT e depois arredonda para 2 casas
+                let finalPrice = parseFloat(strPrice);
+                
+                // Passo E: Segurança final - garante que é número
+                if (isNaN(finalPrice)) finalPrice = 1.00;
+                finalPrice = Number(finalPrice.toFixed(2)); // Truque para garantir 2 casas mas manter como Number
+
+                return {
+                    id: String(item.originalId || item.id),
+                    title: String(item.name).substring(0, 250),
+                    quantity: parseInt(item.quantity),
+                    unit_price: finalPrice, // <--- Aqui está indo o NÚMERO
+                    currency_id: "BRL",
+                    description: String(item.details || 'Sem adicionais').substring(0, 200)
+                };
+            });
+
+            // Adiciona Frete
+            if (frete > 0) {
+                cleanItems.push({
+                    id: "frete",
+                    title: "Taxa de Entrega",
+                    quantity: 1,
+                    unit_price: Number(frete.toFixed(2)),
+                    currency_id: "BRL",
+                    description: "Entrega Delivery"
+                });
+            }
+
+            const dadosParaEnvio = {
+                method: 'card',
+                total: Number(totalFinal.toFixed(2)),
+                playerInfo: {
+                    email: currentOrder.customer.email || 'cliente@tropiberry.com',
+                    name: currentOrder.customer.name || 'Cliente',
+                    phone: currentOrder.customer.phone,
+                    cpf: currentOrder.customer.cpf || ''
+                },
+                items: cleanItems
+            };
+
+            // =================================================================
+            // 🕵️ DEBUGGER DA VERDADE (OLHE ISSO NO CONSOLE)
+            // =================================================================
+            console.log("👇 COPIE O TEXTO ABAIXO SE DER ERRO 👇");
+            const jsonString = JSON.stringify(dadosParaEnvio, null, 2);
+            console.log(jsonString); 
+            // Verifique no console: "unit_price": 10.50 (SEM ASPAS É NÚMERO)
+            // Se estiver "unit_price": "10.50" (COM ASPAS É ERRO)
+            // =================================================================
+
+            // 2. CHAMA API
+            const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(dadosParaEnvio) // Envia o JSON stringificado
+            });
+
+            const data = await response.json();
+            console.log("✅ RESPOSTA API:", data);
+
+            // 3. SUCESSO OU ERRO
+            if (data.init_point || data.sandbox_init_point) {
+                // Salva no Banco e Redireciona...
+                const docRef = await addDoc(collection(db, "pedidos"), {
+                    customer: currentOrder.customer,
+                    items: cart,
+                    total: totalFinal,
+                    paymentMethod: 'card',
+                    method: currentOrder.method,
+                    status: 'Aguardando Pagamento',
+                    paymentStatus: 'pending',
+                    createdAt: serverTimestamp()
+                });
+
+                if (typeof saveLastOrder === 'function') saveLastOrder(docRef.id);
+                localStorage.setItem('temp_cart_backup', JSON.stringify(cart));
+                cart = [];
+                if (typeof updateCartUI === 'function') updateCartUI();
+                
+                window.location.href = data.init_point || data.sandbox_init_point;
+                return;
+
+            } else {
+                throw new Error(data.error || "Erro desconhecido na API.");
+            }
+
+        } catch (e) {
+            console.error("❌ ERRO NO PROCESSO:", e);
+            showToast("Erro: " + (e.message || "Tente novamente"), true);
+            btn.disabled = false;
+            btn.innerHTML = '<span>Finalizar Pedido</span><i class="fas fa-check-circle"></i>';
+        }
+    }
+
+    // =================================================================
+    // PIX (MANTÉM O PADRÃO)
+    // =================================================================
+    
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PIX...';
 
@@ -944,56 +1057,81 @@ async function processPayment() {
         let pixData = { qr_code: null, qr_code_base64: null };
 
         if (payMethod === 'pix') {
+             const cleanItems = cart.map(item => {
+                let p = String(item.price).replace(/[^0-9.,]/g, '').replace(',', '.');
+                let finalPrice = Number(parseFloat(p).toFixed(2));
+                
+                return {
+                    id: String(item.originalId || item.id),
+                    title: item.name,
+                    unit_price: finalPrice,
+                    quantity: parseInt(item.quantity),
+                    currency_id: "BRL"
+                };
+            });
+
+            if (frete > 0) {
+                cleanItems.push({
+                    id: "frete",
+                    title: "Taxa de Entrega",
+                    unit_price: Number(frete.toFixed(2)),
+                    quantity: 1,
+                    currency_id: "BRL"
+                });
+            }
+
             const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-        method: payMethod, 
-        total: totalFinal, 
-        playerInfo: currentOrder.customer, // AQUI: Mudei de 'customer' para 'playerInfo'
-        items: cart 
-    })
-});
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    method: payMethod,
+                    total: totalFinal,
+                    playerInfo: currentOrder.customer,
+                    items: cleanItems
+                })
+            });
 
             const data = await response.json();
-            console.log("Resposta da API:", data); // VEJA O ERRO NO CONSOLE DO NAVEGADOR (F12)
 
-            if (data.success) {
+            if (data.success || data.qr_code) {
                 pixData.qr_code = data.qr_code;
                 pixData.qr_code_base64 = data.qr_code_base64;
             } else {
-                throw new Error(data.error || "Erro na API de pagamento");
+                throw new Error(data.error || "Erro na API PIX");
             }
         }
 
         const docRef = await addDoc(collection(db, "pedidos"), {
-    customer: currentOrder.customer,
-    items: cart,
-    total: totalFinal,
-    paymentMethod: payMethod,
-    method: currentOrder.method, // ESTA LINHA ESTAVA FALTANDO! (delivery ou retirada)
-    status: 'Aguardando',
-    paymentStatus: 'pending',    // Adicionado para o dashboard reconhecer como "NÃO PAGO"
-    pixCode: pixData.qr_code,
-    pixQR: pixData.qr_code_base64,
-    createdAt: serverTimestamp()
-});
-        
-        saveLastOrder(docRef.id);
+            customer: currentOrder.customer,
+            items: cart,
+            total: totalFinal,
+            paymentMethod: payMethod,
+            method: currentOrder.method,
+            status: 'Aguardando',
+            paymentStatus: 'pending',
+            pixCode: pixData.qr_code,
+            pixQR: pixData.qr_code_base64,
+            createdAt: serverTimestamp()
+        });
+
+        if (typeof saveLastOrder === 'function') saveLastOrder(docRef.id);
         cart = [];
-        updateCartUI();
-        closeCheckout();
-        openOrderScreen(docRef.id);
+        if (typeof updateCartUI === 'function') updateCartUI();
+        if (typeof closeCheckout === 'function') closeCheckout();
+        if (typeof openOrderScreen === 'function') openOrderScreen(docRef.id);
         showToast("Pedido enviado!");
 
     } catch (e) {
         console.error("Erro completo:", e);
-        showToast("Falha ao gerar PIX. Verifique os dados ou tente outro método.", true);
+        showToast("Falha ao gerar pedido: " + e.message, true);
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<span>Finalizar Pedido</span><i class="fas fa-check-circle"></i>';
+        if (payMethod !== 'card') {
+            btn.disabled = false;
+            btn.innerHTML = '<span>Finalizar Pedido</span><i class="fas fa-check-circle"></i>';
+        }
     }
 }
+
 let countdownInterval = null;
 
    window.openOrderScreen = (orderId) => {
@@ -1001,7 +1139,6 @@ let countdownInterval = null;
     if(!screen) return;
     screen.classList.remove('hidden');
 
-    // Inicializa o mapa (Leaflet) - MANTIDO
     setTimeout(() => {
         const mapContainer = document.getElementById('final-map');
         if (mapContainer) {
@@ -1012,18 +1149,15 @@ let countdownInterval = null;
         }
     }, 400);
 
-    // Escuta mudanças no Firebase em tempo real - MANTIDO
     onSnapshot(doc(db, "pedidos", orderId), (docSnap) => {
         if (!docSnap.exists()) return;
         const order = docSnap.data();
 
-        // Atualiza IDs e Nomes na tela - MANTIDO
         document.getElementById('status-order-id').innerText = orderId.slice(-5).toUpperCase();
         document.getElementById('status-client-name').innerText = order.customer.name;
         document.getElementById('status-client-phone').innerText = order.customer.phone;
         document.getElementById('status-client-address').innerText = order.customer.address;
 
-        // === INSERÇÃO: LÓGICA DA BARRA DE PROGRESSO (ÍCONES) ===
         const steps = document.querySelectorAll('#order-screen .relative.z-10.flex.flex-col.items-center');
         const setStepActive = (index, active) => {
             if (!steps[index]) return;
@@ -1038,12 +1172,11 @@ let countdownInterval = null;
                 circle.classList.add('bg-gray-200', 'text-gray-500');
             }
         };
-        setStepActive(0, true); // Recebido
+        setStepActive(0, true); 
         setStepActive(1, ['Em Preparo', 'Pronto', 'Saiu para Entrega', 'Finalizado'].includes(order.status));
         setStepActive(2, ['Saiu para Entrega', 'Finalizado'].includes(order.status));
         setStepActive(3, order.status === 'Finalizado');
 
-        // === INSERÇÃO: ATUALIZAÇÃO DO BADGE DE PAGAMENTO ===
         const payBadge = document.getElementById('status-payment-badge');
         if (payBadge) {
             if (order.status === 'Cancelado' || order.status === 'Rejeitado') {
@@ -1058,7 +1191,6 @@ let countdownInterval = null;
             }
         }
 
-        // WhatsApp Button - MANTIDO
         const whatsappBtn = document.getElementById('btn-whatsapp-status');
         if (whatsappBtn) {
             const orderIdShort = orderId.slice(-5).toUpperCase();
@@ -1072,7 +1204,6 @@ let countdownInterval = null;
         const pixArea = document.getElementById('pix-qr-container');
         const pixSlot = document.getElementById('pix-qr-image-slot');
         
-        // Lógica do PIX e do Timer - MANTIDO
         if (order.paymentMethod === 'pix' && order.status === 'Aguardando' && order.paymentStatus !== 'paid') {
             if (!order.createdAt) return; 
 
@@ -1094,23 +1225,19 @@ let countdownInterval = null;
             }
         }
         
-        // Atualiza os itens e o total no resumo da conta - MANTIDO E CORRIGIDO
         renderReceiptFromOrder(order.items, order.total, order, orderId);
     });
 };
 
-// FUNÇÃO DE CÓPIA COM ANIMAÇÃO
 window.copyPixScreen = () => {
     const input = document.getElementById('pix-copy-paste-screen');
     const overlay = document.getElementById('copy-animation-overlay');
     
     if (!input || !input.value || input.value.includes("Aguardando")) return;
 
-    // Copia para a área de transferência
     navigator.clipboard.writeText(input.value).then(() => {
         showToast("Código PIX copiado!");
         
-        // Mostra a animação de sucesso sobre o campo
         if (overlay) {
             overlay.classList.remove('opacity-0', 'pointer-events-none');
             overlay.classList.add('opacity-100');
@@ -1129,17 +1256,13 @@ function iniciarContagemRegressiva(orderId, createdAt) {
     const timerDisplay = document.getElementById('pix-countdown-timer');
     if (!timerDisplay) return;
 
-    // 1. Calcula o tempo de expiração real (Criação + 5 min)
     const tempoCriacao = createdAt.seconds * 1000;
     const tempoExpiracao = tempoCriacao + (5 * 60 * 1000);
 
-    // Função interna para atualizar a tela
     const atualizarTela = async () => {
         const agora = Date.now();
         let restante = tempoExpiracao - agora;
 
-        // CORREÇÃO DO PULO PARA 7 MINUTOS:
-        // Se o relógio do usuário está atrasado e o cálculo deu mais de 5 min, trava em 5 min.
         if (restante > (5 * 60 * 1000)) {
             restante = (5 * 60 * 1000);
         }
@@ -1149,7 +1272,6 @@ function iniciarContagemRegressiva(orderId, createdAt) {
             countdownInterval = null;
             timerDisplay.innerText = "00:00";
             
-            // Cancela o pedido no Firebase
             try {
                 await updateDoc(doc(db, "pedidos", orderId), { 
                     status: 'Cancelado', 
@@ -1165,18 +1287,15 @@ function iniciarContagemRegressiva(orderId, createdAt) {
         timerDisplay.innerText = `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
     };
 
-    // Executa uma vez imediatamente para evitar o "flicker" de 05:00
     atualizarTela(); 
     countdownInterval = setInterval(atualizarTela, 1000);
 }
 
 
-// Função para o botão "Voltar para o pedido" funcionar
 window.abrirUltimoPedido = () => {
     const saved = localStorage.getItem('tropyberry_last_order');
     if (saved) {
         const d = JSON.parse(saved);
-        // Busca o status atual (se ele já pagou ou não) para carregar o link certo
         const statusType = d.status === 'Pago' ? 'paid' : 'pix_pending';
         window.openOrderScreen(d.id, statusType);
     } else {
@@ -1184,111 +1303,56 @@ window.abrirUltimoPedido = () => {
     }
 };
 
-// Chame monitorarConfiguracoes() no DOMContentLoaded
-// === CARREGAMENTO INICIAL COM PERSISTÊNCIA ===
 document.addEventListener('DOMContentLoaded', () => {
-    // Carrega o carrinho do banco local
     const savedCart = localStorage.getItem('tropyberry_cart');
     if (savedCart) {
         cart = JSON.parse(savedCart);
         
-        // Pequeno atraso para garantir que o Header Global já foi injetado no HTML
         setTimeout(() => {
             updateCartUI();
             
-            // VERIFICAÇÃO DE CHECKOUT: Abre o modal se o link tiver ?action=checkout
             const params = new URLSearchParams(window.location.search);
             if (params.get('action') === 'checkout' && cart.length > 0) {
                 startCheckout();
             }
-        }, 300); // 300ms é o tempo suficiente para o Header "nascer"
+        }, 300); 
     }
 });
-function renderTicketBooster() {
-    if (!configPedidos.ticketBooster || cart.length === 0) return '';
 
-    // Filtra produtos que NÃO estão no carrinho e ordena por preço (menor primeiro)
-    const cartIds = cart.map(item => item.originalId);
-    const sugestoes = products
-        .filter(p => !cartIds.includes(p.id))
-        .sort((a, b) => a.price - b.price)
-        .slice(0, 3); // Pega os 3 mais baratos
-
-    if (sugestoes.length === 0) return '';
-
-    return `
-        <div class="mt-6 border-t pt-4 animate-fade-in">
-            <p class="text-xs font-bold text-cyan-700 uppercase mb-3 flex items-center gap-2">
-                <i class="fas fa-rocket text-yellow-500"></i> Que tal adicionar?
-            </p>
-            <div class="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
-                ${sugestoes.map(p => `
-                    <div class="min-w-[140px] bg-white border rounded-xl p-2 shadow-sm">
-                        <img src="${p.image}" class="w-full h-20 object-cover rounded-lg mb-2">
-                        <h4 class="text-[10px] font-bold text-gray-700 truncate">${p.name}</h4>
-                        <div class="flex justify-between items-center mt-1">
-                            <span class="text-xs font-bold text-green-600">R$ ${p.price.toFixed(2)}</span>
-                            <button onclick="abrirModalRapido('${p.id}')" class="bg-cyan-100 text-cyan-600 p-1 rounded-lg hover:bg-cyan-600 hover:text-white transition">
-                                <i class="fas fa-plus text-[10px]"></i>
-                            </button>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-}
 function calcularFrete() {
-    // Se não for delivery, é zero
     if (!currentOrder.method || currentOrder.method !== 'delivery') {
         currentDeliveryFee = 0;
         return 0;
     }
 
-    // Se as configurações não carregaram, usa um valor de segurança (ex: 5.00) ou 0
     if (!configPedidos || !configPedidos.deliveryMode) {
-        console.warn("Configurações de entrega não carregadas.");
         return 0; 
     }
 
     const mode = configPedidos.deliveryMode;
     
-    // --- IMPLEMENTAÇÃO DO MODO GOOGLE (ADICIONADO AQUI) ---
     if (mode === 'google') {
         currentDeliveryFee = freteGoogleCalculado;
         return currentDeliveryFee;
     }
-    // -----------------------------------------------------
 
-    // 1. MODO: FIXO (Mais simples)
     if (mode === 'fixed') {
         currentDeliveryFee = parseFloat(configPedidos.deliveryFixedPrice) || 0;
     } 
-    // 2. MODO: POR BAIRRO (Recomendado para você)
     else if (mode === 'district') {
         const inputBairro = document.getElementById('input-district');
-        // Normaliza o texto: remove espaços extras e acentos (ex: "Jardim América" vira "jardim america")
         const bairroCliente = inputBairro ? removerAcentos(inputBairro.value.trim().toLowerCase()) : "";
         
-        // Procura na sua lista de bairros cadastrados
         const infoBairro = configPedidos.deliveryDistricts?.find(b => 
             removerAcentos(b.nome.toLowerCase()) === bairroCliente
         );
         
-        // Se achou o bairro, cobra o valor dele. Se não achou, cobra uma taxa padrão ou avisa.
-        // Aqui coloquei 0, mas você pode definir um "valor padrão para bairros desconhecidos" no admin
         currentDeliveryFee = infoBairro ? parseFloat(infoBairro.custo) : 0;
     } 
-    // 3. MODO: IFOOD / DISTÂNCIA
     else if (mode === 'ifood' || mode === 'distance') {
-        // ATENÇÃO: Como seu site não tem GPS, este modo não funciona automaticamente.
-        // TENTATIVA DE SALVAMENTO: Vamos ver se o cliente digitou um bairro que você cadastrou.
-        // Isso permite você usar a tabela "iFood" mas cobrar pelo Bairro se o GPS falhar.
-        
         const inputBairro = document.getElementById('input-district');
         const bairroCliente = inputBairro ? removerAcentos(inputBairro.value.trim().toLowerCase()) : "";
         
-        // Tenta achar o bairro na lista de distritos (caso você tenha cadastrado)
         const infoBairro = configPedidos.deliveryDistricts?.find(b => 
             removerAcentos(b.nome.toLowerCase()) === bairroCliente
         );
@@ -1296,9 +1360,7 @@ function calcularFrete() {
         if (infoBairro) {
             currentDeliveryFee = parseFloat(infoBairro.custo);
         } else {
-            // Se não achou bairro e não tem GPS, cobra uma TAXA MÍNIMA em vez de Grátis
-            // Cobra R$ 5,00 (ou o valor da primeira faixa da tabela ifood) para não sair perdendo
-            currentDeliveryFee = 5.99; // Valor de segurança
+            currentDeliveryFee = 5.99; 
         }
     } else {
         currentDeliveryFee = 0;
@@ -1311,14 +1373,54 @@ function removerAcentos(str) {
 }
 
 function renderReceipt() { const list = document.getElementById('receipt-items-list'); list.innerHTML = ''; let subtotal = 0; cart.forEach(item => { const t = item.price * item.quantity; subtotal += t; list.innerHTML += `<div class="flex justify-between items-start mb-2"><div><span class="font-bold text-gray-700">${item.quantity}x</span> <span class="text-gray-600">${item.name}</span></div><span class="text-gray-800 font-medium">R$ ${t.toFixed(2).replace('.', ',')}</span></div>`; }); document.getElementById('receipt-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; document.getElementById('receipt-total').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; }
+
 function toggleReceipt() { const el = document.getElementById('receipt-details'); const arr = document.getElementById('arrow-receipt'); if (el.classList.contains('hidden')) { el.classList.remove('hidden'); arr.classList.add('rotate-180'); } else { el.classList.add('hidden'); arr.classList.remove('rotate-180'); } }
 function closeOrderScreen() { document.getElementById('order-screen').classList.add('hidden'); }
 function switchToStatus() { openOrderScreen('STATUS', 'paid'); }
 function copyPixScreen() { const inp = document.getElementById('pix-copy-paste-screen'); if(inp) { inp.select(); document.execCommand('copy'); showToast("Código PIX copiado!"); } }
-function toggleCart() { const m = document.getElementById('cart-modal'); const p = document.getElementById('cart-panel'); const btn = document.getElementById('last-order-btn'); if(!m) return; if (m.classList.contains('hidden')) { m.classList.remove('hidden'); setTimeout(() => p.classList.remove('translate-x-full'), 10); if(btn) btn.classList.add('hidden'); } else { p.classList.add('translate-x-full'); setTimeout(() => m.classList.add('hidden'), 300); checkLastOrder(); } }
+
+function toggleCart() { 
+    const m = document.getElementById('cart-modal'); 
+    const p = document.getElementById('cart-panel'); 
+    // CORREÇÃO: Não esconde mais o botão ao abrir o carrinho para evitar sumiço
+    // const btn = document.getElementById('last-order-btn'); 
+    
+    if(!m) return; 
+    
+    if (m.classList.contains('hidden')) { 
+        m.classList.remove('hidden'); 
+        setTimeout(() => p.classList.remove('translate-x-full'), 10); 
+        // if(btn) btn.classList.add('hidden'); // REMOVIDO PARA O BOTÃO NÃO SUMIR
+    } else { 
+        p.classList.add('translate-x-full'); 
+        setTimeout(() => m.classList.add('hidden'), 300); 
+        checkLastOrder(); 
+    } 
+}
+
 function saveLastOrder(id) { localStorage.setItem('tropyberry_last_order', JSON.stringify({ id, timestamp: Date.now() })); checkLastOrder(); }
-function checkLastOrder() { const saved = localStorage.getItem('tropyberry_last_order'); const btn = document.getElementById('last-order-btn'); const cart = document.getElementById('cart-modal'); if (cart && !cart.classList.contains('hidden')) { if(btn) btn.classList.add('hidden'); return; } if (saved && btn) { const d = JSON.parse(saved); if ((Date.now() - d.timestamp) / 1000 / 60 < 15) btn.classList.remove('hidden'); else { btn.classList.add('hidden'); localStorage.removeItem('tropyberry_last_order'); } } else if (btn) btn.classList.add('hidden'); }
+function checkLastOrder() { 
+    const saved = localStorage.getItem('tropyberry_last_order'); 
+    const btn = document.getElementById('last-order-btn'); 
+    
+    // Se o botão não existe na tela, não faz nada
+    if (!btn) return;
+
+    if (saved) { 
+        const d = JSON.parse(saved); 
+        // Mostra o botão se o pedido for recente (15 min)
+        if ((Date.now() - d.timestamp) / 1000 / 60 < 15) {
+            btn.classList.remove('hidden'); 
+        } else { 
+            // btn.classList.add('hidden'); // Opcional: pode deixar visivel se quiser
+            localStorage.removeItem('tropyberry_last_order'); 
+        } 
+    } else {
+        btn.classList.add('hidden'); 
+    }
+}
 setInterval(checkLastOrder, 60000);
+
 async function verificarBotaoAdmin(productId) { if (currentUserIsAdmin) { const btn = document.getElementById('admin-edit-shortcut'); if(btn) { btn.classList.remove('hidden'); btn.onclick = () => { window.location.href = `admin.html?edit_product=${productId}`; }; } } }
 
 // 1. Função que renderiza os dados tanto na tela quanto no cupom de impressão
@@ -1379,7 +1481,6 @@ window.renderReceiptFromOrder = (items, total, orderData, orderId) => {
         });
         screenItemsList.innerHTML = screenHtml;
 
-        // --- CORREÇÃO DO FRETE NA TELA ---
         const valorFrete = total - subtotal;
         const deliveryEl = document.getElementById('receipt-delivery');
         
@@ -1412,19 +1513,9 @@ window.toggleReceipt = () => {
 window.prepararImpressao = () => {
     window.print();
 };
-// 2. Função chamada pelo botão de imprimir
-window.prepararImpressao = () => {
-    // Apenas dispara o print. O CSS @media print cuidará de esconder o resto.
-    window.print();
-};
-// ============================================================
-//  CARREGAR INFO DA LOJA (ENDEREÇO, HORÁRIOS) NO SITE
-// ============================================================
 
 function monitorarInfoLoja() {
     if(!db) return;
-    
-    // Escuta em tempo real o documento 'config/loja_info'
     onSnapshot(doc(db, "config", "loja_info"), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
@@ -1434,34 +1525,23 @@ function monitorarInfoLoja() {
 }
 
 function aplicarDadosLojaNoSite(data) {
-    // 1. Imagem da Fachada (Resolve a imagem quebrada)
     const facadeImg = document.querySelector('#info-modal img');
     if(facadeImg && data.facadeUrl) {
         facadeImg.src = data.facadeUrl;
-        facadeImg.style.opacity = "1"; // Deixa a foto nítida
+        facadeImg.style.opacity = "1"; 
     }
-
-    // 2. Horários (Usa o texto que você digitou no Dashboard)
     const hoursEl = document.getElementById('info-hours');
     if(hoursEl) {
         hoursEl.innerHTML = data.horarioTexto ? data.horarioTexto.replace(/\n/g, '<br>') : "Consulte nossos horários";
     }
-
-    // 3. Outros campos
     if(document.getElementById('info-address')) document.getElementById('info-address').innerText = data.endereco || "";
     if(document.getElementById('info-phone')) document.getElementById('info-phone').innerText = data.whatsapp || "";
 }
-// Chame esta função na inicialização
-document.addEventListener('DOMContentLoaded', () => {
-    monitorarInfoLoja();
-});
+
 function animarVooParaCarrinho(event) {
-    // 1. Identifica o ponto de partida (onde o usuário clicou)
     const startX = event.clientX;
     const startY = event.clientY + window.scrollY;
 
-    // 2. Identifica o destino (Ícone do carrinho no cabeçalho)
-    // Certifique-se de que o ícone do carrinho tenha a classe 'cart-icon-target' ou ID 'cart-btn'
     const cartBtn = document.querySelector('.fa-shopping-cart') || document.querySelector('#cart-btn');
     if (!cartBtn) return;
 
@@ -1469,17 +1549,14 @@ function animarVooParaCarrinho(event) {
     const targetX = cartRect.left + (cartRect.width / 2);
     const targetY = cartRect.top + window.scrollY + (cartRect.height / 2);
 
-    // 3. Cria o "Flyer" (Cópia do SVG que você mandou)
     const flyer = document.createElement('div');
     flyer.className = 'acai-flyer';
     flyer.style.left = `${startX - 20}px`;
     flyer.style.top = `${startY - 25}px`;
 
-    // Variáveis CSS para o destino
     flyer.style.setProperty('--tx', `${targetX - startX}px`);
     flyer.style.setProperty('--ty', `${targetY - startY}px`);
 
-    // Injeta o SVG do TropiBerry que você forneceu
     flyer.innerHTML = `
         <svg viewBox="0 0 64 80" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:100%;">
             <ellipse cx="32" cy="74" rx="16" ry="3" fill="black" fillOpacity="0.1" />
@@ -1492,7 +1569,6 @@ function animarVooParaCarrinho(event) {
 
     document.body.appendChild(flyer);
 
-    // 4. Feedback no ícone do carrinho ao "chegar"
     setTimeout(() => {
         cartBtn.classList.add('animate-cart-pulse');
         setTimeout(() => cartBtn.classList.remove('animate-cart-pulse'), 400);
@@ -1500,20 +1576,17 @@ function animarVooParaCarrinho(event) {
     }, 800);
 }
 window.adicionarAoCarrinhoRapido = function(event, produtoId) {
-    event.stopPropagation(); // Impede de abrir a página do produto
+    event.stopPropagation(); 
     
-    // Busca o produto na lista global
     const produto = products.find(p => p.id === produtoId);
     if (!produto) return;
 
-    // Se o produto tiver complementos obrigatórios, obrigamos a abrir o modal
     const temObrigatorios = produto.complementIds && produto.complementIds.length > 0;
     if (temObrigatorios) {
         abrirModalRapido(produtoId);
         return;
     }
 
-    // Cria o item para o carrinho
     const cartItem = {
         id: `${produto.id}-${Date.now()}`,
         originalId: produto.id,
@@ -1524,33 +1597,19 @@ window.adicionarAoCarrinhoRapido = function(event, produtoId) {
         details: ""
     };
 
-    // Adiciona ao carrinho global
     cart.push(cartItem);
-    
-    // Atualiza a interface
     updateCartUI();
-    
-    // DISPARA A ANIMAÇÃO!
     animarVooParaCarrinho(event);
-    
     showToast("Adicionado!");
 };
-// Função para Limpar todo o Carrinho
-window.limparCarrinho = function() {
-    // Se o carrinho já estiver vazio, não faz nada
-    if (cart.length === 0) return;
 
-    // 1. LIMPA TUDO (Sem janelas de confirmação/alert)
+window.limparCarrinho = function() {
+    if (cart.length === 0) return;
     cart = []; 
     localStorage.removeItem('tropyberry_cart'); 
-    
-    // 2. ATUALIZA A TELA (Mostra "Carrinho vazio")
     updateCartUI(); 
-    
-    // 3. FEEDBACK VISUAL (Usa o seu sistema de Toast)
     showToast("Carrinho esvaziado!");
 
-    // 4. FECHA O CARRINHO (Opcional - dá um tempo para o usuário ver que limpou)
     setTimeout(() => {
         const modal = document.getElementById('cart-modal');
         if (modal && !modal.classList.contains('hidden')) {
@@ -1561,25 +1620,21 @@ window.limparCarrinho = function() {
 async function carregarConfiguracoesSite() {
     const docSnap = await getDoc(doc(db, "config", "pedidos"));
     if (docSnap.exists()) {
-        configPedidos = docSnap.data(); // Agora contém delivMin, delivServiceFee, etc.
+        configPedidos = docSnap.data(); 
     }
 }
-// --- CÁLCULO VIA GOOGLE MAPS ---
+
 window.calcularDistanciaGoogle = () => {
-    // 1. Pega os dados
     const rua = document.getElementById('input-street').value;
     const num = document.getElementById('input-number').value;
     const bairro = document.getElementById('input-district').value;
     
-    // Se faltar dados, não calcula
     if(!rua || !num || !bairro) return;
 
-    // 2. Monta os endereços
-    // DICA: No "origin", coloque o endereço fixo da sua loja para ser mais preciso
-    const origin = "Av. Exemplo, 123, João Pessoa, PB"; 
+    // Defina o endereço da sua loja aqui
+    const origin = "Av. Senador Ruy Carneiro, 123, João Pessoa, PB"; 
     const destination = `${rua}, ${num} - ${bairro}, João Pessoa, PB`;
 
-    // Mostra que está pensando...
     const labelFrete = document.getElementById('receipt-delivery');
     if(labelFrete) {
         labelFrete.innerText = "Calculando...";
@@ -1587,7 +1642,6 @@ window.calcularDistanciaGoogle = () => {
         labelFrete.classList.add('text-orange-500', 'animate-pulse');
     }
 
-    // 3. Chama o Google
     const service = new google.maps.DistanceMatrixService();
     service.getDistanceMatrix({
         origins: [origin],
@@ -1596,78 +1650,46 @@ window.calcularDistanciaGoogle = () => {
         unitSystem: google.maps.UnitSystem.METRIC
     }, (response, status) => {
         if (status === 'OK' && response.rows[0].elements[0].status === 'OK') {
-            
-            // 4. Sucesso: Pega a distância
             const distanciaMetros = response.rows[0].elements[0].distance.value;
             const distanciaKm = distanciaMetros / 1000;
             
-            // Pega o preço por KM configurado (ou usa 1.50 como padrão)
             const precoPorKm = configPedidos.deliveryPricePerKm || 1.50;
-            
-            // CÁLCULO FINAL
             let valorFrete = distanciaKm * precoPorKm;
 
-            // Aplica um valor mínimo (ex: nunca ser menos que R$ 5,00)
             const valorMinimo = configPedidos.delivMin || 5.00;
             if (valorFrete < valorMinimo) valorFrete = valorMinimo;
 
             freteGoogleCalculado = valorFrete;
-            console.log(`Google: ${distanciaKm}km = R$ ${valorFrete}`);
-
-            // Atualiza a tela
             renderReceipt(); 
 
         } else {
             console.error("Erro Google Maps:", status);
-            // Se der erro (endereço não achado), cobra um valor fixo de segurança
             freteGoogleCalculado = configPedidos.deliveryFixedPrice || 10.00; 
             renderReceipt();
         }
     });
 };
-// Função para abrir/fechar o Menu de Perfil (Unificado PC/Mobile)
+
 window.toggleUserMenu = () => {
     const overlay = document.getElementById('user-menu-overlay');
     const menu = document.getElementById('user-menu-content');
     
     if (menu.classList.contains('hidden')) {
-        // Abrir
         menu.classList.remove('hidden');
         if(window.innerWidth < 768) {
-            // Animação Mobile (Sobe de baixo)
             menu.classList.add('animate-slide-up');
             overlay.classList.remove('hidden');
         } else {
-            // Desktop (Dropdown simples, sem overlay escuro obrigatório, mas opcional)
             menu.classList.add('animate-fade-in'); 
-            // overlay.classList.remove('hidden'); // Descomente se quiser fundo escuro no PC também
         }
     } else {
-        // Fechar
         menu.classList.add('hidden');
         overlay.classList.add('hidden');
         menu.classList.remove('animate-slide-up', 'animate-fade-in');
     }
 };
-// =========================================
-// MÓDULO MEUS PEDIDOS (CLIENTE)
-// =========================================
-
-// Variável para guardar o email do usuário logado (será preenchida no monitorarEstadoAuth)
-let loggedUserEmail = null;
-
-// Atualize o monitorarEstadoAuth no início do arquivo para salvar o email
-// (Procure onde tem 'monitorarEstadoAuth' no seu código e adicione a linha marcada abaixo)
-/* monitorarEstadoAuth(async (user) => {
-        if (user) {
-            loggedUserEmail = user.email; // <--- ADICIONE ISSO NA SUA FUNÇÃO EXISTENTE
-            // ... resto do código
-        }
-    });
-*/
 
 window.abrirMeusPedidos = async () => {
-    // Fecha o menu de perfil para não atrapalhar
     const userMenu = document.getElementById('user-menu-content');
     const overlay = document.getElementById('user-menu-overlay');
     if(userMenu) userMenu.classList.add('hidden');
@@ -1690,12 +1712,10 @@ window.abrirMeusPedidos = async () => {
     }
 
     try {
-        // Busca pedidos onde 'customer.email' é igual ao email do usuário logado
-        // Importante: Requer índice composto no Firebase (Se der erro no console, clique no link que o Firebase gerar)
         const q = query(
             collection(db, "pedidos"), 
             where("customer.email", "==", loggedUserEmail),
-            orderBy("createdAt", "desc") // Ordena do mais recente para o antigo
+            orderBy("createdAt", "desc") 
         );
 
         const querySnapshot = await getDocs(q);
@@ -1715,7 +1735,6 @@ window.abrirMeusPedidos = async () => {
             const order = doc.data();
             const date = order.createdAt ? order.createdAt.toDate().toLocaleDateString('pt-BR') + ' às ' + order.createdAt.toDate().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 'Data desc.';
             
-            // Definição de cores por status
             let statusColor = 'bg-gray-100 text-gray-600';
             let statusIcon = 'fa-clock';
             
@@ -1725,7 +1744,6 @@ window.abrirMeusPedidos = async () => {
             if(order.status === 'Finalizado') { statusColor = 'bg-green-100 text-green-600'; statusIcon = 'fa-check-circle'; }
             if(order.status === 'Cancelado' || order.status === 'Rejeitado') { statusColor = 'bg-red-100 text-red-600'; statusIcon = 'fa-times-circle'; }
 
-            // Lista de itens resumida
             let itemsHtml = order.items.map(i => `<span class="block text-gray-600 text-xs">• ${i.quantity}x ${i.name}</span>`).join('');
 
             html += `
@@ -1759,7 +1777,6 @@ window.abrirMeusPedidos = async () => {
 
     } catch (e) {
         console.error("Erro ao carregar pedidos:", e);
-        // Tratamento especial para o erro de índice do Firebase
         if(e.message.includes("requires an index")) {
             console.warn("⚠️ NECESSÁRIO CRIAR ÍNDICE NO FIREBASE. VEJA O LINK NO CONSOLE.");
         }
