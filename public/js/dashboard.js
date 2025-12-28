@@ -13,7 +13,7 @@ let allOrders = [];
 let allProducts = [];
 let allCategories = [];
 let tablesConfig = { environments: [] };
-
+let configEntregaAtual = {};
 let currentServiceTab = 'retirada'; 
 let currentStatusFilter = 'todos';  
 let currentEnvId = null;
@@ -1098,27 +1098,31 @@ window.renderizarListaBairrosConfig = () => {
 // 4. Seleção visual no Modal de Delivery
 window.selectDeliveryOption = (element, mode) => {
     // 1. Atualiza visualmente qual card está selecionado
-    document.querySelectorAll('.delivery-option-card').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.delivery-option-card').forEach(c => {
+        c.classList.remove('selected');
+        // Limpa atributo de dados antigo para evitar conflito
+        delete c.dataset.selectedType; 
+    });
+    
     element.classList.add('selected');
+    
+    // CORREÇÃO CRÍTICA: Salva o tipo no dataset do elemento para o botão Salvar encontrar depois
+    element.dataset.selectedType = mode; 
 
     // 2. Lógica para abrir o modal correto
     if (mode === 'fixed') {
-        // Abre o modal de Preço Fixo
         document.getElementById('modal-fixed-price').classList.remove('hidden');
     } 
-    else if (mode === 'district') {
-        // Abre o modal de Preço por Bairro
+   else if (mode === 'district') {
         document.getElementById('modal-neighborhood-price').classList.remove('hidden');
-        renderizarListaBairrosConfig(); // Garante que a lista apareça
+        
+        // Garante que a lista local esteja sincronizada com o que veio do banco, se ainda não estiver editada
+        if (window.localBairros.length === 0 && configEntregaAtual.deliveryDistricts) {
+            window.localBairros = configEntregaAtual.deliveryDistricts;
+        }
+        renderListaBairros();
     }
-    // Para 'free', 'ifood' ou 'distance', apenas salva a seleção na memória
-    else {
-        console.log("Modo selecionado: " + mode);
-    }
-    
-    // (Opcional) Salva o modo escolhido numa variável global para depois enviar ao banco
-    window.currentDeliveryMode = mode;
-};;
+};
 
 
 window.atualizarLabelPrecoDelivery = function(modo) {
@@ -1139,16 +1143,37 @@ window.salvarConfigEntrega = async () => {
     const selected = document.querySelector('.delivery-option-card.selected');
     if(!selected) return;
     
-    const type = selected.dataset.selectedType;
+    // Tenta pegar do dataset (se clicou agora) OU da variável global 
+    let type = selected.dataset.selectedType || window.currentDeliveryMode;
+
+    // FALLBACK DE SEGURANÇA:
+    // Se o usuário abriu o modal e clicou "Salvar" direto sem mudar a opção, 
+    // a variável 'type' pode estar vazia. Vamos pegar direto do atributo onclick do HTML.
+    if (!type) {
+         const clickAttr = selected.getAttribute('onclick'); // ex: "selectDeliveryOption(this, 'free')"
+         if(clickAttr) {
+             const match = clickAttr.match(/'([^']+)'/); // Extrai o texto entre aspas simples ('free')
+             if(match) type = match[1];
+         }
+    }
+
+    // Se ainda assim falhar, avisa o usuário
+    if (!type) {
+        return showToast("Atenção", "Selecione uma opção de entrega antes de salvar.", true);
+    }
+
     try {
+        // Agora salva no Firebase com o tipo correto
         await setDoc(doc(db, "config", "pedidos"), { deliveryMode: type }, { merge: true });
+        
         document.getElementById('delivery-settings-modal').classList.add('hidden');
         
         // Recarrega para atualizar o label "Sem preço" para o novo modo
         carregarConfigPedidos(); 
         showToast("Sucesso", "Modo de entrega atualizado!");
     } catch(e) {
-        showToast("Erro", "Falha ao salvar modo de entrega.", true);
+        console.error("Erro ao salvar entrega:", e);
+        showToast("Erro", "Falha ao salvar modo de entrega. Verifique o console.", true);
     }
 }
 
@@ -1269,11 +1294,18 @@ window.removerBairroLista = (idx) => {
 function renderListaBairros() {
     const container = document.getElementById('lista-bairros-config');
     if(!container) return;
+    
+    // Se a lista estiver vazia
+    if (!window.localBairros || window.localBairros.length === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-center text-sm py-4">Nenhum bairro configurado.</p>';
+        return;
+    }
+
     container.innerHTML = window.localBairros.map((b, idx) => `
         <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg border mb-2">
             <span class="font-bold text-sm text-gray-700">${b.nome}</span>
             <div class="flex items-center gap-4">
-                <span class="font-bold text-cyan-700">R$ ${b.custo.toFixed(2)}</span>
+                <span class="font-bold text-cyan-700">R$ ${parseFloat(b.custo).toFixed(2)}</span>
                 <button onclick="removerBairroLista(${idx})" class="text-red-500 p-2 hover:bg-red-50 rounded-lg transition">
                     <i class="fas fa-trash-alt"></i>
                 </button>
@@ -2670,6 +2702,60 @@ window.fecharSimuladorMobile = function() {
         
         document.body.style.overflow = ''; // Destrava o scroll
     }
+}
+window.prepararModalEntrega = async () => {
+    // 1. Garante que temos os dados mais recentes
+    try {
+        const docSnap = await getDoc(doc(db, "config", "pedidos"));
+        if (docSnap.exists()) {
+            configEntregaAtual = docSnap.data();
+        }
+    } catch (e) {
+        console.error("Erro ao buscar config:", e);
+        return;
+    }
+
+    const mode = configEntregaAtual.deliveryMode || 'free'; // Padrão 'free' se não tiver
+    const districts = configEntregaAtual.deliveryDistricts || [];
+    
+    // 2. Atualiza a seleção visual dos CARDS
+    document.querySelectorAll('.delivery-option-card').forEach(card => {
+        card.classList.remove('selected');
+        // Verifica se o card tem o onclick correspondente ao modo salvo
+        if (card.getAttribute('onclick').includes(`'${mode}'`)) {
+            card.classList.add('selected');
+            // Garante que o dataset esteja correto para o botão Salvar funcionar
+            card.dataset.selectedType = mode; 
+        }
+    });
+
+    // 3. Atualiza a variável global de controle
+    window.currentDeliveryMode = mode;
+    window.localBairros = districts; // Carrega os bairros salvos para a memória local de edição
+
+    // 4. Se for modo 'district' ou 'fixed', mostra os inputs correspondentes
+    document.getElementById('modal-fixed-price').classList.add('hidden');
+    document.getElementById('modal-neighborhood-price').classList.add('hidden');
+
+    if (mode === 'fixed') {
+        // Preenche o input de preço fixo se houver
+        if(document.getElementById('input-fixed-price')) {
+            document.getElementById('input-fixed-price').value = configEntregaAtual.deliveryFixedPrice || 0;
+        }
+    } 
+    else if (mode === 'district') {
+        // Não abrimos o modal interno automaticamente, mas populamos a lista caso o usuário clique em editar
+        renderListaBairros(); 
+    }
+    
+    // Atualiza o texto do Label principal
+    window.atualizarLabelPrecoDelivery(mode);
+};
+window.abrirModalConfigEntrega = async () => {
+    // Primeiro carrega os dados
+    await prepararModalEntrega();
+    // Depois mostra o modal
+    document.getElementById('delivery-settings-modal').classList.remove('hidden');
 }
 
 

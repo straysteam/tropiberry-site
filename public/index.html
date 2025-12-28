@@ -315,9 +315,9 @@
                             <span id="receipt-subtotal">R$ 0,00</span>
                         </div>
                         <div class="flex justify-between text-gray-500 text-xs mb-1">
-                            <span>Taxa de Entrega</span>
-                            <span class="text-green-600">Grátis</span>
-                        </div>
+    <span>Taxa de Entrega</span>
+    <span id="receipt-delivery" class="text-green-600">Calculando...</span>
+</div>
                         <div class="flex justify-between text-gray-900 font-bold text-base mt-2 pt-2 border-t border-gray-200">
                             <span>TOTAL</span>
                             <span id="receipt-total">R$ 0,00</span>
@@ -500,7 +500,6 @@
             </div>
         </div>
     </div>
-    
     <div id="cart-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex justify-end">
         <div class="bg-white w-full md:w-96 h-full shadow-2xl flex flex-col transform transition-transform duration-300 translate-x-full" id="cart-panel">
             <div class="bg-cyan-600 p-4 flex justify-between items-center text-white shadow-md">

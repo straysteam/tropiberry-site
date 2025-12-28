@@ -34,6 +34,7 @@ let configPedidos = {};
 let currentDeliveryFee = 0;
 let freteGoogleCalculado = 0; 
 let googleDebounceTimer = null;
+let distanciaConfirmada = false;
 
 
 // CACHE GLOBAL DE COMPLEMENTOS
@@ -116,6 +117,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const guestOptions = document.getElementById('menu-guest-options');
         const loggedOptions = document.getElementById('menu-logged-options');
         const adminLinks = document.getElementById('menu-admin-links');
+        // Adicione isso no final do seu script.js ou dentro do DOMContentLoaded
+const inputsEndereco = ['input-street', 'input-number', 'input-district'];
+inputsEndereco.forEach(id => {
+    document.getElementById(id)?.addEventListener('blur', () => {
+        // Só chama o Google se o modo for por distância
+        if (configPedidos.deliveryMode === 'distance') {
+            calcularDistanciaGoogle();
+        }
+    });
+});
 
         if (user) {
             loggedUserEmail = user.email;
@@ -1320,50 +1331,58 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function calcularFrete() {
+    // 1. Se não for delivery, frete é zero
     if (!currentOrder.method || currentOrder.method !== 'delivery') {
         currentDeliveryFee = 0;
         return 0;
     }
 
+    // 2. Se não tiver configuração carregada
     if (!configPedidos || !configPedidos.deliveryMode) {
-        return 0; 
+        return 0;
     }
 
     const mode = configPedidos.deliveryMode;
     
-    if (mode === 'google') {
+    // --- CORREÇÃO AQUI ---
+    // Agora o modo 'distance' (configurado no painel) aciona a lógica do Google
+    if (mode === 'distance' || mode === 'google') {
+        // Se o cálculo do Google ainda não rodou ou deu zero, usa um valor mínimo de segurança
+        if (!freteGoogleCalculado || freteGoogleCalculado === 0) {
+             // Tenta calcular agora se tiver endereço
+             if(document.getElementById('input-street').value) {
+                 calcularDistanciaGoogle();
+             }
+             // Enquanto calcula, mantém o valor antigo ou o mínimo
+             return currentDeliveryFee || parseFloat(configPedidos.delivMin) || 0;
+        }
+        
         currentDeliveryFee = freteGoogleCalculado;
         return currentDeliveryFee;
     }
 
+    // 3. Preço Fixo
     if (mode === 'fixed') {
         currentDeliveryFee = parseFloat(configPedidos.deliveryFixedPrice) || 0;
     } 
-    else if (mode === 'district') {
+    // 4. Por Bairro (District) ou iFood (Tabela manual)
+    else if (mode === 'district' || mode === 'ifood') {
         const inputBairro = document.getElementById('input-district');
         const bairroCliente = inputBairro ? removerAcentos(inputBairro.value.trim().toLowerCase()) : "";
         
+        // Busca o bairro na lista salva
         const infoBairro = configPedidos.deliveryDistricts?.find(b => 
             removerAcentos(b.nome.toLowerCase()) === bairroCliente
         );
         
-        currentDeliveryFee = infoBairro ? parseFloat(infoBairro.custo) : 0;
-    } 
-    else if (mode === 'ifood' || mode === 'distance') {
-        const inputBairro = document.getElementById('input-district');
-        const bairroCliente = inputBairro ? removerAcentos(inputBairro.value.trim().toLowerCase()) : "";
-        
-        const infoBairro = configPedidos.deliveryDistricts?.find(b => 
-            removerAcentos(b.nome.toLowerCase()) === bairroCliente
-        );
-
         if (infoBairro) {
             currentDeliveryFee = parseFloat(infoBairro.custo);
         } else {
-            currentDeliveryFee = 5.99; 
+            // Se não encontrar o bairro, usa uma taxa padrão (ex: R$ 10,00) ou 0
+            currentDeliveryFee = 10.00; 
         }
     } else {
-        currentDeliveryFee = 0;
+        currentDeliveryFee = 0; // Frete Grátis
     }
 
     return currentDeliveryFee;
@@ -1372,8 +1391,63 @@ function removerAcentos(str) {
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-function renderReceipt() { const list = document.getElementById('receipt-items-list'); list.innerHTML = ''; let subtotal = 0; cart.forEach(item => { const t = item.price * item.quantity; subtotal += t; list.innerHTML += `<div class="flex justify-between items-start mb-2"><div><span class="font-bold text-gray-700">${item.quantity}x</span> <span class="text-gray-600">${item.name}</span></div><span class="text-gray-800 font-medium">R$ ${t.toFixed(2).replace('.', ',')}</span></div>`; }); document.getElementById('receipt-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; document.getElementById('receipt-total').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`; }
+function renderReceipt() {
+    const list = document.getElementById('receipt-items-list');
+    
+    // Elementos visuais de preço
+    const deliveryEl = document.getElementById('receipt-delivery');
+    const totalEl = document.getElementById('receipt-total');
+    const subtotalEl = document.getElementById('receipt-subtotal');
 
+    if (!list) return;
+
+    list.innerHTML = '';
+    let subtotal = 0;
+
+    // 1. Renderiza os Itens e calcula o Subtotal
+    cart.forEach(item => {
+        const t = item.price * item.quantity;
+        subtotal += t;
+        
+        list.innerHTML += `
+            <div class="flex justify-between items-start mb-2 border-b border-gray-50 pb-2">
+                <div>
+                    <span class="font-bold text-gray-700">${item.quantity}x</span> 
+                    <span class="text-gray-600 text-sm">${item.name}</span>
+                    <p class="text-[10px] text-gray-400 italic">${item.details || ''}</p>
+                </div>
+                <span class="text-gray-800 font-bold text-sm">R$ ${t.toFixed(2).replace('.', ',')}</span>
+            </div>`;
+    });
+
+    // 2. Chama o cálculo do Frete atualizado
+    const frete = calcularFrete();
+
+    // 3. Atualiza o Subtotal na tela
+    if (subtotalEl) subtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+
+    // 4. Atualiza a Taxa de Entrega na tela
+    if (deliveryEl) {
+        if (frete > 0) {
+            deliveryEl.innerText = `R$ ${frete.toFixed(2).replace('.', ',')}`;
+            deliveryEl.className = "text-gray-800 font-bold"; // Remove cor verde se tiver preço
+        } else {
+            // Se for 0, verifica se é retirada ou se é grátis mesmo
+            if (currentOrder.method === 'retirada') {
+                deliveryEl.innerText = '--';
+            } else {
+                deliveryEl.innerText = 'Grátis';
+                deliveryEl.className = "text-green-600 font-bold"; // Põe verde se for grátis
+            }
+        }
+    }
+
+    // 5. Soma Final (Subtotal + Frete)
+    // AQUI ESTAVA O ERRO: O total não estava somando o frete antes
+    const totalFinal = subtotal + frete;
+    
+    if (totalEl) totalEl.innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
+}
 function toggleReceipt() { const el = document.getElementById('receipt-details'); const arr = document.getElementById('arrow-receipt'); if (el.classList.contains('hidden')) { el.classList.remove('hidden'); arr.classList.add('rotate-180'); } else { el.classList.add('hidden'); arr.classList.remove('rotate-180'); } }
 function closeOrderScreen() { document.getElementById('order-screen').classList.add('hidden'); }
 function switchToStatus() { openOrderScreen('STATUS', 'paid'); }
@@ -1631,6 +1705,9 @@ window.calcularDistanciaGoogle = () => {
     
     if(!rua || !num || !bairro) return;
 
+    // Reseta a trava de segurança ao começar a calcular
+    distanciaConfirmada = false; 
+
     // Defina o endereço da sua loja aqui
     const origin = "Av. Senador Ruy Carneiro, 123, João Pessoa, PB"; 
     const destination = `${rua}, ${num} - ${bairro}, João Pessoa, PB`;
@@ -1656,15 +1733,33 @@ window.calcularDistanciaGoogle = () => {
             const precoPorKm = configPedidos.deliveryPricePerKm || 1.50;
             let valorFrete = distanciaKm * precoPorKm;
 
-            const valorMinimo = configPedidos.delivMin || 5.00;
-            if (valorFrete < valorMinimo) valorFrete = valorMinimo;
+            // === LÓGICA ESPECIAL MODO IFOOD ===
+            if (configPedidos.deliveryMode === 'ifood') {
+                // Regra: Menos de 4km é GRÁTIS
+                if (distanciaKm < 4) {
+                    valorFrete = 0;
+                }
+                // Acima de 4km cobra normal (o valor calculado acima)
+            }
+            // === FIM LÓGICA IFOOD ===
+
+            // Lógica Padrão (Mínimo) para outros modos
+            if (configPedidos.deliveryMode !== 'ifood') {
+                const valorMinimo = configPedidos.delivMin || 5.00;
+                if (valorFrete < valorMinimo) valorFrete = valorMinimo;
+            }
 
             freteGoogleCalculado = valorFrete;
+            
+            // LIBERA A TRAVA: Distância calculada com sucesso!
+            distanciaConfirmada = true; 
+            
             renderReceipt(); 
 
         } else {
             console.error("Erro Google Maps:", status);
-            freteGoogleCalculado = configPedidos.deliveryFixedPrice || 10.00; 
+            freteGoogleCalculado = 0; 
+            distanciaConfirmada = false; // Mantém travado se der erro
             renderReceipt();
         }
     });
