@@ -1013,7 +1013,7 @@ window.atualizarLabelPrecoDelivery = function(modo) {
 // 2. Carregar todas as configurações (Pedidos + Endereço da Empresa)
 window.carregarConfigPedidos = async () => {
     try {
-        // Sincroniza Endereço
+        // Sincroniza Endereço da Empresa
         const infoSnap = await getDoc(doc(db, "config", "loja_info"));
         if (infoSnap.exists()) {
             const bizAddress = infoSnap.data().endereco || "Endereço não configurado";
@@ -1021,53 +1021,95 @@ window.carregarConfigPedidos = async () => {
             if (el) el.innerText = bizAddress;
         }
 
-        // Busca Regras de Pedido
+        // Busca Regras de Pedido no Firebase
         const docSnap = await getDoc(doc(db, "config", "pedidos"));
         if(docSnap.exists()) {
             const d = docSnap.data();
             
-            // Switches
+            // 1. Switches de Status (Delivery, Retirada, Loja Aberta)
             if(document.getElementById('cfg-delivery-active')) document.getElementById('cfg-delivery-active').checked = d.delivery !== false;
             if(document.getElementById('cfg-pickup-active')) document.getElementById('cfg-pickup-active').checked = d.pickup !== false;
             if(document.getElementById('cfg-accept-orders')) document.getElementById('cfg-accept-orders').checked = d.accept !== false;
             
-            // Valores Avançados
-            if(document.getElementById('cfg-deliv-min')) document.getElementById('cfg-deliv-min').value = d.delivMin || 0;
-            if(document.getElementById('cfg-deliv-free')) document.getElementById('cfg-deliv-free').value = d.delivFreeAbove || 0;
-            if(document.getElementById('cfg-deliv-service')) document.getElementById('cfg-deliv-service').value = d.delivServiceFee || 0;
+            // 2. Valores Numéricos (AQUI É ONDE SUMIA NO F5)
+            // Usamos a verificação (d.campo !== undefined) para garantir que o 0 apareça
+            if(document.getElementById('cfg-deliv-min')) {
+                document.getElementById('cfg-deliv-min').value = (d.delivMin !== undefined) ? d.delivMin : 0;
+            }
+            if(document.getElementById('cfg-deliv-free')) {
+                document.getElementById('cfg-deliv-free').value = (d.delivFreeAbove !== undefined) ? d.delivFreeAbove : 0;
+            }
+            if(document.getElementById('cfg-deliv-service')) {
+                document.getElementById('cfg-deliv-service').value = (d.delivServiceFee !== undefined) ? d.delivServiceFee : 0;
+            }
             
-            // Checkboxes
-            if(document.getElementById('cfg-deliv-extra')) document.getElementById('cfg-deliv-extra').checked = d.askExtraInfo || false;
-            if(document.getElementById('cfg-deliv-comp')) document.getElementById('cfg-deliv-comp').checked = d.mandatoryComplement || false;
-            if(document.getElementById('cfg-deliv-sched')) document.getElementById('cfg-deliv-sched').checked = d.allowScheduled || false;
+            // 3. Checkboxes de Opções Avançadas
+            if(document.getElementById('cfg-deliv-extra')) {
+                document.getElementById('cfg-deliv-extra').checked = d.askExtraInfo === true;
+            }
+            if(document.getElementById('cfg-deliv-comp')) {
+                document.getElementById('cfg-deliv-comp').checked = d.mandatoryComplement === true;
+            }
+            if(document.getElementById('cfg-deliv-sched')) {
+                document.getElementById('cfg-deliv-sched').checked = d.allowScheduled === true;
+            }
 
+            // 4. Atualiza o rótulo visual (Ex: "Preço Fixo", "Grátis")
             window.atualizarLabelPrecoDelivery(d.deliveryMode);
+            
+            // 5. Sincroniza a variável global interna (se usada para controle de modais)
+            if(typeof configEntregaAtual !== 'undefined') {
+                configEntregaAtual = d;
+            }
         }
-    } catch(e) { console.error(e); }
+    } catch(e) { 
+        console.error("Erro ao carregar configurações de pedidos:", e); 
+    }
 };
 
 // 3. Salvar todas as configurações de uma vez
 window.salvarConfigPedidos = async () => {
+    // 1. Captura os valores garantindo o tipo de dado correto (Boolean ou Number)
     const data = {
-        delivery: document.getElementById('cfg-delivery-active')?.checked,
-        pickup: document.getElementById('cfg-pickup-active')?.checked,
-        accept: document.getElementById('cfg-accept-orders')?.checked,
+        // Switches de canais
+        delivery: document.getElementById('cfg-delivery-active')?.checked ?? true,
+        pickup: document.getElementById('cfg-pickup-active')?.checked ?? true,
+        accept: document.getElementById('cfg-accept-orders')?.checked ?? true,
         
-        delivMin: parseFloat(document.getElementById('cfg-deliv-min')?.value) || 0,
-        delivFreeAbove: parseFloat(document.getElementById('cfg-deliv-free')?.value) || 0,
-        delivServiceFee: parseFloat(document.getElementById('cfg-deliv-service')?.value) || 0,
+        // Valores numéricos (Garante que o Firebase salve como número para os cálculos no site)
+        delivMin: Number(document.getElementById('cfg-deliv-min')?.value) || 0,
+        delivFreeAbove: Number(document.getElementById('cfg-deliv-free')?.value) || 0,
+        delivServiceFee: Number(document.getElementById('cfg-deliv-service')?.value) || 0,
         
-        askExtraInfo: document.getElementById('cfg-deliv-extra')?.checked,
-        mandatoryComplement: document.getElementById('cfg-deliv-comp')?.checked,
-        allowScheduled: document.getElementById('cfg-deliv-sched')?.checked,
+        // Checkboxes de regras avançadas
+        askExtraInfo: document.getElementById('cfg-deliv-extra')?.checked ?? false,
+        mandatoryComplement: document.getElementById('cfg-deliv-comp')?.checked ?? false,
+        allowScheduled: document.getElementById('cfg-deliv-sched')?.checked ?? false,
         
         updatedAt: serverTimestamp()
     };
 
     try {
-        await setDoc(doc(db, "config", "pedidos"), data, { merge: true });
-        window.showToast("Sucesso", "Configurações salvas!");
-    } catch(e) { window.showToast("Erro", "Falha ao salvar", true); }
+        // O { merge: true } é fundamental: ele atualiza esses campos sem apagar o 'deliveryMode'
+        const docRef = doc(db, "config", "pedidos");
+        await setDoc(docRef, data, { merge: true });
+        
+        // Feedback visual
+        if (typeof window.showToast === "function") {
+            window.showToast("Sucesso", "Configurações de delivery salvas!");
+        } else {
+            alert("Sucesso: Configurações salvas!");
+        }
+
+        // Recarrega os dados para garantir que os inputs reflitam o que está no banco
+        await window.carregarConfigPedidos();
+
+    } catch(e) { 
+        console.error("Erro ao salvar configurações:", e);
+        if (typeof window.showToast === "function") {
+            window.showToast("Erro", "Não foi possível salvar as alterações.", true); 
+        }
+    }
 };
 window.renderizarListaBairrosConfig = () => {
     const container = document.getElementById('lista-bairros-config');

@@ -594,12 +594,15 @@ function atualizarTotalDetalhe(prefix) {
         if(btnMob) btnMob.innerText = `R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
     }
 
-    const allRequiredMet = currentComplements.every(g => {
-        if (!g.required) return true;
-        const selected = selectedOptions[g.id] || [];
-        return selected.length >= (g.min || 1);
-    });
+    // Dentro de atualizarTotalDetalhe em script.js
+const allRequiredMet = currentComplements.every(g => {
+    // Se você desligou a obrigatoriedade global no Admin, ignora o check
+    if (configPedidos.mandatoryComplement === false) return true; 
 
+    if (!g.required) return true;
+    const selected = selectedOptions[g.id] || [];
+    return selected.length >= (g.min || 1);
+});
     const addBtn = document.getElementById(`${prefix}-btn-add`) || document.getElementById('btn-add-cart-detail');
     if(addBtn) {
         addBtn.disabled = !allRequiredMet;
@@ -886,39 +889,111 @@ function startCheckout() {
     showStep('step-service');
 }
 function closeCheckout() { document.getElementById('checkout-modal').classList.add('hidden'); }
-function showStep(stepId) { ['step-service', 'step-address', 'step-payment-method'].forEach(id => document.getElementById(id).classList.add('hidden')); document.getElementById(stepId).classList.remove('hidden'); if (stepId === 'step-address') checkSavedAddress(); }
 function selectService(type) { 
     currentOrder.method = type; 
     const f = document.getElementById('delivery-fields'); 
-    if (type === 'retirada') f.classList.add('hidden'); 
-    else f.classList.remove('hidden'); 
+    
+    if (type === 'retirada') {
+        f.classList.add('hidden'); 
+    } else { 
+        f.classList.remove('hidden'); 
+
+        // --- EXIBIÇÃO DINÂMICA (Conforme Dashboard) ---
+        const extraContainer = document.getElementById('extra-info-container');
+        const scheduleContainer = document.getElementById('scheduling-container');
+
+        if (extraContainer) {
+            configPedidos.askExtraInfo ? extraContainer.classList.remove('hidden') : extraContainer.classList.add('hidden');
+        }
+
+        if (scheduleContainer) {
+            configPedidos.allowScheduled ? scheduleContainer.classList.remove('hidden') : scheduleContainer.classList.add('hidden');
+        }
+    }
     
     showStep('step-address'); 
     renderReceipt(); 
 }
 function checkSavedAddress() { const s = localStorage.getItem('tropyberry_user'); if (s) { const d = JSON.parse(s); document.getElementById('input-name').value = d.name || ''; document.getElementById('input-phone').value = d.phone || ''; document.getElementById('input-street').value = d.street || ''; document.getElementById('input-number').value = d.number || ''; document.getElementById('input-district').value = d.district || ''; document.getElementById('input-comp').value = d.comp || ''; if(d.street) { document.getElementById('saved-address-card').classList.remove('hidden'); document.getElementById('saved-address-card').classList.add('flex'); document.getElementById('saved-address-text').innerText = `${d.street}, ${d.number}`; } } }
-function useSavedAddress() { goToPaymentMethod(); }
+function useSavedAddress() { goToSummary(); }
 function goToPaymentMethod() {
-    const n = document.getElementById('input-name').value; 
-    const p = document.getElementById('input-phone').value; 
-    const e = document.getElementById('input-email').value;
+    // 1. Calcula o subtotal atual para validar a trava de valor mínimo
+    const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    
+    // 2. Captura e limpa os campos básicos de identificação
+    const n = document.getElementById('input-name').value.trim(); 
+    const p = document.getElementById('input-phone').value.trim(); 
+    const e = document.getElementById('input-email').value.trim();
 
-    if (!n || !p || !e) return showToast("Preencha Nome, Telefone e E-mail.");
+    // Validação básica obrigatória para qualquer tipo de pedido
+    if (!n || !p || !e) {
+        return showToast("Preencha Nome, Telefone e E-mail para continuar.", true);
+    }
 
+    // Inicializa o objeto do cliente no pedido atual
     currentOrder.customer = { name: n, phone: p, email: e };
 
+    // 3. Lógica específica para o modo DELIVERY
     if (currentOrder.method === 'delivery') {
-        const s = document.getElementById('input-street').value; 
-        const num = document.getElementById('input-number').value; 
-        const d = document.getElementById('input-district').value; 
-        const c = document.getElementById('input-comp').value;
         
-        if (!s || !num) return showToast("Endereço incompleto."); 
-        currentOrder.customer.address = `${s}, ${num} - ${d} (${c})`; 
+        // --- TRAVA: Valor Mínimo para entrega ---
+        // Se ativado no admin e o subtotal for menor que o mínimo, bloqueia
+        if (configPedidos.delivMin > 0 && subtotal < configPedidos.delivMin) {
+            return showToast(`O valor mínimo para entrega é R$ ${configPedidos.delivMin.toFixed(2).replace('.', ',')}`, true);
+        }
+
+        // --- TRAVA: Informação Adicional Obrigatória (CPF/Ponto de Ref) ---
+        // Verifica se o botão "Solicite informações adicionais" está ligado no admin
+        if (configPedidos.askExtraInfo) {
+            const extraInput = document.getElementById('input-extra-info').value.trim();
+            if (!extraInput) {
+                showToast("Por favor, preencha a Informação Adicional obrigatória.", true);
+                document.getElementById('input-extra-info').focus();
+                return;
+            }
+            // Salva a info adicional no objeto do cliente
+            currentOrder.customer.extraInfo = extraInput;
+        }
+
+        // --- TRAVA: Agendamento de Pedido ---
+        // Verifica se o botão "Permitir pedidos agendados" está ligado no admin
+        if (configPedidos.allowScheduled) {
+            const date = document.getElementById('input-schedule-date').value;
+            const time = document.getElementById('input-schedule-time').value;
+            if (!date || !time) {
+                return showToast("Selecione a data e o horário para o agendamento.", true);
+            }
+            // Salva o horário agendado no pedido
+            currentOrder.scheduled = `${date} às ${time}`;
+        }
+
+        // --- VALIDAÇÃO DE ENDEREÇO ---
+        const s = document.getElementById('input-street').value.trim(); 
+        const num = document.getElementById('input-number').value.trim(); 
+        const d = document.getElementById('input-district').value.trim(); 
+        const c = document.getElementById('input-comp').value.trim();
+        
+        // Rua, Número e Bairro são sempre obrigatórios no Delivery
+        if (!s || !num || !d) {
+            return showToast("Endereço incompleto. Rua, Número e Bairro são obrigatórios.", true); 
+        }
+
+        // Monta a string final de endereço
+        currentOrder.customer.address = `${s}, ${num} - ${d}${c ? ' (' + c + ')' : ''}`; 
+
     } else { 
+        // 4. Lógica para modo RETIRADA
         currentOrder.customer.address = "Retirada na Loja"; 
     }
+
+    // 5. Avança para a etapa de pagamento
     showStep('step-payment-method');
+
+    // 6. Atualiza o recibo final (Recalcula Taxa de Serviço e Frete Grátis por valor)
+    // Isso garante que o valor exibido na tela de pagamento seja o total real final.
+    if (typeof renderReceipt === 'function') {
+        renderReceipt();
+    }
 }
 document.getElementById('input-district')?.addEventListener('input', () => {
     updateCartUI();
@@ -1398,6 +1473,10 @@ function renderReceipt() {
     const deliveryEl = document.getElementById('receipt-delivery');
     const totalEl = document.getElementById('receipt-total');
     const subtotalEl = document.getElementById('receipt-subtotal');
+    
+    // Seleciona os novos elementos da Taxa de Serviço (Garante que existam no index.html)
+    const serviceRow = document.getElementById('receipt-service-row');
+    const serviceFeeEl = document.getElementById('receipt-service-fee');
 
     if (!list) return;
 
@@ -1421,7 +1500,24 @@ function renderReceipt() {
     });
 
     // 2. Chama o cálculo do Frete atualizado
-    const frete = calcularFrete();
+    let frete = calcularFrete();
+
+    // --- NOVA LÓGICA: Entrega grátis por valor (Botão "Entrega grátis acima de") ---
+    if (currentOrder.method === 'delivery' && configPedidos.delivFreeAbove > 0) {
+        if (subtotal >= configPedidos.delivFreeAbove) {
+            frete = 0;
+        }
+    }
+
+    // --- NOVA LÓGICA: Taxa de Serviço (Botão "Taxa de serviço") ---
+    let taxaServico = 0;
+    if (currentOrder.method === 'delivery' && configPedidos.delivServiceFee > 0) {
+        taxaServico = parseFloat(configPedidos.delivServiceFee);
+        if (serviceRow) serviceRow.classList.remove('hidden');
+        if (serviceFeeEl) serviceFeeEl.innerText = `R$ ${taxaServico.toFixed(2).replace('.', ',')}`;
+    } else {
+        if (serviceRow) serviceRow.classList.add('hidden');
+    }
 
     // 3. Atualiza o Subtotal na tela
     if (subtotalEl) subtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
@@ -1430,23 +1526,24 @@ function renderReceipt() {
     if (deliveryEl) {
         if (frete > 0) {
             deliveryEl.innerText = `R$ ${frete.toFixed(2).replace('.', ',')}`;
-            deliveryEl.className = "text-gray-800 font-bold"; // Remove cor verde se tiver preço
+            deliveryEl.className = "text-gray-800 font-bold"; 
         } else {
-            // Se for 0, verifica se é retirada ou se é grátis mesmo
             if (currentOrder.method === 'retirada') {
                 deliveryEl.innerText = '--';
             } else {
                 deliveryEl.innerText = 'Grátis';
-                deliveryEl.className = "text-green-600 font-bold"; // Põe verde se for grátis
+                deliveryEl.className = "text-green-600 font-bold";
             }
         }
     }
 
-    // 5. Soma Final (Subtotal + Frete)
-    // AQUI ESTAVA O ERRO: O total não estava somando o frete antes
-    const totalFinal = subtotal + frete;
+    // 5. Soma Final (Subtotal + Frete + Taxa de Serviço)
+    const totalFinal = subtotal + frete + taxaServico;
     
     if (totalEl) totalEl.innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
+    
+    // Sincroniza o total final para o objeto do pedido
+    currentOrder.total = totalFinal;
 }
 function toggleReceipt() { const el = document.getElementById('receipt-details'); const arr = document.getElementById('arrow-receipt'); if (el.classList.contains('hidden')) { el.classList.remove('hidden'); arr.classList.add('rotate-180'); } else { el.classList.add('hidden'); arr.classList.remove('rotate-180'); } }
 function closeOrderScreen() { document.getElementById('order-screen').classList.add('hidden'); }
@@ -1881,4 +1978,87 @@ window.abrirMeusPedidos = async () => {
 
 window.fecharMeusPedidos = () => {
     document.getElementById('my-orders-modal').classList.add('hidden');
+};
+// Função para salvar os dados do cliente no navegador (Local Storage)
+window.salvarDadosClienteAutomatico = function() {
+    const dados = {
+        name: document.getElementById('input-name').value,
+        email: document.getElementById('input-email').value,
+        phone: document.getElementById('input-phone').value,
+        street: document.getElementById('input-street').value,
+        number: document.getElementById('input-number').value,
+        district: document.getElementById('input-district').value,
+        comp: document.getElementById('input-comp').value
+    };
+    localStorage.setItem('tropyberry_user', JSON.stringify(dados));
+};
+
+// Função que abre a tela de Resumo
+window.goToSummary = function() {
+    // 1. Validações básicas
+    const name = document.getElementById('input-name').value;
+    if(!name) return showToast("Por favor, informe seu nome.", true);
+    
+    // 2. Captura dados para o objeto do pedido
+    currentOrder.customer = {
+        name: name,
+        phone: document.getElementById('input-phone').value,
+        email: document.getElementById('input-email').value
+    };
+
+    if (currentOrder.method === 'delivery') {
+        const rua = document.getElementById('input-street').value;
+        const num = document.getElementById('input-number').value;
+        const bairro = document.getElementById('input-district').value;
+        
+        if(!rua || !num || !bairro) return showToast("Preencha o endereço completo!", true);
+        
+        currentOrder.customer.address = `${rua}, ${num} - ${bairro}`;
+    } else {
+        currentOrder.customer.address = "Retirada na Loja";
+    }
+
+    // 3. SALVAR AUTOMATICAMENTE NO NAVEGADOR
+    window.salvarDadosClienteAutomatico();
+
+    // 4. Preencher a tela de Resumo
+    const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const frete = calcularFrete();
+    const totalFinal = subtotal + frete + (parseFloat(configPedidos.delivServiceFee) || 0);
+    
+    currentOrder.total = totalFinal;
+
+    document.getElementById('summary-address-display').innerText = currentOrder.customer.address;
+    document.getElementById('summary-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+    document.getElementById('summary-delivery').innerText = frete > 0 ? `R$ ${frete.toFixed(2).replace('.', ',')}` : "Grátis";
+    document.getElementById('summary-total').innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
+
+    const itemsContainer = document.getElementById('summary-items');
+    itemsContainer.innerHTML = cart.map(item => `
+        <div class="flex justify-between border-b border-gray-50 pb-1">
+            <span class="text-gray-600">${item.quantity}x ${item.name}</span>
+            <span class="font-bold">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+        </div>
+    `).join('');
+
+    // 5. Mudar de tela
+    showStep('step-summary');
+};
+
+// Atualização da função de passos para incluir o resumo
+window.showStep = function(stepId) { 
+    // Adicionamos o 'step-summary' na lista para ele ser escondido sempre que mudar de passo
+    const passos = ['step-service', 'step-address', 'step-summary', 'step-payment-method'];
+    
+    passos.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden'); // Esconde todos os passos
+    }); 
+
+    const target = document.getElementById(stepId);
+    if (target) {
+        target.classList.remove('hidden'); // Mostra apenas o passo atual
+    }
+
+    if (stepId === 'step-address') checkSavedAddress(); 
 };
