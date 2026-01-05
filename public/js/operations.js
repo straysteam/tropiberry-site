@@ -287,44 +287,40 @@
     };
 
     // === ATUALIZAÇÃO AUTOMÁTICA EM TEMPO REAL (Img 2 funcional) ===
-    window.toggleKitchenAutoRefresh = () => {
-        const mainBtn = document.getElementById('kitchen-auto-refresh-btn');
-        const sideToggle = document.getElementById('toggle-auto-refresh-kitchen');
-        const badge = document.getElementById('auto-refresh-status-badge');
+  window.toggleKitchenAutoRefresh = () => {
+    const mainBtn = document.getElementById('kitchen-auto-refresh-btn');
+    const sideToggle = document.getElementById('toggle-auto-refresh-kitchen');
+    const badge = document.getElementById('auto-refresh-status-badge');
 
-        if (kitchenListener) {
-            // DESATIVAR
-            kitchenListener();
-            kitchenListener = null;
-            
-            // UI Dashboard
-            if(mainBtn) {
-                mainBtn.innerText = "Ativar atualização automática";
-                mainBtn.classList.replace('bg-orange-500', 'bg-blue-600');
-            }
-            // UI Modal Lateral
-            if(sideToggle) sideToggle.checked = false;
-            if(badge) {
-                badge.innerText = "Desativado";
-                badge.className = "text-[10px] bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-bold uppercase";
-            }
-        } else {
-            // ATIVAR
-            iniciarMonitorCozinha();
-            
-            // UI Dashboard
-            if(mainBtn) {
-                mainBtn.innerText = "Pausar atualização";
-                mainBtn.classList.replace('bg-blue-600', 'bg-orange-500');
-            }
-            // UI Modal Lateral
-            if(sideToggle) sideToggle.checked = true;
-            if(badge) {
-                badge.innerText = "Ativado";
-                badge.className = "text-[10px] bg-green-100 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase";
-            }
+    if (kitchenListener) {
+        // Se já está ativo, desliga
+        kitchenListener();
+        kitchenListener = null;
+        
+        if(mainBtn) {
+            mainBtn.innerText = "Ativar atualização automática";
+            mainBtn.classList.replace('bg-orange-500', 'bg-blue-600');
         }
-    };
+        if(sideToggle) sideToggle.checked = false;
+        if(badge) {
+            badge.innerText = "Desativado";
+            badge.className = "text-[10px] bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-bold uppercase";
+        }
+    } else {
+        // Se está desligado, liga
+        iniciarMonitorCozinha();
+        
+        if(mainBtn) {
+            mainBtn.innerText = "Pausar atualização";
+            mainBtn.classList.replace('bg-blue-600', 'bg-orange-500');
+        }
+        if(sideToggle) sideToggle.checked = true;
+        if(badge) {
+            badge.innerText = "Ativado";
+            badge.className = "text-[10px] bg-green-100 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase";
+        }
+    }
+};
     window.renomearCozinha = async () => {
         const nomeAtual = document.getElementById('kitchen-name-label').innerText;
         const novoNome = prompt("Digite o novo nome para esta cozinha:", nomeAtual);

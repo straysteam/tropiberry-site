@@ -582,8 +582,6 @@ function renderizarPedidosLista() {
         // Cores da borda baseadas no status
         if(order.status === 'Aguardando') borderClass = 'border-l-4 border-l-orange-500';
         if(order.status === 'Em Preparo') borderClass = 'border-l-4 border-l-blue-500';
-        if(order.status === 'Pronto') borderClass = 'border-l-4 border-l-cyan-500';
-        if(order.status === 'Saiu para Entrega') borderClass = 'border-l-4 border-l-purple-500';
         if(order.status === 'Finalizado') borderClass = 'border-l-4 border-l-green-500';
         if(order.status === 'Cancelado' || order.status === 'Rejeitado') borderClass = 'border-l-4 border-l-red-500';
 
@@ -598,7 +596,7 @@ function renderizarPedidosLista() {
             `<span class="bg-green-100 text-green-600 text-[10px] px-2 py-0.5 rounded font-bold">PAGO</span>` : 
             `<span class="bg-orange-100 text-orange-600 text-[10px] px-2 py-0.5 rounded font-bold cursor-pointer" onclick="abrirModalPagamento('${order.id}')">NÃO PAGO</span>`;
 
-        // Lógica de Botões de Ação (Passo 3: Transição de Status)
+        // Lógica de Botões de Ação
         let actions = '';
         if (order.status === 'Finalizado' || order.status === 'Cancelado' || order.status === 'Rejeitado') {
             actions = `<span class="text-[10px] font-bold text-gray-400 uppercase">Pedido Encerrado</span>`;
@@ -607,21 +605,6 @@ function renderizarPedidosLista() {
                 <div class="flex gap-2 justify-end">
                     <button onclick="atualizarStatus('${order.id}', 'Rejeitado')" class="border border-red-500 text-red-500 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-50">Rejeitar</button>
                     <button onclick="atualizarStatus('${order.id}', 'Em Preparo')" class="bg-green-500 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-600 shadow-sm">Aceitar</button>
-                </div>`;
-        } else if (order.status === 'Em Preparo') {
-            actions = `
-                <div class="flex gap-2 justify-end">
-                    <button onclick="atualizarStatus('${order.id}', 'Pronto')" class="bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-600">Pedido Pronto</button>
-                </div>`;
-        } else if (order.status === 'Pronto') {
-            actions = `
-                <div class="flex gap-2 justify-end">
-                    <button onclick="atualizarStatus('${order.id}', 'Saiu para Entrega')" class="bg-orange-500 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-orange-600">Despachar</button>
-                </div>`;
-        } else if (order.status === 'Saiu para Entrega') {
-            actions = `
-                <div class="flex gap-2 justify-end">
-                    <button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-700">Entregue</button>
                 </div>`;
         } else {
             actions = `<div class="flex gap-2 justify-end"><button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="bg-cyan-900 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-cyan-800">Concluir</button></div>`;
@@ -641,7 +624,12 @@ function renderizarPedidosLista() {
                 <div class="font-bold text-gray-800">${order.customer?.name || 'Cliente'}</div>
                 <div class="text-gray-500 text-[10px]">${order.items?.length || 0} itens</div>
             </div>
-            <div class="col-span-2 p-3 text-right">${actions}</div>
+            <div class="col-span-2 p-3 text-right flex items-center justify-end gap-2">
+                <button onclick="window.imprimirPedidoDash('${order.id}')" class="text-gray-400 hover:text-cyan-600 p-2 transition" title="Imprimir Cupom">
+                    <i class="fas fa-print"></i>
+                </button>
+                ${actions}
+            </div>
         `;
         container.appendChild(div);
     });
@@ -2905,11 +2893,12 @@ window.atualizarComandaPDV = () => {
     });
     if(totalEl) totalEl.innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
 };
-window.renderizarProdutosPOS = () => {
+window.renderizarProdutosPOS = (filtroTexto = '') => {
     const container = document.getElementById('pos-products-grid');
-    console.log("Produtos carregados para o PDV:", allProducts); // Verifique isso no F12
-    if (!container) {
-        console.error("Erro: Elemento 'pos-products-grid' não encontrado no HTML!");
+    if (!container) return;
+
+    if (allProducts.length === 0) {
+        container.innerHTML = '<p class="p-8 text-gray-400 text-sm text-center col-span-full">Nenhum produto cadastrado...</p>';
         return;
     }
 
@@ -2954,7 +2943,48 @@ window.filtrarProdutosPOS = () => {
     const busca = document.getElementById('pos-search').value;
     window.renderizarProdutosPOS(busca);
 };
-env.tables.forEach(num => {
-    const mesaData = { id: num, nome: `Mesa ${num}`, status: activeOrder ? 'ocupada' : 'livre' };
-    container.innerHTML += MesaCard(mesaData); 
-});
+// Função que prepara os dados do pedido para a impressora real
+window.imprimirPedidoDash = (orderId) => {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) return window.showToast("Erro", "Pedido não encontrado", true);
+
+    const subtotal = order.items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    const taxaEntrega = order.total - subtotal;
+
+    // Gera as linhas dos itens
+    const itensHtml = order.items.map(item => `
+        <div class="item-row">
+            <span style="flex: 1;">${item.quantity}x ${item.name}</span>
+            <span style="margin-left: 10px;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
+        </div>
+        ${item.details ? `<div style="font-size: 0.85em; color: #444; margin-bottom: 5px;">(${item.details})</div>` : ''}
+    `).join('');
+
+    // Monta o esqueleto do cupom
+    const cupomFull = `
+        <div class="text-center font-bold" style="font-size: 1.2em; margin-bottom: 5px;">TROPIBERRY</div>
+        <div class="text-center" style="margin-bottom: 10px;">CUPOM NÃO FISCAL</div>
+        <div class="divider"></div>
+        <div class="item-row"><b>PEDIDO:</b> <span>#${orderId.slice(-4).toUpperCase()}</span></div>
+        <div class="item-row"><b>DATA:</b> <span>${order.createdAt ? order.createdAt.toDate().toLocaleString('pt-BR') : '--'}</span></div>
+        <div class="divider"></div>
+        <div style="margin-bottom: 5px;"><b>CLIENTE:</b> ${order.customer?.name || 'N/I'}</div>
+        <div style="margin-bottom: 5px;"><b>TEL:</b> ${order.customer?.phone || '--'}</div>
+        <div style="margin-bottom: 5px;"><b>END:</b> ${order.customer?.address || 'Retirada'}</div>
+        <div class="divider"></div>
+        <div class="font-bold" style="margin-bottom: 8px;">ITENS:</div>
+        ${itensHtml}
+        <div class="divider" style="border-top-style: solid;"></div>
+        <div class="item-row"><span>SUBTOTAL</span> <span>R$ ${subtotal.toFixed(2)}</span></div>
+        <div class="item-row"><span>TAXA ENTREGA</span> <span>${taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2)}` : 'GRÁTIS'}</span></div>
+        <div class="item-row font-bold" style="font-size: 1.1em; margin-top: 5px;">
+            <span>TOTAL</span> <span>R$ ${order.total.toFixed(2)}</span>
+        </div>
+        <div class="divider"></div>
+        <div class="text-center"><b>PAGAMENTO:</b> ${order.paymentMethod?.toUpperCase() || 'NÃO DEFINIDO'}</div>
+        <div class="text-center" style="margin-top: 10px; font-size: 0.9em;">${printConfig.footerMsg || 'Obrigado pela preferência!'}</div>
+    `;
+
+    // Chama a função de impressão real que já existe no seu dashboard.js
+    window.imprimirPedidoReal(cupomFull);
+};
