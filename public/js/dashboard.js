@@ -22,6 +22,7 @@ let currentTableOrder = [];
 let currentPayOrder = null;
 let currentPayMethod = 'dinheiro';
 let salesChartInstance = null;
+let categoriaAtivaPOS = 'todos';
 
 document.addEventListener('DOMContentLoaded', () => {
     monitorarEstadoAuth(async (user) => {
@@ -581,6 +582,8 @@ function renderizarPedidosLista() {
         // Cores da borda baseadas no status
         if(order.status === 'Aguardando') borderClass = 'border-l-4 border-l-orange-500';
         if(order.status === 'Em Preparo') borderClass = 'border-l-4 border-l-blue-500';
+        if(order.status === 'Pronto') borderClass = 'border-l-4 border-l-cyan-500';
+        if(order.status === 'Saiu para Entrega') borderClass = 'border-l-4 border-l-purple-500';
         if(order.status === 'Finalizado') borderClass = 'border-l-4 border-l-green-500';
         if(order.status === 'Cancelado' || order.status === 'Rejeitado') borderClass = 'border-l-4 border-l-red-500';
 
@@ -595,7 +598,7 @@ function renderizarPedidosLista() {
             `<span class="bg-green-100 text-green-600 text-[10px] px-2 py-0.5 rounded font-bold">PAGO</span>` : 
             `<span class="bg-orange-100 text-orange-600 text-[10px] px-2 py-0.5 rounded font-bold cursor-pointer" onclick="abrirModalPagamento('${order.id}')">NÃO PAGO</span>`;
 
-        // Lógica de Botões de Ação
+        // Lógica de Botões de Ação (Passo 3: Transição de Status)
         let actions = '';
         if (order.status === 'Finalizado' || order.status === 'Cancelado' || order.status === 'Rejeitado') {
             actions = `<span class="text-[10px] font-bold text-gray-400 uppercase">Pedido Encerrado</span>`;
@@ -604,6 +607,21 @@ function renderizarPedidosLista() {
                 <div class="flex gap-2 justify-end">
                     <button onclick="atualizarStatus('${order.id}', 'Rejeitado')" class="border border-red-500 text-red-500 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-50">Rejeitar</button>
                     <button onclick="atualizarStatus('${order.id}', 'Em Preparo')" class="bg-green-500 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-600 shadow-sm">Aceitar</button>
+                </div>`;
+        } else if (order.status === 'Em Preparo') {
+            actions = `
+                <div class="flex gap-2 justify-end">
+                    <button onclick="atualizarStatus('${order.id}', 'Pronto')" class="bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-600">Pedido Pronto</button>
+                </div>`;
+        } else if (order.status === 'Pronto') {
+            actions = `
+                <div class="flex gap-2 justify-end">
+                    <button onclick="atualizarStatus('${order.id}', 'Saiu para Entrega')" class="bg-orange-500 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-orange-600">Despachar</button>
+                </div>`;
+        } else if (order.status === 'Saiu para Entrega') {
+            actions = `
+                <div class="flex gap-2 justify-end">
+                    <button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-700">Entregue</button>
                 </div>`;
         } else {
             actions = `<div class="flex gap-2 justify-end"><button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="bg-cyan-900 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-cyan-800">Concluir</button></div>`;
@@ -781,39 +799,26 @@ function renderizarGridMesas() {
     container.innerHTML = '';
 
     const env = tablesConfig.environments.find(e => e.id === currentEnvId);
-    if (!env) {
-        container.innerHTML = '<div class="col-span-full text-center py-10 text-gray-400">Selecione um ambiente acima</div>';
-        return;
-    }
+    if (!env) return;
 
     env.tables.forEach(num => {
-        // Busca pedido ativo para esta mesa
+        // Busca o pedido ativo desta mesa
         const activeOrder = allOrders.find(o => 
             o.method === 'mesa' && 
-            o.tableNumber == num && 
+            parseInt(o.tableNumber) === parseInt(num) && 
             !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
         );
 
-        const card = document.createElement('div');
-        card.className = `table-card ${activeOrder ? 'occupied' : ''}`;
-        
-        let content = `<span class="text-2xl font-bold text-gray-400">${num}</span>`;
-        if (activeOrder) {
-            content = `
-                <span class="text-xl font-bold text-red-500">${num}</span>
-                <div class="mt-1 flex flex-col items-center">
-                    <span class="text-xs font-bold text-gray-700">R$ ${activeOrder.total.toFixed(2)}</span>
-                    <span class="text-[10px] text-gray-400">Ocupada</span>
-                </div>`;
-        }
-        
-        card.innerHTML = content;
-        card.onclick = () => abrirMesaPDV(num, activeOrder); 
-        container.appendChild(card);
+        // Chama o componente passando número, ambiente e o pedido (se houver)
+        container.innerHTML += MesaCard(num, env.name, activeOrder);
     });
+    
+    // Adiciona o botão de nova mesa ao final
+    container.innerHTML += BotaoNovaMesa();
 }
 
 window.changePosQtd = (idx, delta) => {
+    if(!currentTableOrder[idx]) return;
     currentTableOrder[idx].quantity += delta;
     if(currentTableOrder[idx].quantity <= 0) currentTableOrder.splice(idx, 1);
     window.atualizarComandaPDV();
@@ -2810,3 +2815,146 @@ window.desconectarIfood = () => {
     document.getElementById('ifood-status-badge').innerText = "Offline";
     document.getElementById('ifood-status-badge').className = "bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-1 rounded border border-gray-200 uppercase";
 }
+// Função que abre a tela de pedidos da mesa
+window.abrirMesaPDV = (numero) => {
+    console.log("Abrindo PDV para Mesa:", numero);
+    currentTablePOS = numero;
+    
+    // 1. Procura o pedido ativo desta mesa
+    const activeOrder = allOrders.find(o => 
+        o.method === 'mesa' && 
+        parseInt(o.tableNumber) === parseInt(numero) && 
+        !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
+    );
+
+    // 2. Atualiza o título na lateral (ex: Mesa 01)
+    const titleEl = document.getElementById('pos-table-title');
+    if(titleEl) titleEl.innerText = `Mesa ${numero}`;
+    
+    // 3. Carrega itens se já houver pedido, ou limpa a comanda
+    currentTableOrder = (activeOrder && activeOrder.items) ? [...activeOrder.items] : [];
+    
+    // 4. RESET de filtros para abrir a mesa sempre com tudo visível
+    categoriaAtivaPOS = 'todos';
+    const searchInput = document.getElementById('pos-search');
+    if(searchInput) searchInput.value = '';
+
+    // 5. NAVEGAÇÃO E RENDERIZAÇÃO (O segredo para não dar tela branca)
+    window.navegarPara('view-pos'); 
+    window.renderizarCategoriasPOS(); // Desenha as abas (Açaís, Combos, etc)
+    window.renderizarProdutosPOS();   // Desenha os cards dos produtos
+    window.atualizarComandaPDV();     // Desenha o carrinho/lista lateral
+};
+window.renderizarCategoriasPOS = () => {
+    const container = document.getElementById('pos-categories');
+    if (!container) return;
+
+    // Criamos uma lista de categorias únicas baseada nos produtos que você tem
+    const categorias = ['todos', ...new Set(allProducts.map(p => p.category).filter(c => c))];
+
+    container.innerHTML = categorias.map(cat => `
+        <button onclick="window.filtrarPorCategoriaPOS('${cat}')" 
+            class="px-5 py-2 rounded-full text-xs font-bold transition whitespace-nowrap shadow-sm border ${categoriaAtivaPOS === cat ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}">
+            ${cat.toUpperCase()}
+        </button>
+    `).join('');
+};
+
+// Função para filtrar produtos ao clicar na categoria
+window.filtrarPorCategoriaPOS = (cat) => {
+    categoriaAtivaPOS = cat;
+    window.renderizarCategoriasPOS();
+    window.renderizarProdutosPOS();
+};
+// Função para voltar das mesas para o painel
+window.fecharMesaPDV = () => {
+    currentTablePOS = null;
+    currentTableOrder = [];
+    navegarPara('view-pdv-wrapper');
+};
+window.changePosQtd = (idx, delta) => {
+    if(!currentTableOrder[idx]) return;
+    currentTableOrder[idx].quantity += delta;
+    if(currentTableOrder[idx].quantity <= 0) currentTableOrder.splice(idx, 1);
+    window.atualizarComandaPDV();
+};
+
+window.atualizarComandaPDV = () => {
+    const container = document.getElementById('pos-order-items');
+    const totalEl = document.getElementById('pos-total');
+    if(!container) return;
+    
+    container.innerHTML = '';
+    let total = 0;
+
+    currentTableOrder.forEach((item, idx) => {
+        total += (item.price * item.quantity);
+        container.innerHTML += `
+            <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg mb-2 border">
+                <div class="flex-1">
+                    <p class="text-xs font-bold text-gray-800">${item.name}</p>
+                    <p class="text-[10px] text-cyan-600">R$ ${item.price.toFixed(2)}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="window.changePosQtd(${idx}, -1)" class="w-6 h-6 bg-white border rounded text-red-500">-</button>
+                    <span class="text-xs font-bold">${item.quantity}</span>
+                    <button onclick="window.changePosQtd(${idx}, 1)" class="w-6 h-6 bg-white border rounded text-green-500">+</button>
+                </div>
+            </div>
+        `;
+    });
+    if(totalEl) totalEl.innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+};
+window.renderizarProdutosPOS = () => {
+    const container = document.getElementById('pos-products-grid');
+    console.log("Produtos carregados para o PDV:", allProducts); // Verifique isso no F12
+    if (!container) {
+        console.error("Erro: Elemento 'pos-products-grid' não encontrado no HTML!");
+        return;
+    }
+
+    // Filtra por Categoria E por Texto da busca simultaneamente
+    let filtrados = allProducts.filter(p => {
+        const matchesTexto = p.name?.toLowerCase().includes(filtroTexto.toLowerCase());
+        const matchesCategoria = categoriaAtivaPOS === 'todos' || p.category === categoriaAtivaPOS;
+        return matchesTexto && matchesCategoria;
+    });
+
+    container.innerHTML = filtrados.map(p => `
+        <div onclick="window.adicionarAoPedidoPOS('${p.id}')" 
+             class="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm hover:shadow-md transition cursor-pointer flex flex-col items-center text-center group active:scale-95">
+            <div class="relative w-20 h-20 mb-2">
+                <img src="${p.image || 'img/placeholder.png'}" class="w-full h-full object-cover rounded-xl shadow-inner bg-gray-50">
+            </div>
+            <p class="text-[11px] font-bold text-gray-800 line-clamp-2 h-8 leading-tight">${p.name || 'Sem nome'}</p>
+            <p class="text-xs font-black text-cyan-700 mt-1">R$ ${parseFloat(p.price || 0).toFixed(2).replace('.', ',')}</p>
+        </div>
+    `).join('');
+};
+window.adicionarAoPedidoPOS = (id) => {
+    const p = allProducts.find(x => x.id === id);
+    if (!p) return;
+
+    const existe = currentTableOrder.find(item => item.id === id);
+    if (existe) {
+        existe.quantity++;
+    } else {
+        currentTableOrder.push({
+            id: p.id,
+            name: p.name,
+            price: parseFloat(p.price),
+            quantity: 1,
+            details: ''
+        });
+    }
+    window.atualizarComandaPDV();
+};
+
+window.filtrarProdutosPOS = () => {
+    const busca = document.getElementById('pos-search').value;
+    window.renderizarProdutosPOS(busca);
+};
+env.tables.forEach(num => {
+    const mesaData = { id: num, nome: `Mesa ${num}`, status: activeOrder ? 'ocupada' : 'livre' };
+    container.innerHTML += MesaCard(mesaData); 
+});

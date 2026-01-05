@@ -83,7 +83,7 @@
                 status: "Pronto",
                 updatedAt: new Date()
             });
-            if (typeof showToast === "function") showToast("Cozinha", "Pedido finalizado!");
+           showToast("Cozinha", "Pedido marcado como pronto!");
         } catch (e) { 
             console.error("Erro ao finalizar:", e); 
         }

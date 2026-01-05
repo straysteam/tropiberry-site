@@ -1220,7 +1220,7 @@ async function processPayment() {
 
 let countdownInterval = null;
 
-   window.openOrderScreen = (orderId) => {
+ window.openOrderScreen = (orderId) => {
     const screen = document.getElementById('order-screen');
     if(!screen) return;
     screen.classList.remove('hidden');
@@ -1244,6 +1244,7 @@ let countdownInterval = null;
         document.getElementById('status-client-phone').innerText = order.customer.phone;
         document.getElementById('status-client-address').innerText = order.customer.address;
 
+        // --- LÓGICA DE RASTREIO DE 5 PASSOS ---
         const steps = document.querySelectorAll('#order-screen .relative.z-10.flex.flex-col.items-center');
         const setStepActive = (index, active) => {
             if (!steps[index]) return;
@@ -1258,22 +1259,26 @@ let countdownInterval = null;
                 circle.classList.add('bg-gray-200', 'text-gray-500');
             }
         };
-        setStepActive(0, true); 
-        setStepActive(1, ['Em Preparo', 'Pronto', 'Saiu para Entrega', 'Finalizado'].includes(order.status));
-        setStepActive(2, ['Saiu para Entrega', 'Finalizado'].includes(order.status));
-        setStepActive(3, order.status === 'Finalizado');
 
+        const status = order.status;
+        setStepActive(0, true); // Passo 1: Recebido (Sempre Ativo)
+        setStepActive(1, ['Em Preparo', 'Pronto', 'Saiu para Entrega', 'Finalizado'].includes(status)); // Passo 2: Preparando
+        setStepActive(2, ['Pronto', 'Saiu para Entrega', 'Finalizado'].includes(status)); // Passo 3: Pronto (NOVO)
+        setStepActive(3, ['Saiu para Entrega', 'Finalizado'].includes(status)); // Passo 4: A Caminho
+        setStepActive(4, status === 'Finalizado'); // Passo 5: Entregue
+
+        // --- LÓGICA DO BADGE DE PAGAMENTO ---
         const payBadge = document.getElementById('status-payment-badge');
         if (payBadge) {
             if (order.status === 'Cancelado' || order.status === 'Rejeitado') {
                 payBadge.innerText = 'CANCELADO';
-                payBadge.className = "bg-red-100 text-red-600 text-xs px-3 py-1 rounded-full font-bold border border-red-200";
+                payBadge.className = "bg-red-100 text-red-600 text-[10px] px-3 py-1 rounded-full font-bold border border-red-200";
             } else if (order.paymentStatus === 'paid') {
                 payBadge.innerText = 'PAGO';
-                payBadge.className = "bg-green-100 text-green-600 text-xs px-3 py-1 rounded-full font-bold border border-green-200";
+                payBadge.className = "bg-green-100 text-green-600 text-[10px] px-3 py-1 rounded-full font-bold border border-green-200";
             } else {
                 payBadge.innerText = 'PENDENTE';
-                payBadge.className = "bg-orange-100 text-orange-600 text-xs px-3 py-1 rounded-full font-bold border border-orange-200";
+                payBadge.className = "bg-orange-100 text-orange-600 text-[10px] px-3 py-1 rounded-full font-bold border border-orange-200";
             }
         }
 

@@ -108,8 +108,10 @@ export function renderizarHeaderGlobal() {
 }
 // js/components.js
 
-export function MesaCard(mesa) {
-    // Define estilos baseados no status
+export function MesaCard(num, ambiente, order = null) {
+    // Define estilos baseados se há um pedido ativo ou não
+    const isOccupied = order !== null;
+    
     let statusStyles = {
         bg: 'bg-white',
         border: 'border-gray-200',
@@ -119,7 +121,7 @@ export function MesaCard(mesa) {
         extra: ''
     };
 
-    if (mesa.status === 'ocupada') {
+    if (isOccupied) {
         statusStyles = {
             bg: 'bg-red-50',
             border: 'border-red-500',
@@ -128,34 +130,23 @@ export function MesaCard(mesa) {
             label: 'Ocupada',
             extra: `
                 <div class="text-center mt-2 w-full pt-2 border-t border-red-200">
-                    <p class="text-sm font-bold text-gray-800">R$ ${mesa.total ? mesa.total.toFixed(2) : '0.00'}</p>
-                    <p class="text-[10px] text-gray-500 flex items-center justify-center gap-1">
-                        <i class="far fa-clock"></i> ${mesa.tempo || '0min'}
-                    </p>
+                    <p class="text-sm font-bold text-gray-800">R$ ${parseFloat(order.total || 0).toFixed(2).replace('.', ',')}</p>
+                    <p class="text-[10px] text-gray-400">Pedido #${order.id.slice(-4).toUpperCase()}</p>
                 </div>`
-        };
-    } else if (mesa.status === 'pagamento') {
-        statusStyles = {
-            bg: 'bg-yellow-50',
-            border: 'border-yellow-400',
-            icon: '<i class="fas fa-hand-holding-usd text-yellow-600 text-3xl animate-bounce"></i>',
-            text: 'text-yellow-700',
-            label: 'Pagando...',
-            extra: '<p class="text-[10px] text-yellow-600 mt-2 font-bold">Aguardando fechamento</p>'
         };
     }
 
-    // Retorna o HTML do cartão
+    // Retorna o HTML. Passamos apenas o NÚMERO no onclick para evitar erros de objeto.
     return `
-        <div onclick="window.abrirMesaPDV(${mesa.id}, '${mesa.nome}')" 
+        <div onclick="window.abrirMesaPDV(${num})" 
              class="table-card relative p-4 rounded-2xl border-2 ${statusStyles.border} ${statusStyles.bg} flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition transform hover:-translate-y-1 h-48">
             
-            <div class="absolute top-2 left-3 font-bold text-gray-400 text-[10px] uppercase tracking-wider">${mesa.ambiente || 'Salão'}</div>
-            <div class="absolute top-2 right-3 font-bold text-gray-800 text-sm">#${mesa.id}</div>
+            <div class="absolute top-2 left-3 font-bold text-gray-400 text-[10px] uppercase tracking-wider">${ambiente || 'Salão'}</div>
+            <div class="absolute top-2 right-3 font-bold text-gray-800 text-sm">#${num}</div>
             
             <div class="mb-3">${statusStyles.icon}</div>
             
-            <h4 class="font-bold text-gray-700 text-lg mb-1">${mesa.nome}</h4>
+            <h4 class="font-bold text-gray-700 text-lg mb-1">Mesa ${num}</h4>
             <span class="text-xs font-bold ${statusStyles.text} uppercase tracking-wider bg-white/50 px-2 py-1 rounded-full">
                 ${statusStyles.label}
             </span>
