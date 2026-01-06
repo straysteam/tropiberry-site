@@ -334,3 +334,13 @@ button[onclick="limparCarrinho()"]:hover {
 .animate-slide-up {
     animation: slideUp 0.3s ease-out forwards;
 }
+.is-app footer { display: none; }
+.is-app .algum-botao-do-site { visibility: hidden; }
+/* Se estiver usando CSS puro para a logo */
+.logo-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%; /* Faz ficar redondo */
+    object-fit: cover;   /* Não deixa a imagem esticar */
+    border: 3px solid white;
+}

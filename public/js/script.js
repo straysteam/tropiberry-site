@@ -2067,3 +2067,6 @@ window.showStep = function(stepId) {
 
     if (stepId === 'step-address') checkSavedAddress(); 
 };
+if (window.navigator.userAgent.includes('wv')) {
+    document.body.classList.add('is-app');
+}
