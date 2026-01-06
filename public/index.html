@@ -176,7 +176,7 @@
     <div id="checkout-modal" class="fixed inset-0 bg-gray-900 bg-opacity-90 hidden z-50 flex items-center justify-center p-0 md:p-4 backdrop-blur-sm font-sans">
         <div class="bg-white w-full h-full md:h-auto md:max-w-lg md:rounded-2xl shadow-2xl flex flex-col overflow-hidden relative animate-pop-up">
             <div class="bg-white p-5 border-b flex justify-between items-center">
-                <button onclick="closeCheckout()" class="text-gray-500 hover:text-gray-800 flex items-center gap-2"><i class="fas fa-chevron-left"></i> Voltar</button>
+                <button onclick="voltarCheckout()" class="text-gray-500 hover:text-gray-800 flex items-center gap-2"><i class="fas fa-chevron-left"></i> Voltar</button>
                 <h3 class="font-bold text-cyan-900 text-lg">Finalizar Pedido</h3>
                 <div class="w-10"></div>
             </div>
@@ -641,5 +641,19 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbW_ZTCs-k6OW034Ee93IYf4IZpHKFzno&libraries=geometry,places"></script>
     <script type="module" src="js/script.js"></script>
+<a id="btn-download" href="TropiBerry.apk" class="fixed bottom-20 right-4 bg-yellow-400 text-cyan-900 font-bold p-4 rounded-full shadow-2xl flex items-center gap-2 z-[40] animate-bounce">
+        <i class="fas fa-mobile-alt"></i>
+        Baixar nosso App!
+    </a>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const isApp = urlParams.get('platform');
+
+        if (isApp === 'app') {
+            // Isso esconde o botão se detectar que está dentro do App Android
+            document.getElementById('btn-download').style.display = 'none';
+        }
+    </script>
 </body>
 </html>

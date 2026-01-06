@@ -15,11 +15,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 import { monitorarEstadoAuth, fazerLogout, verificarAdminNoBanco, db as authDb } from './auth.js'; 
-import { renderizarHeaderGlobal } from './components.js'; 
+import { renderizarHeaderGlobal, garantirModaisGlobais } from './components.js';
 
 let currentUserIsAdmin = false;
 // Usa o banco já inicializado no auth.js
 let db = authDb; 
+let monitorPedidoAtivo = null;
 
 let products = [];
 let categories = []; 
@@ -87,6 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 1. Renderiza o Header (Isso cria a div 'auth-buttons-container')
     renderizarHeaderGlobal();
+    garantirModaisGlobais();
 
     if (window.location.pathname.includes('produto.html')) {
         const params = new URLSearchParams(window.location.search);
@@ -581,11 +583,18 @@ function validarGrupo(group, prefix) {
 
 function atualizarTotalDetalhe(prefix) {
     let addonsTotal = 0;
-    Object.values(selectedOptions).forEach(list => list.forEach(opt => addonsTotal += (opt.price || 0)));
+    
+    // 1. Calcula o preço dos adicionais
+    Object.values(selectedOptions).forEach(list => {
+        if(list && Array.isArray(list)) {
+            list.forEach(opt => addonsTotal += (opt.price || 0));
+        }
+    });
 
     const unitPrice = (currentProductDetail.price + addonsTotal);
     const finalTotal = unitPrice * currentQtd;
 
+    // 2. Atualiza os textos de preço
     const btn = document.getElementById(`${prefix}-total-btn`);
     if(btn) btn.innerText = `R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
     
@@ -594,20 +603,31 @@ function atualizarTotalDetalhe(prefix) {
         if(btnMob) btnMob.innerText = `R$ ${finalTotal.toFixed(2).replace('.', ',')}`;
     }
 
-    // Dentro de atualizarTotalDetalhe em script.js
-const allRequiredMet = currentComplements.every(g => {
-    // Se você desligou a obrigatoriedade global no Admin, ignora o check
-    if (configPedidos.mandatoryComplement === false) return true; 
+    // 3. TRAVA DE SEGURANÇA VISUAL (Desabilita o botão)
+    const allRequiredMet = currentComplements.every(g => {
+        // Se o grupo não é obrigatório, passa direto
+        if (!g.required) return true;
+        
+        // Verifica se selecionou a quantidade mínima (geralmente 1)
+        const selected = selectedOptions[g.id] || [];
+        return selected.length >= (g.min || 1);
+    });
 
-    if (!g.required) return true;
-    const selected = selectedOptions[g.id] || [];
-    return selected.length >= (g.min || 1);
-});
     const addBtn = document.getElementById(`${prefix}-btn-add`) || document.getElementById('btn-add-cart-detail');
+    
     if(addBtn) {
-        addBtn.disabled = !allRequiredMet;
-        if(!allRequiredMet) addBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        else addBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        addBtn.disabled = !allRequiredMet; // Se não cumpriu os requisitos, DESABILITA (True)
+        
+        if(!allRequiredMet) {
+            // Estilo visual de bloqueado
+            addBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-400');
+            addBtn.classList.remove('bg-cyan-600', 'hover:bg-cyan-700');
+            if(btn) btn.innerText = "Escolha os itens";
+        } else {
+            // Estilo visual de liberado
+            addBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-400');
+            addBtn.classList.add('bg-cyan-600', 'hover:bg-cyan-700');
+        }
     }
 }
 
@@ -632,6 +652,29 @@ function mudarQtdDetalhe(delta, prefix = 'detail') {
 function adicionarAoCarrinhoDetalhado() {
     if (!currentProductDetail) return;
 
+    // === TRAVA FINAL DE SEGURANÇA ===
+    // Verifica de novo se todos os obrigatórios foram marcados
+    const pendencias = currentComplements.filter(g => {
+        if (!g.required) return false;
+        const selected = selectedOptions[g.id] || [];
+        return selected.length < (g.min || 1);
+    });
+
+    if (pendencias.length > 0) {
+        // Se houver pendência, avisa o usuário e PARA TUDO.
+        showToast(`Selecione: ${pendencias[0].title}`, true);
+        
+        // Dá um efeito visual no grupo que falta preencher
+        const cardFaltante = document.getElementById(`modal-group-card-${pendencias[0].id}`) || document.getElementById(`detail-group-card-${pendencias[0].id}`);
+        if(cardFaltante) {
+            cardFaltante.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            cardFaltante.classList.add('border-red-500', 'animate-pulse');
+            setTimeout(() => cardFaltante.classList.remove('border-red-500', 'animate-pulse'), 2000);
+        }
+        return; // <--- AQUI O CÓDIGO PARA E NÃO ADICIONA NO CARRINHO
+    }
+    // =================================
+
     let complementsDescription = [];
     let addonsTotalPrice = 0;
 
@@ -646,6 +689,7 @@ function adicionarAoCarrinhoDetalhado() {
     const modalObs = document.getElementById('modal-obs');
     const detailObs = document.getElementById('detail-obs');
     
+    // Verifica qual campo de observação está visível
     if(!document.getElementById('quick-view-modal').classList.contains('hidden') && modalObs) {
         obs = modalObs.value;
     } else if (detailObs) {
@@ -654,6 +698,7 @@ function adicionarAoCarrinhoDetalhado() {
 
     if (obs) complementsDescription.push(`Obs: ${obs}`);
 
+    // Cria ID único baseado nos complementos para diferenciar produtos iguais com opcionais diferentes
     const hasComplements = complementsDescription.length > 0;
     const cartItemId = hasComplements ? `${currentProductDetail.id}-${Date.now()}` : currentProductDetail.id;
 
@@ -1220,10 +1265,17 @@ async function processPayment() {
 
 let countdownInterval = null;
 
- window.openOrderScreen = (orderId) => {
+window.openOrderScreen = (orderId) => {
+    // 1. Garante que a tela existe (caso tenha sido injetada agora)
     const screen = document.getElementById('order-screen');
     if(!screen) return;
     screen.classList.remove('hidden');
+
+    // 2. CORREÇÃO: Limpa o monitoramento anterior para não misturar pedidos
+    if (monitorPedidoAtivo) {
+        monitorPedidoAtivo(); // Para de escutar o pedido velho
+        monitorPedidoAtivo = null;
+    }
 
     setTimeout(() => {
         const mapContainer = document.getElementById('final-map');
@@ -1235,39 +1287,47 @@ let countdownInterval = null;
         }
     }, 400);
 
-    onSnapshot(doc(db, "pedidos", orderId), (docSnap) => {
+    // 3. Inicia o novo monitoramento e guarda na variável global
+    monitorPedidoAtivo = onSnapshot(doc(db, "pedidos", orderId), (docSnap) => {
         if (!docSnap.exists()) return;
         const order = docSnap.data();
 
+        // Seus preenchimentos originais
         document.getElementById('status-order-id').innerText = orderId.slice(-5).toUpperCase();
-        document.getElementById('status-client-name').innerText = order.customer.name;
-        document.getElementById('status-client-phone').innerText = order.customer.phone;
-        document.getElementById('status-client-address').innerText = order.customer.address;
+        
+        // Verifica se os elementos existem antes de preencher (segurança extra)
+        if(document.getElementById('status-client-name')) document.getElementById('status-client-name').innerText = order.customer.name || 'Cliente';
+        if(document.getElementById('status-client-phone')) document.getElementById('status-client-phone').innerText = order.customer.phone || '';
+        if(document.getElementById('status-client-address')) document.getElementById('status-client-address').innerText = order.customer.address || '';
 
-        // --- LÓGICA DE RASTREIO DE 5 PASSOS ---
+        // --- LÓGICA DE RASTREIO DE 5 PASSOS (Mantida Original) ---
         const steps = document.querySelectorAll('#order-screen .relative.z-10.flex.flex-col.items-center');
         const setStepActive = (index, active) => {
             if (!steps[index]) return;
             const circle = steps[index].querySelector('.w-8.h-8');
             if (active) {
                 steps[index].classList.remove('opacity-40');
-                circle.classList.add('bg-green-500', 'text-white');
-                circle.classList.remove('bg-gray-200', 'text-gray-500');
+                if(circle) {
+                    circle.classList.add('bg-green-500', 'text-white');
+                    circle.classList.remove('bg-gray-200', 'text-gray-500');
+                }
             } else {
                 steps[index].classList.add('opacity-40');
-                circle.classList.remove('bg-green-500', 'text-white');
-                circle.classList.add('bg-gray-200', 'text-gray-500');
+                if(circle) {
+                    circle.classList.remove('bg-green-500', 'text-white');
+                    circle.classList.add('bg-gray-200', 'text-gray-500');
+                }
             }
         };
 
         const status = order.status;
-        setStepActive(0, true); // Passo 1: Recebido (Sempre Ativo)
-        setStepActive(1, ['Em Preparo', 'Pronto', 'Saiu para Entrega', 'Finalizado'].includes(status)); // Passo 2: Preparando
-        setStepActive(2, ['Pronto', 'Saiu para Entrega', 'Finalizado'].includes(status)); // Passo 3: Pronto (NOVO)
-        setStepActive(3, ['Saiu para Entrega', 'Finalizado'].includes(status)); // Passo 4: A Caminho
-        setStepActive(4, status === 'Finalizado'); // Passo 5: Entregue
+        setStepActive(0, true); 
+        setStepActive(1, ['Em Preparo', 'Pronto', 'Saiu para Entrega', 'Finalizado'].includes(status)); 
+        setStepActive(2, ['Pronto', 'Saiu para Entrega', 'Finalizado'].includes(status)); 
+        setStepActive(3, ['Saiu para Entrega', 'Finalizado'].includes(status)); 
+        setStepActive(4, status === 'Finalizado'); 
 
-        // --- LÓGICA DO BADGE DE PAGAMENTO ---
+        // --- BADGE DE PAGAMENTO (Mantido Original) ---
         const payBadge = document.getElementById('status-payment-badge');
         if (payBadge) {
             if (order.status === 'Cancelado' || order.status === 'Rejeitado') {
@@ -1295,24 +1355,27 @@ let countdownInterval = null;
         const pixArea = document.getElementById('pix-qr-container');
         const pixSlot = document.getElementById('pix-qr-image-slot');
         
-        if (order.paymentMethod === 'pix' && order.status === 'Aguardando' && order.paymentStatus !== 'paid') {
-            if (!order.createdAt) return; 
-
-            pixArea.classList.remove('hidden');
-            if (order.pixQR) {
-                pixSlot.innerHTML = `<img src="data:image/jpeg;base64,${order.pixQR}" class="w-48 h-48 rounded-lg shadow-lg border-4 border-white mx-auto">`;
-            }
-            if (order.pixCode) {
-                document.getElementById('pix-copy-paste-screen').value = order.pixCode;
-            }
-            if (!countdownInterval) {
-                iniciarContagemRegressiva(orderId, order.createdAt);
-            }
-        } else {
-            pixArea.classList.add('hidden');
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-                countdownInterval = null;
+        if (pixArea && pixSlot) {
+            if (order.paymentMethod === 'pix' && order.status === 'Aguardando' && order.paymentStatus !== 'paid') {
+                if (order.createdAt) {
+                    pixArea.classList.remove('hidden');
+                    if (order.pixQR) {
+                        pixSlot.innerHTML = `<img src="data:image/jpeg;base64,${order.pixQR}" class="w-48 h-48 rounded-lg shadow-lg border-4 border-white mx-auto">`;
+                    }
+                    if (order.pixCode) {
+                        const copyInput = document.getElementById('pix-copy-paste-screen');
+                        if(copyInput) copyInput.value = order.pixCode;
+                    }
+                    if (!countdownInterval) {
+                        iniciarContagemRegressiva(orderId, order.createdAt);
+                    }
+                }
+            } else {
+                pixArea.classList.add('hidden');
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
             }
         }
         
@@ -2070,3 +2133,21 @@ window.showStep = function(stepId) {
 if (window.navigator.userAgent.includes('wv')) {
     document.body.classList.add('is-app');
 }
+window.voltarCheckout = function() {
+    const steps = ['step-service', 'step-address', 'step-summary', 'step-payment-method'];
+    let currentStepId = "";
+    
+    // Encontra qual etapa está visível no momento
+    steps.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('hidden')) currentStepId = id;
+    });
+
+    if (currentStepId === 'step-service' || currentStepId === "") {
+        closeCheckout(); // Se for a primeira etapa, fecha o modal
+    } else {
+        // Se estiver em qualquer outra etapa, volta para a anterior
+        const currentIndex = steps.indexOf(currentStepId);
+        showStep(steps[currentIndex - 1]);
+    }
+};
