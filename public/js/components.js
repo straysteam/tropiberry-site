@@ -169,7 +169,7 @@ export function BotaoNovaMesa() {
     `;
 }
 
-// Mantendo sua função original, mas a abaixo (garantirModaisGlobais) é a que o script.js usa
+// Mantendo sua função original (legado)
 export function injetarModaisGlobais() {
     if (document.getElementById('my-orders-modal')) return;
 
@@ -198,8 +198,9 @@ export function injetarModaisGlobais() {
     document.body.insertAdjacentHTML('beforeend', modaisHTML);
 }
 
-// Esta é a função que o script.js está chamando
+// === FUNÇÃO COMPLETA: Garante TODOS os Modais (Histórico, Info, Loja Fechada) ===
 export function garantirModaisGlobais() {
+    
     // 1. Modais de Pedido e Histórico
     if (!document.getElementById('my-orders-modal')) {
         const modaisHTML = `
@@ -314,5 +315,31 @@ export function garantirModaisGlobais() {
         </div>
         `;
         document.body.insertAdjacentHTML('beforeend', infoModalHTML);
+    }
+
+    // 3. Modal LOJA FECHADA - (Estava faltando este HTML na sua versão)
+    if (!document.getElementById('closed-store-modal')) {
+        const closedModalHTML = `
+        <div id="closed-store-modal" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm text-center overflow-hidden animate-pop-up relative">
+                <div class="bg-orange-100 p-6">
+                    <div class="w-20 h-20 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg border-4 border-white">
+                        <i class="fas fa-clock text-4xl text-white"></i>
+                    </div>
+                </div>
+                <div class="p-6 pt-2">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Loja Fechada</h3>
+                    <p class="text-gray-600 mb-6 font-medium leading-relaxed">
+                        Nesse momento só recebemos <br> <span class="text-orange-600 font-bold">pedidos agendados</span>.
+                    </p>
+                    <button onclick="document.getElementById('closed-store-modal').classList.add('hidden')" 
+                            class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-black py-3 rounded-xl shadow-lg transition transform active:scale-95 text-lg">
+                        OK!!
+                    </button>
+                </div>
+            </div>
+        </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', closedModalHTML);
     }
 }

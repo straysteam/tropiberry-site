@@ -764,11 +764,39 @@ function renderizarBotoesCategorias() {
     
     container.innerHTML = html;
 }   
+// Substitua a função monitorarStatusLojaNoBanco no arquivo js/script.js
+
 function monitorarStatusLojaNoBanco() {
     if(!db) return;
     try {
         const docRef = doc(db, "config", "loja");
-        onSnapshot(docRef, (docSnap) => { if (docSnap.exists()) { isStoreOpen = docSnap.data().aberto; updateStoreStatusUI(); } });
+        onSnapshot(docRef, (docSnap) => { 
+            if (docSnap.exists()) { 
+                const dados = docSnap.data();
+                isStoreOpen = dados.aberto; 
+                
+                updateStoreStatusUI(); 
+
+                // === LÓGICA DO MODAL DE AVISO (Aparece 1x se fechado) ===
+                if (!isStoreOpen) {
+                    // Verifica se já mostrou nessa sessão
+                    const jaMostrou = sessionStorage.getItem('aviso_loja_fechada_mostrado');
+                    
+                    if (!jaMostrou) {
+                        const modalFechado = document.getElementById('closed-store-modal');
+                        if (modalFechado) {
+                            modalFechado.classList.remove('hidden');
+                            // Marca que já mostrou para não abrir de novo se atualizar a página
+                            sessionStorage.setItem('aviso_loja_fechada_mostrado', 'true');
+                        }
+                    }
+                } else {
+                    // Se a loja abrir, reseta o aviso para o futuro
+                    sessionStorage.removeItem('aviso_loja_fechada_mostrado');
+                }
+                // ========================================================
+            } 
+        });
     } catch (e) { console.error(e); }
 }
 async function toggleStoreStatus() {
@@ -943,16 +971,58 @@ function selectService(type) {
     } else { 
         f.classList.remove('hidden'); 
 
-        // --- EXIBIÇÃO DINÂMICA (Conforme Dashboard) ---
+        // --- EXIBIÇÃO DINÂMICA ---
         const extraContainer = document.getElementById('extra-info-container');
-        const scheduleContainer = document.getElementById('scheduling-container');
+        
+        // CORREÇÃO AQUI: O ID correto no seu HTML agora é 'timing-selector'
+        const timingContainer = document.getElementById('timing-selector');
 
         if (extraContainer) {
             configPedidos.askExtraInfo ? extraContainer.classList.remove('hidden') : extraContainer.classList.add('hidden');
         }
 
-        if (scheduleContainer) {
-            configPedidos.allowScheduled ? scheduleContainer.classList.remove('hidden') : scheduleContainer.classList.add('hidden');
+        // Lógica de Agendamento e Loja Fechada
+        if (timingContainer) {
+            if (configPedidos.allowScheduled) {
+                timingContainer.classList.remove('hidden');
+
+                // Se a loja estiver FECHADA, bloqueia a opção "Agora"
+                if (!isStoreOpen) {
+                    const radioNow = document.querySelector('input[name="order-timing"][value="now"]');
+                    const radioSchedule = document.querySelector('input[name="order-timing"][value="schedule"]');
+                    const divNow = document.getElementById('option-now');
+
+                    if (radioNow) {
+                        radioNow.disabled = true;
+                        radioNow.parentElement.classList.add('pointer-events-none');
+                    }
+                    if (divNow) {
+                        divNow.classList.add('opacity-50', 'bg-gray-100');
+                        divNow.innerHTML = '<i class="fas fa-lock text-xl mb-1 block"></i><span class="text-xs font-bold">Fechado</span>';
+                    }
+                    // Força marcar "Agendar"
+                    if (radioSchedule) {
+                        radioSchedule.checked = true;
+                        toggleTimingUI(); // Abre os inputs de data
+                    }
+                } else {
+                    // Se a loja estiver ABERTA, reseta o botão "Agora"
+                    const radioNow = document.querySelector('input[name="order-timing"][value="now"]');
+                    const divNow = document.getElementById('option-now');
+                    
+                    if (radioNow) {
+                        radioNow.disabled = false;
+                        radioNow.parentElement.classList.remove('pointer-events-none');
+                    }
+                    if (divNow) {
+                        divNow.classList.remove('opacity-50', 'bg-gray-100');
+                        divNow.innerHTML = '<i class="fas fa-stopwatch text-xl mb-1 block"></i><span class="text-xs font-bold">Agora</span>';
+                    }
+                    toggleTimingUI();
+                }
+            } else {
+                timingContainer.classList.add('hidden');
+            }
         }
     }
     
@@ -982,13 +1052,11 @@ function goToPaymentMethod() {
     if (currentOrder.method === 'delivery') {
         
         // --- TRAVA: Valor Mínimo para entrega ---
-        // Se ativado no admin e o subtotal for menor que o mínimo, bloqueia
         if (configPedidos.delivMin > 0 && subtotal < configPedidos.delivMin) {
             return showToast(`O valor mínimo para entrega é R$ ${configPedidos.delivMin.toFixed(2).replace('.', ',')}`, true);
         }
 
-        // --- TRAVA: Informação Adicional Obrigatória (CPF/Ponto de Ref) ---
-        // Verifica se o botão "Solicite informações adicionais" está ligado no admin
+        // --- TRAVA: Informação Adicional Obrigatória ---
         if (configPedidos.askExtraInfo) {
             const extraInput = document.getElementById('input-extra-info').value.trim();
             if (!extraInput) {
@@ -996,20 +1064,35 @@ function goToPaymentMethod() {
                 document.getElementById('input-extra-info').focus();
                 return;
             }
-            // Salva a info adicional no objeto do cliente
             currentOrder.customer.extraInfo = extraInput;
         }
 
-        // --- TRAVA: Agendamento de Pedido ---
-        // Verifica se o botão "Permitir pedidos agendados" está ligado no admin
+        // --- TRAVA: Agendamento de Pedido (CORRIGIDO) ---
         if (configPedidos.allowScheduled) {
-            const date = document.getElementById('input-schedule-date').value;
-            const time = document.getElementById('input-schedule-time').value;
-            if (!date || !time) {
-                return showToast("Selecione a data e o horário para o agendamento.", true);
+            // Verifica se escolheu "Agora" ou "Agendar"
+            const timing = document.querySelector('input[name="order-timing"]:checked')?.value;
+            
+            // Só cobra a data se o cliente escolheu "Agendar"
+            if (timing === 'schedule') {
+                const date = document.getElementById('input-schedule-date').value;
+                const time = document.getElementById('input-schedule-time').value;
+                
+                if (!date || !time) {
+                    return showToast("Selecione a data e o horário para o agendamento.", true);
+                }
+                
+                // Validação extra: Data futura
+                const selectedDate = new Date(`${date}T${time}`);
+                if (selectedDate < new Date()) {
+                     return showToast("A data/hora deve ser futura.", true);
+                }
+
+                const dataFormatada = date.split('-').reverse().join('/');
+                currentOrder.scheduled = `${dataFormatada} às ${time}`;
+            } else {
+                // Se for "Agora", remove qualquer agendamento
+                delete currentOrder.scheduled;
             }
-            // Salva o horário agendado no pedido
-            currentOrder.scheduled = `${date} às ${time}`;
         }
 
         // --- VALIDAÇÃO DE ENDEREÇO ---
@@ -1034,8 +1117,7 @@ function goToPaymentMethod() {
     // 5. Avança para a etapa de pagamento
     showStep('step-payment-method');
 
-    // 6. Atualiza o recibo final (Recalcula Taxa de Serviço e Frete Grátis por valor)
-    // Isso garante que o valor exibido na tela de pagamento seja o total real final.
+    // 6. Atualiza o recibo final
     if (typeof renderReceipt === 'function') {
         renderReceipt();
     }
@@ -2115,24 +2197,40 @@ window.goToSummary = function() {
 
 // Atualização da função de passos para incluir o resumo
 window.showStep = function(stepId) { 
-    // Adicionamos o 'step-summary' na lista para ele ser escondido sempre que mudar de passo
-    const passos = ['step-service', 'step-address', 'step-summary', 'step-payment-method'];
-    
-    passos.forEach(id => {
+    const steps = ['step-service', 'step-address', 'step-summary', 'step-payment-method'];
+    steps.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.classList.add('hidden'); // Esconde todos os passos
-    }); 
-
+        if (el) el.classList.add('hidden'); // ISSO AQUI LIMPA O MODAL ANTIGO
+    });
+    // 2. Mostra a etapa atual
     const target = document.getElementById(stepId);
-    if (target) {
-        target.classList.remove('hidden'); // Mostra apenas o passo atual
-    }
+    if (target) target.classList.remove('hidden');
 
-    if (stepId === 'step-address') checkSavedAddress(); 
+    // 3. CONTROLA OS BOTÕES FIXOS DO RODAPÉ
+    const btnAddress = document.getElementById('btn-next-address'); // Botão Azul "Revisar Pedido"
+    const btnSummary = document.getElementById('btn-next-summary'); // Botão Verde "Ir para Pagamento"
+    const btnEdit = document.getElementById('btn-edit-summary');    // Botão "Alterar Dados"
+    const btnPay = document.getElementById('btn-generate-pay');     // Botão "Finalizar"
+
+    // Esconde todos primeiro
+    if(btnAddress) btnAddress.classList.add('hidden');
+    if(btnSummary) btnSummary.classList.add('hidden');
+    if(btnEdit) btnEdit.classList.add('hidden');
+    if(btnPay) btnPay.classList.add('hidden');
+
+    // Mostra o botão certo para a etapa certa
+    if (stepId === 'step-address') {
+        if(btnAddress) btnAddress.classList.remove('hidden'); // <--- AQUI MOSTRA O BOTÃO AZUL
+        checkSavedAddress();
+    }
+    else if (stepId === 'step-summary') {
+        if(btnSummary) btnSummary.classList.remove('hidden');
+        if(btnEdit) btnEdit.classList.remove('hidden');
+    }
+    else if (stepId === 'step-payment-method') {
+        if(btnPay) btnPay.classList.remove('hidden');
+    }
 };
-if (window.navigator.userAgent.includes('wv')) {
-    document.body.classList.add('is-app');
-}
 window.voltarCheckout = function() {
     const steps = ['step-service', 'step-address', 'step-summary', 'step-payment-method'];
     let currentStepId = "";
@@ -2151,3 +2249,17 @@ window.voltarCheckout = function() {
         showStep(steps[currentIndex - 1]);
     }
 };
+window.toggleTimingUI = function() {
+    const timing = document.querySelector('input[name="order-timing"]:checked')?.value;
+    const inputsDiv = document.getElementById('schedule-inputs');
+    if (timing === 'schedule') {
+        inputsDiv.classList.remove('hidden');
+    } else {
+        inputsDiv.classList.add('hidden');
+        document.getElementById('input-schedule-date').value = '';
+        document.getElementById('input-schedule-time').value = '';
+    }
+};
+
+// Adicione isso no final do arquivo script.js se ainda não tiver
+window.toggleTimingUI = toggleTimingUI;
