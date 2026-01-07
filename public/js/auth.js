@@ -30,7 +30,7 @@ const firebaseConfig = {
     measurementId: "G-P1MLB08TZ8"
 };
 
-// Inicialização (Removido o nome "authApp" para evitar conflito com outras partes do site)
+// Inicialização
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
@@ -39,6 +39,42 @@ const googleProvider = new GoogleAuthProvider();
 // Descobre se estamos no App para manter o parâmetro ?platform=app nos links
 const isApp = localStorage.getItem('isFromTropiApp') === 'true' || window.location.search.includes('platform=app');
 const appParam = isApp ? "?platform=app" : "";
+
+// --- FUNÇÃO AUXILIAR: TOAST PERSONALIZADO (VISUAL TROPIBERRY) ---
+function mostrarToast(mensagem, tipo = 'sucesso') {
+    const toast = document.getElementById('toast-notification');
+    const toastMsg = document.getElementById('toast-message');
+    const toastIconContainer = toast.querySelector('div:first-child');
+    const toastIcon = toastIconContainer.querySelector('i');
+    const toastTitle = toast.querySelector('p.font-bold');
+
+    // Configura as cores e ícones baseados no tipo
+    if (tipo === 'sucesso') {
+        toast.classList.replace('border-red-500', 'border-green-500');
+        toastIconContainer.classList.replace('text-red-500', 'text-green-500');
+        toastIconContainer.classList.replace('bg-red-100', 'bg-green-100');
+        toastIcon.className = 'fas fa-check-circle text-xl';
+        toastTitle.textContent = 'Sucesso!';
+    } else {
+        // Se for erro, garante que as classes de erro existam
+        toast.classList.remove('border-green-500');
+        toast.classList.add('border-red-500');
+        toastIconContainer.classList.remove('text-green-500', 'bg-green-100');
+        toastIconContainer.classList.add('text-red-500', 'bg-red-100');
+        toastIcon.className = 'fas fa-exclamation-circle text-xl';
+        toastTitle.textContent = 'Ops!';
+    }
+
+    toastMsg.textContent = mensagem;
+
+    // Animação para mostrar (Remove as classes de esconder do Tailwind)
+    toast.classList.remove('translate-x-full', 'opacity-0', 'pointer-events-none');
+
+    // Esconde após 4 segundos
+    setTimeout(() => {
+        toast.classList.add('translate-x-full', 'opacity-0', 'pointer-events-none');
+    }, 4000);
+}
 
 // --- LÓGICA DE REDIRECIONAMENTO ---
 getRedirectResult(auth)
@@ -77,7 +113,7 @@ export async function criarConta(email, senha) {
         await salvarUsuarioNoBanco(userCredential.user);
         window.location.href = "index.html" + appParam;
     } catch (error) {
-        alert("Erro ao cadastrar: " + error.message);
+        mostrarToast("Erro ao cadastrar: " + error.message, 'erro');
     }
 }
 
@@ -87,13 +123,12 @@ export async function fazerLogin(email, senha) {
         await salvarUsuarioNoBanco(userCredential.user);
         window.location.href = "index.html" + appParam;
     } catch (error) {
-        alert("Email ou senha incorretos.");
+        mostrarToast("Email ou senha incorretos.", 'erro');
     }
 }
 
 export async function loginComGoogle() {
     try {
-        // Se estiver no celular (WebView), usa Redirect. Se estiver no PC, usa Popup (melhor UX).
         if (isApp) {
             await signInWithRedirect(auth, googleProvider);
         } else {
@@ -103,19 +138,22 @@ export async function loginComGoogle() {
         }
     } catch (error) {
         console.error("Erro Google:", error);
+        mostrarToast("Erro ao entrar com Google.", 'erro');
     }
 }
 
 export async function recuperarSenha(email) {
     if(!email) {
-        alert("Digite seu e-mail primeiro.");
+        mostrarToast("Digite seu e-mail no campo acima.", 'erro');
         return;
     }
     try {
         await sendPasswordResetEmail(auth, email);
-        alert("E-mail de redefinição enviado!");
+        mostrarToast("Link de redefinição enviado para o seu e-mail!");
     } catch (error) {
-        alert("Erro: " + error.message);
+        let msg = "Erro ao enviar e-mail.";
+        if(error.code === 'auth/user-not-found') msg = "E-mail não cadastrado.";
+        mostrarToast(msg, 'erro');
     }
 }
 
@@ -134,8 +172,6 @@ export function monitorarEstadoAuth(callback) {
         callback(user);
 
         if (user) {
-            // Se o usuário está logado E a URL atual for uma página de "sucesso" do Google ou login
-            // Nós forçamos ele a voltar para a Home
             const url = window.location.href;
             if (url.includes("auth/handler") || url.includes("callback") || url.includes("login.html")) {
                 console.log("Login detectado, redirecionando para Home...");
@@ -144,6 +180,7 @@ export function monitorarEstadoAuth(callback) {
         }
     });
 }
+
 export async function verificarAdminNoBanco(email) {
     if (!email) return false;
     try {
