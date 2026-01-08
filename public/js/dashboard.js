@@ -888,9 +888,6 @@ window.salvarNovaConfiguracao = async () => {
     }
 };
 
-window.fecharModalProduto = () => document.getElementById('product-modal').classList.add('hidden');
-
-// 2. CONFIGURAÇÕES DA LOJA (BOAS-VINDAS)
 window.handleFacadeUpload = async (input) => {
     if (input.files && input.files[0]) {
         const file = input.files[0];
@@ -2650,19 +2647,16 @@ async function confirmarRecebimentoEventos(eventos) {
         body: JSON.stringify(eventsToAck)
     });
 }
-// Função que desenha os produtos na aba "Produtos" do Dashboard
+// Substitua a função antiga por esta
 window.renderizarListaProdutos = () => {
     const container = document.getElementById('products-list-container');
     if (!container) return;
 
     container.innerHTML = '';
 
+    // Usamos o allProducts que já é carregado no dashboard.js
     if (allProducts.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-10">
-                <p class="text-gray-500">Nenhum produto encontrado no banco de dados.</p>
-                <button onclick="navegarPara('view-config-business')" class="text-cyan-600 underline text-sm">Verificar configurações</button>
-            </div>`;
+        container.innerHTML = `<div class="text-center py-10"><p class="text-gray-500">Nenhum produto cadastrado.</p></div>`;
         return;
     }
 
@@ -2681,149 +2675,12 @@ window.renderizarListaProdutos = () => {
             </div>
             <div class="text-right">
                 <p class="font-bold text-cyan-700">R$ ${parseFloat(p.price).toFixed(2).replace('.', ',')}</p>
-                <button onclick="abrirModalEdicaoDash('${p.id}')" class="text-xs text-blue-600 font-bold hover:underline">Editar</button>
+                <button onclick="window.abrirModalEdicao('${p.id}')" class="text-xs text-blue-600 font-bold hover:underline">Editar</button>
             </div>
         `;
         container.appendChild(div);
     });
 }
-
-// Atalho para abrir o modal de edição que já existe no HTML
-window.abrirModalEdicaoDash = (id) => {
-    const p = allProducts.find(x => x.id === id);
-    if (!p) return;
-
-    // Preenche os campos básicos
-    document.getElementById('edit-id').value = p.id;
-    document.getElementById('edit-name').value = p.name;
-    document.getElementById('edit-category').value = p.category || '';
-    document.getElementById('edit-price').value = p.price;
-    document.getElementById('edit-original-price').value = p.originalPrice || '';
-    document.getElementById('edit-desc').value = p.description || '';
-    
-    // Preenche campos de tamanho/peso
-    if(document.getElementById('edit-serves')) document.getElementById('edit-serves').value = p.serves || '1';
-    if(document.getElementById('edit-weight')) document.getElementById('edit-weight').value = p.weight || '';
-    if(document.getElementById('edit-unit')) document.getElementById('edit-unit').value = p.unit || 'ml';
-
-    // Gerencia a pré-visualização da imagem
-    const preview = document.getElementById('preview-image');
-    const icon = document.getElementById('icon-image');
-    const inputUrl = document.getElementById('edit-image-url');
-
-    if(p.image) {
-        preview.src = p.image;
-        preview.classList.remove('hidden');
-        icon.classList.add('hidden');
-        inputUrl.value = p.image;
-    } else {
-        preview.classList.add('hidden');
-        icon.classList.remove('hidden');
-        inputUrl.value = '';
-    }
-
-    // Altera o título do modal e mostra
-    document.getElementById('modal-title').innerText = "Editar Produto";
-    document.getElementById('product-modal').classList.remove('hidden');
-    
-    // Garante que comece na aba "Sobre"
-    if (typeof window.mudarAba === 'function') window.mudarAba('sobre');
-};
-// Função para Salvar/Atualizar o produto no Firebase (usada pelo botão do modal)
-// Função que faz o upload da imagem do produto para o Firebase Storage
-window.handleImageUpload = async (input) => {
-    if (input.files && input.files[0]) {
-        const file = input.files[0];
-        const loading = document.getElementById('upload-loading');
-        
-        if(loading) loading.classList.remove('hidden');
-
-        try {
-            // Cria uma referência única no Storage
-            const storageRef = ref(storage, `produtos/${Date.now()}_${file.name}`);
-            
-            // Faz o upload
-            await uploadBytes(storageRef, file);
-            
-            // Pega a URL para salvar no banco
-            const url = await getDownloadURL(storageRef);
-            
-            // Atualiza a visualização no modal
-            const preview = document.getElementById('preview-image');
-            const icon = document.getElementById('icon-image');
-            const inputHidden = document.getElementById('edit-image-url');
-
-            if(preview) {
-                preview.src = url;
-                preview.classList.remove('hidden');
-            }
-            if(icon) icon.classList.add('hidden');
-            if(inputHidden) inputHidden.value = url;
-            
-            showToast("Sucesso", "Imagem carregada!");
-
-        } catch (error) {
-            console.error("Erro no upload da imagem:", error);
-            showToast("Erro", "Falha ao enviar imagem.", true);
-        } finally {
-            if(loading) loading.classList.add('hidden');
-        }
-    }
-};  
-window.salvarProduto = async function() {
-    const id = document.getElementById('edit-id').value;
-    const priceInput = document.getElementById('edit-price').value;
-
-    const produto = {
-        name: document.getElementById('edit-name').value,
-        category: document.getElementById('edit-category').value,
-        price: parseFloat(priceInput),
-        originalPrice: document.getElementById('edit-original-price').value ? parseFloat(document.getElementById('edit-original-price').value) : null,
-        description: document.getElementById('edit-desc').value,
-        image: document.getElementById('edit-image-url').value,
-        serves: document.getElementById('edit-serves').value,
-        weight: document.getElementById('edit-weight').value,
-        unit: document.getElementById('edit-unit').value
-    };
-
-    if (!produto.name || isNaN(produto.price)) {
-        return showToast("Erro", "Nome e Preço são obrigatórios.", true);
-    }
-
-    try {
-        if (id) {
-            await updateDoc(doc(db, "produtos", id), produto);
-            showToast("Atualizado", "Produto salvo com sucesso!");
-        } else {
-            await addDoc(collection(db, "produtos"), produto);
-            showToast("Criado", "Novo produto adicionado!");
-        }
-        document.getElementById('product-modal').classList.add('hidden');
-        // Atualiza a lista após salvar
-        renderizarListaProdutos(); 
-    } catch (e) {
-        // O ERRO ESTAVA AQUI: você usava 'error' mas declarou 'e'
-        console.error("Erro ao salvar produto:", e); 
-        showToast("Erro", "Falha ao salvar no banco de dados.", true);
-    }
-};
-
-// Função para Excluir o produto (usada pelo botão do modal)
-window.deletarProduto = async function() {
-    const id = document.getElementById('edit-id').value;
-    if(!id) return;
-    if(!confirm("Deseja excluir este produto permanentemente?")) return;
-
-    try {
-        await deleteDoc(doc(db, "produtos", id));
-        showToast("Excluído", "Produto removido com sucesso.");
-        document.getElementById('product-modal').classList.add('hidden');
-    } catch(e) {
-        console.error(e);
-        showToast("Erro", "Erro ao excluir produto.", true);
-    }
-};
-// Função para abrir o simulador
 window.abrirSimuladorMobile = function() {
     const modal = document.getElementById('modal-simulador-mobile');
     const iframe = document.getElementById('iframe-mobile');

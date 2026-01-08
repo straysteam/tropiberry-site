@@ -12,7 +12,7 @@ let allCategories = [];
 let allComplementGroups = []; // Todos os grupos existentes na loja
 let currentProductAttachedGroups = []; // Grupos vinculados ao produto sendo editado agora
 let currentCategoryFilter = 'all';
-
+let editingGroupId = null;
 const AVAILABLE_TAGS = [
     "Vegano", "Vegetariano", "Orgânico", "Sem açúcar", "Sem lactose", "Sem glúten",
     "Bebida gelada", "Bebida alcoólica", "Natural", "Mais Vendido", "Promoção", "Ofertão",
@@ -95,15 +95,23 @@ function renderAvailableGroupsList() {
             <div class="flex items-center justify-between bg-white p-3 rounded border border-gray-100 shadow-sm mb-2">
                 <div class="flex-1">
                     <p class="font-bold text-sm text-cyan-900">${group.title}</p>
-                    <p class="text-[10px] text-gray-500">${group.options ? group.options.length : 0} opções • ${group.required ? 'Obrigatório' : 'Opcional'}</p>
+                    <p class="text-[10px] text-gray-500">Min: ${group.min || 0} • Max: ${group.max} • ${group.options ? group.options.length : 0} opções</p>
                 </div>
                 
-                <div class="flex items-center gap-2">
-                    <button onclick="toggleGroupAttachment('${group.id}')" class="${isAttached ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} text-xs font-bold px-3 py-1.5 rounded transition">
-                        ${isAttached ? 'Remover' : 'Adicionar'}
+                <div class="flex items-center gap-1">
+                    <button onclick="toggleGroupAttachment('${group.id}')" class="${isAttached ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} text-[10px] font-bold px-2 py-1.5 rounded transition">
+                        ${isAttached ? 'Desvincular' : 'Vincular'}
                     </button>
                     
-                    <button onclick="excluirGrupoComplemento('${group.id}')" class="bg-gray-100 hover:bg-red-500 hover:text-white text-gray-400 text-xs px-2 py-1.5 rounded transition" title="Excluir grupo do sistema">
+                    <button onclick="prepararEdicaoGrupo('${group.id}')" class="bg-blue-50 text-blue-600 text-[10px] p-1.5 rounded hover:bg-blue-500 hover:text-white" title="Editar este grupo">
+                        <i class="fas fa-edit"></i>
+                    </button>
+
+                    <button onclick="duplicarGrupo('${group.id}')" class="bg-yellow-50 text-yellow-600 text-[10px] p-1.5 rounded hover:bg-yellow-500 hover:text-white" title="Duplicar (Para preços específicos)">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                    
+                    <button onclick="excluirGrupoComplemento('${group.id}')" class="bg-gray-50 text-gray-400 text-[10px] p-1.5 rounded hover:bg-red-500 hover:text-white">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -111,6 +119,59 @@ function renderAvailableGroupsList() {
         container.innerHTML += html;
     });
 }
+window.prepararEdicaoGrupo = (id) => {
+    const group = allComplementGroups.find(g => g.id === id);
+    if (!group) return;
+
+    editingGroupId = id;
+    document.getElementById('editing-group-id').value = id;
+    document.getElementById('new-group-title').value = group.title;
+    document.getElementById('new-group-category').value = group.internalCategory || 'complemento';
+    document.getElementById('new-group-required').value = group.required.toString();
+    document.getElementById('new-group-min').value = group.min || 0;
+    document.getElementById('new-group-max').value = group.max || 1;
+    
+    document.getElementById('btn-cancel-edit-group').classList.remove('hidden');
+    document.getElementById('btn-save-group').innerText = "Atualizar Grupo";
+
+    // Carregar opções
+    const optionsContainer = document.getElementById('new-group-options');
+    optionsContainer.innerHTML = '';
+    group.options.forEach(opt => {
+        const rowId = Date.now() + Math.random();
+        const html = `
+            <div class="flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-200" id="opt-row-${rowId}">
+                <label class="w-8 h-8 flex-shrink-0 bg-white border border-gray-300 rounded cursor-pointer flex items-center justify-center hover:bg-gray-100 overflow-hidden">
+                    <input type="file" class="hidden" onchange="uploadOptionImage(this, 'img-${rowId}', 'input-${rowId}')">
+                    <img id="img-${rowId}" src="${opt.image || ''}" class="w-full h-full object-cover ${opt.image ? '' : 'hidden'}">
+                    <i class="fas fa-camera text-gray-400 text-xs ${opt.image ? 'hidden' : ''}"></i>
+                    <input type="hidden" class="option-img-url" id="input-${rowId}" value="${opt.image || ''}">
+                </label>
+                <input type="text" class="option-name w-full border rounded p-1 text-xs" value="${opt.name}" placeholder="Nome">
+                <input type="number" step="0.01" class="option-price w-20 border rounded p-1 text-xs" value="${opt.price}" placeholder="R$">
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>
+            </div>`;
+        optionsContainer.insertAdjacentHTML('beforeend', html);
+    });
+};
+
+// NOVA FUNÇÃO: Duplicar grupo (para criar versões com preços diferentes)
+window.duplicarGrupo = (id) => {
+    prepararEdicaoGrupo(id);
+    editingGroupId = null; // Remove o ID para que o salvar entenda como "Novo"
+    document.getElementById('editing-group-id').value = '';
+    document.getElementById('new-group-title').value += " (Cópia)";
+    document.getElementById('btn-save-group').innerText = "Salvar como Novo";
+    showToast("Copiado", "Altere os valores e salve como um novo grupo.");
+};
+window.resetarFormGrupo = () => {
+    editingGroupId = null;
+    document.getElementById('form-new-group').reset();
+    document.getElementById('new-group-options').innerHTML = '';
+    document.getElementById('btn-cancel-edit-group').classList.add('hidden');
+    document.getElementById('btn-save-group').innerText = "Criar e Vincular";
+    addOptionRow();
+};
 
 window.toggleGroupAttachment = (groupId) => {
     if (currentProductAttachedGroups.includes(groupId)) {
@@ -194,12 +255,13 @@ window.uploadOptionImage = async function(input, imgId, hiddenInputId) {
 }
 
 window.salvarNovoGrupo = async function() {
+    const id = document.getElementById('editing-group-id').value;
     const title = document.getElementById('new-group-title').value;
     const required = document.getElementById('new-group-required').value === 'true';
+    const min = parseInt(document.getElementById('new-group-min').value) || 0;
     const max = parseInt(document.getElementById('new-group-max').value) || 1;
-    const category = document.getElementById('new-group-category').value; // PEGA A CATEGORIA SELECIONADA
+    const category = document.getElementById('new-group-category').value;
     
-    // Coleta Opções
     const options = [];
     document.querySelectorAll('#new-group-options > div').forEach(row => {
         const name = row.querySelector('.option-name').value;
@@ -211,21 +273,27 @@ window.salvarNovoGrupo = async function() {
     if(!title || options.length === 0) return alert("Preencha o título e pelo menos uma opção.");
 
     try {
-        // SALVA A CATEGORIA NO BANCO DE DADOS
-        const docRef = await addDoc(collection(db, "complementos"), {
+        const groupData = {
             title, 
             required, 
+            min, 
             max, 
-            min: required ? 1 : 0, 
             options,
-            internalCategory: category // Campo novo no Firebase
-        });
+            internalCategory: category
+        };
+
+        if (id) {
+            // EDITAR EXISTENTE
+            await updateDoc(doc(db, "complementos", id), groupData);
+            showToast("Atualizado", "Grupo de complementos atualizado!");
+        } else {
+            // CRIAR NOVO
+            const docRef = await addDoc(collection(db, "complementos"), groupData);
+            toggleGroupAttachment(docRef.id);
+            showToast("Sucesso", "Novo grupo criado!");
+        }
         
-        showToast("Sucesso", "Grupo de complementos criado!");
-        
-        toggleGroupAttachment(docRef.id);
-        document.getElementById('group-manager-modal').classList.add('hidden');
-        
+        resetarFormGrupo();
     } catch(e) {
         console.error(e);
         showToast("Erro", "Erro ao salvar grupo.", true);
@@ -543,3 +611,8 @@ window.excluirGrupoComplemento = async (id) => {
         toggleLoading(false);
     }
 }
+// Adicione isso no final do seu admin.js
+window.abrirModalEdicaoExterno = (id, listaProdutos) => {
+    allProducts = listaProdutos; // Sincroniza a lista do dash com a do admin
+    window.abrirModalEdicao(id);
+}   

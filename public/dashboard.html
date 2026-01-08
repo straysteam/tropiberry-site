@@ -1531,43 +1531,99 @@
 </div>
 </div>
         </main> 
-        <div id="product-modal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+<div id="product-modal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center p-4 backdrop-blur-sm">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up overflow-hidden">
         <div class="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
-            <h3 id="modal-title" class="font-bold text-lg text-gray-800">Novo Produto</h3>
-            <button onclick="fecharModalProduto()" class="text-gray-400 hover:text-red-500 text-xl"><i class="fas fa-times"></i></button>
+            <h3 id="modal-title" class="font-bold text-lg text-gray-800">Produto</h3>
+            <button type="button" onclick="window.fecharModalProduto()" class="text-gray-400 hover:text-red-500 text-xl"><i class="fas fa-times"></i></button>
         </div>
+
         <div class="flex border-b bg-white">
-            <button onclick="mudarAba('sobre')" id="tab-btn-sobre" class="flex-1 py-3 text-sm font-bold text-cyan-700 border-b-2 border-cyan-700 bg-cyan-50">Sobre o produto</button>
-            <button onclick="mudarAba('complementos')" id="tab-btn-complementos" class="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50">Complementos</button>
+            <button type="button" onclick="window.mudarAba('sobre')" id="tab-btn-sobre" class="flex-1 py-3 text-sm font-bold text-cyan-700 border-b-2 border-cyan-700 bg-cyan-50">Sobre o produto</button>
+            <button type="button" onclick="window.mudarAba('complementos')" id="tab-btn-complementos" class="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50">Complementos</button>
         </div>
+        
         <form id="form-produto" class="flex-1 overflow-y-auto bg-white relative">
             <input type="hidden" id="edit-id">
+            
             <div id="tab-sobre" class="p-6 space-y-5">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label class="block text-xs font-bold text-gray-600 mb-1">Nome</label><input type="text" id="edit-name" class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none" required></div>
-                    <div><label class="block text-xs font-bold text-gray-600 mb-1">Categoria</label><select id="edit-category" class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none bg-white"></select></div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs font-bold text-gray-600 mb-1">Preço Atual (R$)</label><input type="number" step="0.01" id="edit-price" class="w-full border rounded-lg p-2 text-sm" required></div>
-                    <div><label class="block text-xs font-bold text-gray-600 mb-1">Preço Original (De/Por)</label><input type="number" step="0.01" id="edit-original-price" class="w-full border rounded-lg p-2 text-sm"></div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs text-gray-500 mb-1">Serve até</label><select id="edit-serves" class="w-full border rounded p-2 text-sm bg-white"><option value="1">1 Pessoa</option><option value="2">2 Pessoas</option><option value="3">3 Pessoas</option><option value="4">4+ Pessoas</option></select></div>
-                    <div><label class="block text-xs text-gray-500 mb-1">Peso / Volume</label><div class="flex"><input type="number" id="edit-weight" class="w-2/3 border rounded-l p-2 text-sm"><select id="edit-unit" class="w-1/3 border-y border-r rounded-r p-2 text-sm bg-gray-100"><option value="ml">ml</option><option value="l">L</option><option value="g">g</option><option value="kg">kg</option></select></div></div>
-                </div>
-                <div><label class="block text-xs font-bold text-gray-600 mb-1">Descrição</label><textarea id="edit-desc" rows="3" class="w-full border rounded-lg p-2 text-sm"></textarea></div>
-                <div><label class="block text-xs font-bold text-gray-600 mb-1">Imagem</label>
-                    <div class="flex items-center gap-4">
-                        <div class="w-20 h-20 bg-gray-100 rounded-lg border overflow-hidden relative"><img id="preview-image" class="w-full h-full object-cover hidden"><div id="icon-image" class="w-full h-full flex items-center justify-center text-gray-300 text-2xl"><i class="fas fa-image"></i></div><div id="upload-loading" class="absolute inset-0 bg-black/50 hidden flex items-center justify-center"><i class="fas fa-spinner fa-spin text-white"></i></div></div>
-                        <input type="file" id="file-upload" accept="image/*" class="hidden" onchange="handleImageUpload(this)"><button type="button" onclick="document.getElementById('file-upload').click()" class="bg-cyan-600 text-white text-xs font-bold px-4 py-2 rounded">Escolher Imagem</button><input type="hidden" id="edit-image-url">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Nome</label>
+                        <input type="text" id="edit-name" class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
+                        <select id="edit-category" class="w-full border rounded-lg p-2 text-sm bg-white"></select>
                     </div>
                 </div>
-                <div><label class="block text-xs font-bold text-gray-600 mb-2">Tags</label><div id="tags-container" class="flex flex-wrap gap-2"></div></div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Preço Atual</label>
+                        <input type="number" step="0.01" id="edit-price" class="w-full border rounded-lg p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Preço Original</label>
+                        <input type="number" step="0.01" id="edit-original-price" class="w-full border rounded-lg p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Serve até</label>
+                        <select id="edit-serves" class="w-full border rounded p-2 text-sm"><option value="1">1 Pessoa</option><option value="2">2 Pessoas</option></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Peso / Volume</label>
+                        <div class="flex">
+                            <input type="number" id="edit-weight" class="w-2/3 border rounded-l p-2 text-sm">
+                            <select id="edit-unit" class="w-1/3 border-y border-r rounded-r p-2 text-sm bg-gray-100"><option value="ml">ml</option><option value="g">g</option></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">Descrição</label>
+                    <textarea id="edit-desc" rows="3" class="w-full border rounded-lg p-2 text-sm"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">Imagem</label>
+                    <div class="flex items-center gap-4">
+                        <div class="w-20 h-20 bg-gray-100 rounded-lg border overflow-hidden relative">
+                            <img id="preview-image" class="w-full h-full object-cover hidden">
+                            <div id="icon-image" class="w-full h-full flex items-center justify-center text-gray-300 text-2xl"><i class="fas fa-image"></i></div>
+                            <div id="upload-loading" class="absolute inset-0 bg-black/50 hidden flex items-center justify-center"><i class="fas fa-spinner fa-spin text-white"></i></div>
+                        </div>
+                        <input type="file" id="file-upload" accept="image/*" class="hidden" onchange="window.handleImageUpload(this)">
+                        <button type="button" onclick="document.getElementById('file-upload').click()" class="bg-cyan-600 text-white text-xs font-bold px-4 py-2 rounded">Trocar Imagem</button>
+                        <input type="hidden" id="edit-image-url">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-2">Tags</label>
+                    <div id="tags-container" class="flex flex-wrap gap-2"></div>
+                </div>
             </div>
-            <div id="tab-complementos" class="p-6 hidden h-full flex flex-col"><div class="flex justify-between items-center mb-4"><h4 class="font-bold text-gray-700">Grupos vinculados</h4><button type="button" onclick="abrirGerenciadorGrupos()" class="text-red-600 font-bold text-sm border border-red-600 px-4 py-2 rounded-lg hover:bg-red-50">+ Criar/Vincular Grupo</button></div><div id="attached-groups-list" class="space-y-3 flex-1 overflow-y-auto pb-4"></div></div>
+
+            <div id="tab-complementos" class="p-6 hidden h-full flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="font-bold text-gray-700">Grupos vinculados</h4>
+                    <button type="button" onclick="window.abrirGerenciadorGrupos()" class="text-red-600 font-bold text-sm border border-red-600 px-4 py-2 rounded-lg">+ Vincular Grupo</button>
+                </div>
+                <div id="attached-groups-list" class="space-y-3 flex-1 overflow-y-auto pb-4"></div>
+            </div>
         </form>
-        <div class="px-6 py-4 border-t bg-gray-50 flex justify-between items-center"><button type="button" onclick="deletarProduto()" class="text-red-500 hover:text-red-700 text-sm font-bold flex items-center gap-1"><i class="fas fa-trash"></i> Excluir</button><div class="flex gap-3"><button type="button" onclick="fecharModalProduto()" class="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg text-sm font-bold">Cancelar</button><button type="button" onclick="salvarProduto()" class="px-6 py-2 bg-cyan-900 text-white rounded-lg text-sm font-bold hover:bg-cyan-800 shadow">Salvar Produto</button></div></div>
+
+        <div class="px-6 py-4 border-t bg-gray-50 flex justify-between items-center">
+            <button type="button" onclick="window.deletarProduto()" class="text-red-500 font-bold text-sm">Excluir</button>
+            <div class="flex gap-3">
+                <button type="button" onclick="window.fecharModalProduto()" class="px-4 py-2 text-gray-600 font-bold text-sm">Cancelar</button>
+                <button type="button" onclick="window.salvarProduto()" class="px-6 py-2 bg-cyan-900 text-white rounded-lg font-bold text-sm">Salvar Alterações</button>
+            </div>
+        </div>
     </div>
 </div>
 
