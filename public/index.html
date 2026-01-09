@@ -39,21 +39,45 @@
             </div>
         </div>
     </section>
+ <section class="container mx-auto px-4 mb-8 relative z-30">
+        <div class="relative group max-w-5xl mx-auto">
+            
+            <button onclick="moverCarrossel(-1)" class="absolute -left-5 top-1/2 -translate-y-1/2 z-40 bg-white text-cyan-900 w-10 h-10 rounded-full shadow-xl hidden md:flex items-center justify-center hover:bg-cyan-50 transition-all border border-gray-100">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+
+            <button onclick="moverCarrossel(1)" class="absolute -right-5 top-1/2 -translate-y-1/2 z-40 bg-white text-cyan-900 w-10 h-10 rounded-full shadow-xl hidden md:flex items-center justify-center hover:bg-cyan-50 transition-all border border-gray-100">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+
+            <div id="marketing-banners-site" class="carousel-container no-scrollbar flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-4">
+                </div>
+
+            <div id="carousel-indicators" class="flex justify-center gap-2 mt-2">
+                </div>
+        </div>
+    </section>
 
     <section id="menu-section" class="container mx-auto px-4 py-12 flex-grow">
         <div id="closed-banner" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-8 rounded-lg shadow-md flex items-center gap-3">
             <i class="fas fa-store-slash text-2xl"></i>
-            <div><p class="font-bold">A Loja está fechada no momento!</p><p class="text-sm">Você pode navegar pelo cardápio, mas os pedidos online estão pausados.</p></div>
+            <div>
+                <p class="font-bold">A Loja está fechada no momento!</p>
+                <p class="text-sm">Você pode navegar pelo cardápio, mas os pedidos online estão pausados.</p>
+            </div>
         </div>
+
         <div class="text-center mb-12">
             <span class="text-cyan-600 font-bold tracking-wider uppercase text-sm">Nossas Delícias</span>
             <h3 class="text-4xl font-bold text-cyan-900 mt-2">Destaques</h3>
             <div class="w-24 h-1.5 bg-yellow-400 mx-auto mt-4 rounded-full"></div>
         </div>
         
-       <div id="category-filters" class="flex flex-nowrap gap-3 overflow-x-auto pb-4 px-4 -mx-4 md:mx-0 md:flex-wrap md:justify-center no-scrollbar touch-pan-x mb-8">
-    </div>
-<div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10"></div>
+        <div id="category-filters" class="flex flex-nowrap gap-3 overflow-x-auto pb-4 px-4 -mx-4 md:mx-0 md:flex-wrap md:justify-center no-scrollbar touch-pan-x mb-8">
+            </div>
+
+        <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10">
+            </div>
         
         <div class="text-center pb-20">
             <a href="cardapio.html" class="inline-block bg-white border-2 border-cyan-600 text-cyan-600 px-8 py-3 rounded-full font-bold hover:bg-cyan-600 hover:text-white transition shadow-md">
@@ -672,5 +696,80 @@
         }
     }
 </script>
+<div id="modal-clube" class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-pop-up">
+        <div class="bg-cyan-900 p-8 text-center relative">
+            <button onclick="document.getElementById('modal-clube').classList.add('hidden')" class="absolute top-4 right-4 text-white/50 hover:text-white">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+            <div class="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg ring-4 ring-cyan-800">
+                <i class="fas fa-crown text-3xl text-cyan-900"></i>
+            </div>
+            <h3 class="text-2xl font-black text-white uppercase italic tracking-tighter">Clube TropiBerry</h3>
+            <p class="text-cyan-200 text-sm">Vantagens exclusivas todos os meses</p>
+        </div>
+        
+        <div class="p-8 space-y-6">
+            <div class="space-y-4">
+                <div class="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <div class="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0">
+                        <i class="fas fa-percentage font-bold"></i>
+                    </div>
+                    <p class="text-gray-700 text-sm font-medium leading-tight"><b>10% de Desconto</b> em todos os seus pedidos na loja.</p>
+                </div>
+                <div class="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center shrink-0">
+                        <i class="fas fa-rocket"></i>
+                    </div>
+                    <p class="text-gray-700 text-sm font-medium leading-tight">Prioridade na fila de produção e entrega.</p>
+                </div>
+            </div>
+
+            <div class="text-center py-4">
+                <span class="text-gray-400 text-xs uppercase font-bold tracking-widest">Investimento Mensal</span>
+                <div class="flex items-center justify-center gap-1">
+                    <span class="text-gray-800 font-bold">R$</span>
+                    <span class="text-4xl font-black text-gray-900">30,00</span>
+                    <span class="text-gray-400 font-bold">/mês</span>
+                </div>
+            </div>
+
+            <button id="btn-assinar-clube" onclick="window.assinarClube()" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-cyan-100 transition-all flex items-center justify-center gap-3">
+                <i class="fas fa-check-circle"></i> QUERO PARTICIPAR AGORA
+            </button>
+            <p class="text-[10px] text-center text-gray-400">Assinatura processada via Mercado Pago. Cancele quando quiser.</p>
+        </div>
+    </div>
+</div>
+<div id="modal-fidelidade" class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-pop-up">
+        <div class="bg-gradient-to-br from-yellow-400 to-orange-600 p-8 text-center relative">
+            <button onclick="document.getElementById('modal-fidelidade').classList.add('hidden')" class="absolute top-4 right-4 text-white/50 hover:text-white">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+            <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <i class="fas fa-star text-2xl text-orange-500"></i>
+            </div>
+            <h3 class="text-2xl font-black text-white uppercase italic tracking-tighter">Fidelidade Tropi</h3>
+            <p class="text-yellow-100 text-sm font-bold">Peça 10 e o 11º é por nossa conta!</p>
+        </div>
+        
+        <div class="p-8 text-center">
+            <p class="text-gray-600 text-sm mb-6">A cada compra acima de <b>R$ 20,00</b>, você ganha 1 selo no seu cartão virtual. Ao completar 10 selos, você retira um Açaí de 300ml totalmente grátis!</p>
+            
+            <div class="grid grid-cols-5 gap-2 mb-8">
+                <div class="aspect-square bg-orange-100 rounded-full flex items-center justify-center text-orange-400 border-2 border-dashed border-orange-200"><i class="fas fa-check"></i></div>
+                <div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
+                <div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
+                <div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
+                <div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
+                </div>
+
+            <button onclick="document.getElementById('modal-fidelidade').classList.add('hidden')" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-xl transition-all">
+                COMEÇAR A PONTUAR
+            </button>
+        </div>
+    </div>
+</div>
 </body>
 </html>

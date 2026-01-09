@@ -24,6 +24,13 @@ let currentPayMethod = 'dinheiro';
 let salesChartInstance = null;
 let categoriaAtivaPOS = 'todos';
 
+const AVAILABLE_TAGS = [
+    "Vegano", "Vegetariano", "Orgânico", "Sem açúcar", "Sem lactose", "Sem glúten",
+    "Bebida gelada", "Bebida alcoólica", "Natural", "Mais Vendido", "Promoção", "Ofertão",
+    "Para Compartilhar"
+];
+let currentProductAttachedGroups = [];
+
 document.addEventListener('DOMContentLoaded', () => {
     monitorarEstadoAuth(async (user) => {
         if (!user || !(await verificarAdminNoBanco(user.email))) {
@@ -98,6 +105,69 @@ window.toggleSubmenu = (id) => {
     const arrow = document.getElementById('arrow-vendas');
     arrow.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
 }
+// Gerenciamento de Tags (Copiado do Admin)
+function renderTagSelector() {
+    const container = document.getElementById('tags-container');
+    if(!container) return;
+    container.innerHTML = '';
+    AVAILABLE_TAGS.forEach(tag => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tag-item border rounded-full px-3 py-1 text-xs font-bold transition tag-default cursor-pointer mb-1 mr-1';
+        btn.innerText = tag;
+        btn.onclick = () => {
+            if (btn.classList.contains('tag-selected')) {
+                btn.classList.remove('tag-selected');
+                btn.classList.add('tag-default');
+            } else {
+                btn.classList.add('tag-selected');
+                btn.classList.remove('tag-default');
+            }
+        };
+        container.appendChild(btn);
+    });
+}
+
+function getSelectedTags() {
+    const selected = [];
+    document.querySelectorAll('.tag-item.tag-selected').forEach(btn => selected.push(btn.innerText));
+    return selected;
+}
+
+function setSelectedTags(tagsArray) {
+    if (!tagsArray) return;
+    document.querySelectorAll('.tag-item').forEach(btn => {
+        if (tagsArray.includes(btn.innerText)) {
+            btn.classList.add('tag-selected');
+            btn.classList.remove('tag-default');
+        } else {
+            btn.classList.remove('tag-selected');
+            btn.classList.add('tag-default');
+        }
+    });
+}
+
+// Upload de Imagem do Produto
+window.handleImageUpload = async function(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        document.getElementById('upload-loading').classList.remove('hidden');
+        try {
+            const storageRef = ref(storage, `produtos/${Date.now()}_${file.name}`);
+            await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(storageRef);
+            document.getElementById('preview-image').src = url;
+            document.getElementById('preview-image').classList.remove('hidden');
+            document.getElementById('icon-image').classList.add('hidden');
+            document.getElementById('edit-image-url').value = url;
+        } catch (error) {
+            console.error(error);
+            window.showToast("Erro", "Falha no upload", true);
+        } finally {
+            document.getElementById('upload-loading').classList.add('hidden');
+        }
+    }
+}
 
 window.navegarPara = (telaId) => {
     // 1. Salva a tela atual para o F5
@@ -110,7 +180,7 @@ window.navegarPara = (telaId) => {
         'view-produtos', 'view-boasvindas', 'view-config-pedidos',
         'view-kitchen', 'view-inventory', 'view-chatbot', 
         'view-config-business', 'view-config-team', 
-        'view-config-printers', 'view-config-interactions'
+        'view-config-printers', 'view-config-interactions','view-marketing-cupons'
     ];
     
     // 3. Esconde todas e trata classes específicas
@@ -134,8 +204,8 @@ window.navegarPara = (telaId) => {
     const activeBtn = document.querySelector(`[onclick="navegarPara('${telaId}')"]`);
     if(activeBtn) activeBtn.classList.add('active');
 
-    // 6. GATILHOS DE CARREGAMENTO (AQUI RESOLVE O CAIXA E OS PRODUTOS)
-    if(telaId === 'view-caixa') iniciarTelaCaixa(); // Chama saldo + histórico
+// GATILHOS DE CARREGAMENTO
+    if(telaId === 'view-caixa') iniciarTelaCaixa(); 
     if(telaId === 'view-produtos') renderizarListaProdutos();
     if(telaId === 'view-historico') carregarHistorico();
     if(telaId === 'view-relatorios') renderizarRelatorios();
@@ -148,6 +218,11 @@ window.navegarPara = (telaId) => {
     if(telaId === 'view-config-team') renderizarEquipe();
     if(telaId === 'view-config-printers') carregarConfigImpressao();
     if(telaId === 'view-config-interactions') carregarCredenciaisIfood();
+    
+    // CORREÇÃO AQUI: Chama apenas o Monitor de Marketing
+    if(telaId === 'view-marketing-cupons') {
+        window.iniciarMonitorMarketing();
+    }
 }
 
 // === MONITORAMENTO DE PEDIDOS ===
@@ -2651,25 +2726,17 @@ async function confirmarRecebimentoEventos(eventos) {
 window.renderizarListaProdutos = () => {
     const container = document.getElementById('products-list-container');
     if (!container) return;
-
     container.innerHTML = '';
-
-    // Usamos o allProducts que já é carregado no dashboard.js
-    if (allProducts.length === 0) {
-        container.innerHTML = `<div class="text-center py-10"><p class="text-gray-500">Nenhum produto cadastrado.</p></div>`;
-        return;
-    }
 
     allProducts.forEach(p => {
         const div = document.createElement('div');
         div.className = "bg-white border rounded-lg p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition";
-        
         div.innerHTML = `
             <img src="${p.image || 'https://via.placeholder.com/100'}" class="w-16 h-16 rounded-lg object-cover bg-gray-100">
             <div class="flex-1">
                 <h4 class="font-bold text-gray-800">${p.name}</h4>
                 <p class="text-xs text-gray-500 line-clamp-1">${p.description || 'Sem descrição'}</p>
-                <div class="mt-1">
+                <div class="mt-1 flex gap-2">
                     <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-600 uppercase font-bold">${p.category}</span>
                 </div>
             </div>
@@ -2680,6 +2747,96 @@ window.renderizarListaProdutos = () => {
         `;
         container.appendChild(div);
     });
+}
+
+window.abrirModalNovoProduto = () => {
+    document.getElementById('form-produto').reset();
+    document.getElementById('edit-id').value = '';
+    document.getElementById('edit-image-url').value = '';
+    document.getElementById('preview-image').classList.add('hidden');
+    document.getElementById('icon-image').classList.remove('hidden');
+    document.getElementById('modal-title').innerText = "Novo Produto";
+    currentProductAttachedGroups = [];
+    renderTagSelector();
+    window.mudarAba('sobre');
+    document.getElementById('product-modal').classList.remove('hidden');
+}
+
+window.abrirModalEdicao = (id) => {
+    const p = allProducts.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('edit-id').value = p.id;
+    document.getElementById('edit-name').value = p.name;
+    document.getElementById('edit-price').value = p.price;
+    document.getElementById('edit-desc').value = p.description || '';
+    document.getElementById('edit-image-url').value = p.image || '';
+    
+    if(p.image) {
+        document.getElementById('preview-image').src = p.image;
+        document.getElementById('preview-image').classList.remove('hidden');
+        document.getElementById('icon-image').classList.add('hidden');
+    }
+
+    renderTagSelector();
+    setSelectedTags(p.tags || []);
+    document.getElementById('modal-title').innerText = "Editar Produto";
+    document.getElementById('product-modal').classList.remove('hidden');
+}
+
+window.salvarProduto = async function() {
+    const id = document.getElementById('edit-id').value;
+    const produto = {
+        name: document.getElementById('edit-name').value,
+        price: parseFloat(document.getElementById('edit-price').value),
+        description: document.getElementById('edit-desc').value,
+        image: document.getElementById('edit-image-url').value,
+        tags: getSelectedTags(),
+        updatedAt: serverTimestamp()
+    };
+
+    try {
+        if (id) {
+            await updateDoc(doc(db, "produtos", id), produto);
+            window.showToast("Sucesso", "Produto atualizado!");
+        } else {
+            await addDoc(collection(db, "produtos"), produto);
+            window.showToast("Sucesso", "Produto criado!");
+        }
+        document.getElementById('product-modal').classList.add('hidden');
+    } catch (e) {
+        window.showToast("Erro", "Falha ao salvar", true);
+    }
+}
+window.editarPedidoManual = (orderId) => {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Carrega os dados para o estado do PDV
+    currentTablePOS = order.tableNumber || "Balcão";
+    currentTableOrder = [...order.items]; // Copia os itens para o carrinho
+    
+    // Abre a tela do PDV
+    window.navegarPara('view-pos');
+    window.renderizarCategoriasPOS();
+    window.renderizarProdutosPOS();
+    window.atualizarComandaPDV();
+    
+    // Altera o comportamento do botão de envio para ATUALIZAR em vez de criar novo
+    const btnEnvio = document.querySelector('[onclick="confirmarPedidoMesa()"]');
+    btnEnvio.innerHTML = `<i class="fas fa-save"></i> ATUALIZAR PEDIDO #${orderId.slice(-4)}`;
+    btnEnvio.onclick = async () => {
+        const total = currentTableOrder.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+        await updateDoc(doc(db, "pedidos", orderId), {
+            items: currentTableOrder,
+            total: total,
+            updatedAt: serverTimestamp()
+        });
+        window.showToast("Sucesso", "Pedido atualizado!");
+        fecharMesaPDV();
+        // Restaura o botão original
+        btnEnvio.innerHTML = `<i class="fas fa-paper-plane"></i> ENVIAR PARA COZINHA`;
+        btnEnvio.onclick = confirmarPedidoMesa;
+    };
 }
 window.abrirSimuladorMobile = function() {
     const modal = document.getElementById('modal-simulador-mobile');
@@ -2959,4 +3116,148 @@ window.imprimirPedidoDash = (orderId) => {
 
     // Chama a função de impressão real que já existe no seu dashboard.js
     window.imprimirPedidoReal(cupomFull);
+};
+// ===============================================
+// SISTEMA DE MARKETING DEFINITIVO
+// ===============================================
+
+// 1. Função para carregar os dados do Firebase para o Dashboard
+window.iniciarMonitorMarketing = () => {
+    console.log("📡 Iniciando monitor de Marketing...");
+    
+    // Monitor de Banners (Destaques)
+    onSnapshot(collection(db, "marketing_banners"), (snapshot) => {
+        const banners = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const container = document.getElementById('banners-container');
+        if (!container) return;
+
+        if (banners.length === 0) {
+            container.innerHTML = `
+                <div class="p-10 text-center w-full border-2 border-dashed rounded-3xl">
+                    <p class="text-gray-400 mb-4">Nenhum destaque no banco de dados.</p>
+                    <button onclick="window.criarDestaquesPadrao()" class="bg-cyan-600 text-white px-4 py-2 rounded-lg font-bold text-xs">
+                        GERAR CLUBE E COMBO AGORA
+                    </button>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = banners.map(b => `
+            <div class="banner-card group ${b.ativo ? '' : 'grayscale opacity-60'}">
+                <div class="banner-bg bg-gradient-to-br ${b.gradient || 'from-cyan-600 to-cyan-900'}">
+                    <div class="shine-effect"></div>
+                </div>
+                <div class="relative z-20 flex flex-col justify-between h-full p-6 text-white">
+                    <div>
+                        <span class="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-[9px] font-black uppercase border border-white/10">${b.tag}</span>
+                        <h2 class="text-2xl font-black mt-2 leading-tight">${b.title}</h2>
+                        <p class="text-white/80 text-xs">${b.subtitle}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="toggleStatusMarketing('marketing_banners', '${b.id}', ${b.ativo})" class="bg-white text-cyan-900 px-4 py-1.5 rounded-lg text-[10px] font-black shadow-md">
+                            ${b.ativo ? 'DESATIVAR' : 'ATIVAR'}
+                        </button>
+                        <button onclick="deletarItemMarketing('marketing_banners', '${b.id}')" class="bg-red-500 text-white p-1.5 rounded-lg">
+                            <i class="fas fa-trash text-[10px]"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="pop-out-image absolute -right-4 -bottom-4">
+                    <img src="${b.img}" class="w-28 h-28 object-contain ${b.id === 'casal' ? 'rounded-full border-4 border-white' : ''}">
+                </div>
+            </div>
+        `).join('') + `<div class="min-w-[50px] h-1 flex-shrink-0"></div>`;
+    });
+
+    // Monitor de Cupons
+    onSnapshot(collection(db, "marketing_cupons"), (snapshot) => {
+        const cupons = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const container = document.getElementById('coupons-container');
+        if (container) {
+            container.innerHTML = cupons.map(c => `
+                <div class="group relative bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden p-6 ${c.ativo ? '' : 'opacity-50 grayscale'}">
+                    <div class="ticket-notch notch-left"></div>
+                    <div class="ticket-notch notch-right"></div>
+                    <div class="flex items-center gap-4">
+                        <div class="${c.color || 'bg-cyan-600'} w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg">
+                            ${c.icon || '🎟️'}
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="font-black text-cyan-900 text-xl leading-none">${c.title}</h3>
+                            <p class="text-gray-500 text-[10px] mt-1">${c.desc}</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" ${c.ativo ? 'checked' : ''} onchange="toggleStatusMarketing('marketing_cupons', '${c.id}', ${c.ativo})" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>
+                    <div class="mt-6 pt-4 border-t border-dashed flex justify-between items-center">
+                        <span class="font-mono font-black text-cyan-600 tracking-tighter">${c.code}</span>
+                        <button onclick="deletarItemMarketing('marketing_cupons', '${c.id}')" class="text-red-400 hover:text-red-600 text-[10px] font-bold">EXCLUIR</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+    });
+};
+
+// 2. FUNÇÃO PARA CRIAR O CLUBE E O COMBO NO BANCO (Caso esteja vazio)
+window.criarDestaquesPadrao = async () => {
+    try {
+        // Criar Clube do Açaí
+        await addDoc(collection(db, "marketing_banners"), {
+            title: "Clube do Açai",
+            subtitle: "Vantagens exclusivas",
+            tag: "O QUERIDINHO",
+            gradient: "from-cyan-600 to-cyan-950",
+            img: "img/logosf.png",
+            ativo: true,
+            createdAt: serverTimestamp()
+        });
+
+        // Criar Combo Casal
+        await addDoc(collection(db, "marketing_banners"), {
+            title: "Hora do Casal",
+            subtitle: "2 Copos de 500ml",
+            tag: "COMBO TOP",
+            gradient: "from-blue-500 to-cyan-700",
+            img: "img/fotoPrincipal2.png",
+            ativo: true,
+            createdAt: serverTimestamp()
+        });
+
+        window.showToast("Sucesso", "Destaques criados com sucesso!");
+    } catch (e) {
+        console.error(e);
+        window.showToast("Erro", "Falha ao criar padrões.", true);
+    }
+};
+
+// 3. Ações de Status e Exclusão
+window.toggleStatusMarketing = async (colecao, id, statusAtual) => {
+    await updateDoc(doc(db, colecao, id), { ativo: !statusAtual });
+};
+
+window.deletarItemMarketing = async (colecao, id) => {
+    if(confirm("Remover permanentemente?")) await deleteDoc(doc(db, colecao, id));
+};
+
+// 4. Botões de Criar Manual
+window.criarNovoDestaque = async () => {
+    const nome = prompt("Título do Destaque:");
+    if(!nome) return;
+    await addDoc(collection(db, "marketing_banners"), {
+        title: nome, subtitle: "Nova Promoção", tag: "NOVIDADE",
+        gradient: "from-cyan-600 to-cyan-900", img: "img/logosf.png",
+        ativo: true, createdAt: serverTimestamp()
+    });
+};
+
+window.criarNovoCupom = async () => {
+    const code = prompt("Código do Cupom:");
+    if(!code) return;
+    await addDoc(collection(db, "marketing_cupons"), {
+        code: code.toUpperCase(), title: "Cupom Novo", desc: "Válido hoje",
+        icon: "🎟️", color: "bg-cyan-600", ativo: true, createdAt: serverTimestamp()
+    });
 };

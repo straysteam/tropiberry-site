@@ -104,6 +104,15 @@
     <div class="sidebar-item" onclick="navegarPara('view-chatbot')">
         <i class="fab fa-whatsapp w-5 text-green-400"></i> <span class="text-sm font-medium">Chatbot WhatsApp</span>
     </div>
+ <div class="sidebar-item" onclick="toggleSubmenu('submenu-marketing')">
+    <i class="fas fa-bullhorn w-5 text-yellow-400"></i> <span class="text-sm font-medium flex-1">Marketing</span>
+    <i class="fas fa-chevron-down text-xs transition-transform" id="arrow-marketing"></i>
+</div>
+<div id="submenu-marketing" class="hidden bg-cyan-950/30 transition-all overflow-hidden">
+    <div class="sidebar-item submenu-item" onclick="navegarPara('view-marketing-cupons')">
+        <i class="fas fa-ad w-4"></i> Anúncios e Cupons
+    </div>
+</div>
 
     <div class="sidebar-item" onclick="toggleSubmenu('submenu-config')">
     <i class="fas fa-cog w-5 text-gray-400"></i> <span class="text-sm font-medium flex-1">Configurações</span>
@@ -1529,8 +1538,28 @@
         </div>
     </div>
 </div>
-</div>
-        </main> 
+    </div>
+    </div> <div id="view-marketing-cupons" class="hidden p-6 overflow-y-auto pb-24 space-y-8">
+        <div class="flex justify-between items-end mb-4 px-2">
+            <div>
+                <h2 class="text-3xl font-black text-cyan-950 tracking-tighter uppercase italic">Marketing e Destaques</h2>
+                <p class="text-gray-500 text-sm font-medium">Gerencie o que aparece no início do seu site</p>
+            </div>
+        <button onclick="window.criarNovoDestaque()" class="bg-cyan-600 text-white px-6 py-2 rounded-xl font-bold text-sm shadow-lg hover:bg-cyan-700 transition">
+        + Criar Novo Destaque
+    </button>
+
+    <div class="flex items-center justify-between px-2 mt-8">
+        <div class="flex items-center gap-3">
+            <div class="bg-cyan-600 p-2 rounded-xl shadow-lg text-white"><i class="fas fa-ticket-alt"></i></div>
+            <h2 class="text-2xl font-black text-cyan-900 uppercase italic">Cupons Ativos</h2>
+        </div>
+        <button onclick="window.criarNovoCupom()" class="bg-cyan-50 text-cyan-600 px-4 py-1.5 rounded-lg font-bold text-xs hover:bg-cyan-100">
+            + Criar Cupom
+        </button>
+    </div>
+
+    </main>
 <div id="product-modal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center p-4 backdrop-blur-sm">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up overflow-hidden">
         <div class="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
@@ -1774,8 +1803,6 @@
         </div>
     </div>
 </div>
-
-
    </main>
 
     <div id="toast" class="fixed top-4 right-4 z-[100] bg-white border-l-4 border-green-500 shadow-xl rounded px-4 py-3 hidden animate-fade-in-up">

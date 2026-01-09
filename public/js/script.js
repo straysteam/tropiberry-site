@@ -304,8 +304,14 @@ function renderProducts(containerId, filterCategory) {
         return `
         <div onclick="window.location.href='produto.html?id=${product.id}'" class="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group flex flex-col h-full border border-gray-100 relative cursor-pointer">
             ${stockAlert}
-            <div class="h-40 relative overflow-hidden">
-                <img src="${product.image || 'https://via.placeholder.com/300'}" alt="${product.name}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110">
+            
+            <div class="h-40 w-full relative overflow-hidden bg-gray-100 shrink-0">
+                <img 
+                    src="${product.image || 'https://via.placeholder.com/300'}" 
+                    alt="${product.name}" 
+                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    loading="lazy"
+                >
                 <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             </div>
             
@@ -330,7 +336,7 @@ function renderProducts(containerId, filterCategory) {
             </div>
         </div>
     `}).join('');
-}   
+}
 
 // === LÓGICA DO MODAL RÁPIDO & PÁGINA DE PRODUTO ===
 async function carregarDadosProduto(id, containerPrefix) {
@@ -2260,6 +2266,218 @@ window.toggleTimingUI = function() {
         document.getElementById('input-schedule-time').value = '';
     }
 };
+let currentSlide = 0;
+let autoPlayTimer;
 
-// Adicione isso no final do arquivo script.js se ainda não tiver
-window.toggleTimingUI = toggleTimingUI;
+window.renderizarBannersSite = function() {
+    const container = document.getElementById('marketing-banners-site');
+    const indicatorContainer = document.getElementById('carousel-indicators');
+    if (!container) return;
+
+    const banners = [
+        { title: "Clube do Açai", subtitle: "10% OFF e Prioridade", tag: "O QUERIDINHO", grad: "from-cyan-600 to-cyan-900", img: "img/logosf.png", action: "window.abrirModalClube()" },
+        { title: "Combo Casal", subtitle: "2 Copos de 500ml", tag: "COMBO TOP", grad: "from-pink-500 to-red-600", img: "img/destaques/copo2.png", action: "window.location.href='cardapio.html'" },
+        { title: "Monte seu Copo", subtitle: "Do seu jeito!", tag: "DO SEU JEITO", grad: "from-purple-600 to-cyan-700", img: "img/destaques/copo1.png", action: "window.location.href='cardapio.html'" },
+        { title: "Fidelidade Tropi", subtitle: "Ganhe 1 Açaí Grátis", tag: "GANHE PRÊMIOS", grad: "from-yellow-400 to-orange-600", img: "img/destaques/fidelidade.png", action: "window.abrirModalFidelidade()" }
+    ];
+
+    // 1. Injeta os Banners
+    container.innerHTML = banners.map(b => `
+        <div class="banner-card group cursor-pointer" onclick="${b.action}">
+            <div class="banner-bg bg-gradient-to-br ${b.grad}">
+                <div class="shine-effect"></div>
+            </div>
+            <div class="relative z-20 flex flex-col justify-between h-full p-5 text-white">
+                <div>
+                    <span class="bg-white/20 text-[9px] font-black px-2 py-1 rounded-full border border-white/10 uppercase">${b.tag}</span>
+                    <h2 class="text-xl font-black mt-2 leading-tight italic uppercase">${b.title}</h2>
+                    <p class="text-white/80 text-[10px] font-medium">${b.subtitle}</p>
+                </div>
+                <button class="bg-white text-cyan-950 px-4 py-1.5 rounded-xl text-[10px] font-black w-fit shadow-md uppercase">Conferir</button>
+            </div>
+            <div class="pop-out-image absolute -right-3 -bottom-3">
+                <img src="${b.img}" class="w-28 h-28 object-contain ${b.title.includes('Casal') || b.title.includes('Monte') ? 'rounded-full' : ''}">
+            </div>
+        </div>
+    `).join('');
+
+    // 2. Injeta os Tracinhos
+    if(indicatorContainer) {
+        indicatorContainer.innerHTML = banners.map((_, i) => `
+            <div class="indicator-bar ${i === 0 ? 'active' : ''}" id="ind-${i}">
+                <div class="indicator-progress"></div>
+            </div>
+        `).join('');
+    }
+
+    // 3. Detectar Scroll Manual (Dedo no mobile)
+    container.addEventListener('scroll', () => {
+        const width = container.children[0].offsetWidth + 16;
+        const index = Math.round(container.scrollLeft / width);
+        if (index !== currentSlide) {
+            currentSlide = index;
+            atualizarIndicadores(currentSlide);
+        }
+    });
+
+    iniciarAutoPlay(banners.length);
+}
+
+// Função das Setas
+window.moverCarrossel = (direcao) => {
+    const container = document.getElementById('marketing-banners-site');
+    if (!container || container.children.length === 0) return;
+
+    const total = container.children.length;
+    currentSlide = (currentSlide + direcao + total) % total;
+    
+    const cardWidth = container.children[0].offsetWidth + 16; 
+    container.scrollTo({ left: currentSlide * cardWidth, behavior: 'smooth' });
+    
+    atualizarIndicadores(currentSlide);
+    resetAutoPlay(total);
+};
+
+function atualizarIndicadores(idx) {
+    document.querySelectorAll('.indicator-bar').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+        const progress = el.querySelector('.indicator-progress');
+        if(progress) {
+            progress.style.transition = 'none';
+            progress.style.width = '0%';
+            if (i === idx) {
+                setTimeout(() => {
+                    progress.style.transition = 'width 5s linear';
+                    progress.style.width = '100%';
+                }, 10);
+            }
+        }
+    });
+}
+
+function iniciarAutoPlay(total) {
+    if (autoPlayTimer) clearInterval(autoPlayTimer);
+    autoPlayTimer = setInterval(() => window.moverCarrossel(1), 5000);
+}
+
+function resetAutoPlay(total) {
+    iniciarAutoPlay(total);
+}
+
+// --- FUNÇÕES DOS MODAIS ---
+
+window.abrirModalClube = () => {
+    document.getElementById('modal-clube')?.classList.remove('hidden');
+};
+
+window.abrirModalFidelidade = () => {
+    // Se você não criou o modal de fidelidade no HTML ainda, ele não vai abrir.
+    // Certifique-se de que o ID 'modal-fidelidade' existe no seu index.html
+    document.getElementById('modal-fidelidade')?.classList.remove('hidden');
+};
+
+// --- INICIALIZAÇÃO ÚNICA ---
+// Remova as chamadas duplicadas e deixe apenas estas duas:
+renderizarBannersSite();
+renderizarCuponsSite();
+
+// Faz a ponte com o Mercado Pago através da sua Cloud Function
+window.assinarClube = async () => {
+    // Verifica se o usuário está logado
+    if (!loggedUserEmail) {
+        showToast("Faça login para participar do clube!", true);
+        setTimeout(() => window.location.href = 'login.html', 1500);
+        return;
+    }
+
+    const btn = document.getElementById('btn-assinar-clube');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+
+    try {
+        const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                method: 'subscription', // Backend deve identificar como assinatura mensal
+                total: 30.00,
+                planName: 'Assinatura Mensal Clube TropiBerry',
+                playerInfo: {
+                    email: loggedUserEmail,
+                    name: "Membro do Clube"
+                }
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.init_point) {
+            // Redireciona para o checkout do Mercado Pago configurado como recorrência
+            window.location.href = data.init_point;
+        } else {
+            throw new Error("Erro no link de pagamento");
+        }
+
+    } catch (e) {
+        console.error(e);
+        showToast("Erro ao gerar assinatura. Tente novamente.", true);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check-circle"></i> ADERIR AO CLUBE';
+    }
+};
+// Chame a função no início do script.js ou dentro do DOMContentLoaded
+renderizarBannersSite();
+// Função para renderizar os cupons no Index (Site do Cliente)
+function renderizarCuponsSite() {
+    const container = document.getElementById('marketing-coupons-site');
+    // Pegamos a SECTION inteira (pai do container e do título)
+    const sectionArea = document.getElementById('section-cupons-area'); 
+
+    if (!container || !db) return;
+
+    onSnapshot(query(collection(db, "marketing_cupons"), where("ativo", "==", true)), (snapshot) => {
+        const cupons = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        if (cupons.length === 0) {
+            // Se não tem cupons, esconde a seção inteira (incluindo o título "Economize Agora")
+            if(sectionArea) sectionArea.classList.add('hidden');
+            return;
+        } else {
+            // Se tem cupons, mostra a seção
+            if(sectionArea) sectionArea.classList.remove('hidden');
+        }
+
+        container.innerHTML = cupons.map(c => `
+            <div class="bg-white rounded-xl p-4 border-2 border-dashed border-cyan-200 flex items-center justify-between relative overflow-hidden group hover:border-cyan-400 transition-colors cursor-pointer" onclick="copiarCupomSite('${c.code}')">
+                <div class="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-blue-50 rounded-full border-r border-cyan-200"></div>
+                <div class="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-blue-50 rounded-full border-l border-cyan-200"></div>
+                
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg ${c.color || 'bg-cyan-600'} text-white flex items-center justify-center text-lg shadow-sm">
+                        ${c.icon || '🎟️'}
+                    </div>
+                    <div>
+                        <p class="font-bold text-gray-800 text-sm leading-none">${c.title}</p>
+                        <p class="text-xs text-gray-500 mt-1">${c.desc}</p>
+                    </div>
+                </div>
+                
+                <div class="bg-cyan-50 text-cyan-700 font-mono font-bold text-sm px-3 py-1 rounded border border-cyan-100 group-hover:bg-cyan-600 group-hover:text-white transition">
+                    ${c.code}
+                </div>
+            </div>
+        `).join('');
+    });
+}
+
+// Função para copiar o código ao clicar
+window.copiarCupomSite = (codigo) => {
+    navigator.clipboard.writeText(codigo).then(() => {
+        // Usa o seu sistema de Toast existente
+        if(typeof showToast === 'function') {
+            showToast(`Cupom ${codigo} copiado!`);
+        } else {
+            alert(`Cupom ${codigo} copiado!`);
+        }
+    });
+};
