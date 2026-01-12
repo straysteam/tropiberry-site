@@ -487,3 +487,49 @@ button[onclick="limparCarrinho()"]:hover {
 }
 .notch-left { left: -12px; }
 .notch-right { right: -12px; }
+/* Animação Lateral do Carrinho */
+@keyframes slideRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+.animate-slide-right {
+    animation: slideRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Card de Cupom Estilo iFood */
+.coupon-card {
+    background: white;
+    border: 2px solid #f3f4f6;
+    border-radius: 16px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.coupon-card:hover {
+    border-color: #0891b2;
+    background: #ecfeff;
+}
+
+.coupon-card.active {
+    border-color: #0891b2;
+    background: #ecfeff;
+    box-shadow: 0 0 0 1px #0891b2;
+}
+
+/* Detalhe de picote lateral do cupom */
+.coupon-card::before, .coupon-card::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    background: #f9fafb; /* cor do fundo da lista */
+    border-radius: 50%;
+    transform: translateY(-50%);
+}
+.coupon-card::before { left: -12px; border-right: 2px solid #f3f4f6; }
+.coupon-card::after { right: -12px; border-left: 2px solid #f3f4f6; }

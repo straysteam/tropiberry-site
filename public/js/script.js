@@ -860,7 +860,7 @@ function updateCartUI() {
     const cartItemsContainer = document.getElementById('cart-items');
     const cartTotalElement = document.getElementById('cart-total');
     const cartCountBadge = document.getElementById('cart-count');
-
+    
     if (!cartItemsContainer || !cartTotalElement) return;
 
     cartItemsContainer.innerHTML = '';
@@ -908,12 +908,10 @@ function updateCartUI() {
         });
     }
 
-    // === ADIÇÃO: BOTÃO "VOLTAR PARA PEDIDO" DENTRO DO CARRINHO ===
-    // Verifica se existe um pedido recente
+    // === BOTÃO "VOLTAR PARA PEDIDO" ===
     const savedOrder = localStorage.getItem('tropyberry_last_order');
     if (savedOrder) {
         const orderData = JSON.parse(savedOrder);
-        // Só mostra se for recente (< 30 min)
         if ((Date.now() - orderData.timestamp) / 1000 / 60 < 30) {
             const backBtnHtml = `
                 <div class="mt-4 pt-2 border-t border-gray-100 text-center animate-fade-in-up">
@@ -925,28 +923,61 @@ function updateCartUI() {
             cartItemsContainer.insertAdjacentHTML('beforeend', backBtnHtml);
         }
     }
-    // =============================================================
 
     localStorage.setItem('tropyberry_cart', JSON.stringify(cart));
 
+    // === NOVA LÓGICA DE CÁLCULO COM CUPOM ===
     const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
-    cartTotalElement.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+    let valorDesconto = 0;
+
+    if (cupomAtivo) {
+        // Validação de segurança: se o subtotal caiu abaixo do mínimo do cupom, remove ele
+        if (subtotal < cupomAtivo.min) {
+            cupomAtivo = null;
+            const couponText = document.getElementById('coupon-selected-text');
+            if(couponText) {
+                couponText.innerText = "Cupom de desconto";
+                couponText.classList.remove('text-cyan-600');
+            }
+            document.getElementById('row-discount')?.classList.add('hidden');
+        } else {
+            // Calcula o valor real do desconto
+            if (cupomAtivo.tipo === 'fixo') {
+                valorDesconto = cupomAtivo.valor;
+            } else if (cupomAtivo.tipo === 'porcentagem') {
+                valorDesconto = subtotal * cupomAtivo.valor;
+            }
+
+            // Atualiza a linha de desconto na UI
+            const rowDiscount = document.getElementById('row-discount');
+            const discountValueEl = document.getElementById('cart-discount');
+            if (rowDiscount) rowDiscount.classList.remove('hidden');
+            if (discountValueEl) discountValueEl.innerText = `- R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
+        }
+    }
+
+    const totalFinal = subtotal - valorDesconto;
+
+    // Atualiza os textos de valores no modal
+    const subtotalEl = document.getElementById('cart-subtotal');
+    if (subtotalEl) subtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+    
+    cartTotalElement.innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
+
+    // === ATUALIZAÇÃO DE BADGES E CONTADORES ===
+    const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
 
     if (cartCountBadge) {
-        const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
         cartCountBadge.innerText = totalItems;
         cartCountBadge.classList.toggle('hidden', totalItems === 0);
     }
-    const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
 
-    // Atualiza Desktop
     const badgeDesk = document.getElementById('cart-count-desktop'); 
     if(badgeDesk) {
         badgeDesk.innerText = totalItems;
         badgeDesk.classList.toggle('hidden', totalItems === 0);
     }
 
-    // Atualiza Mobile
     const badgeMob = document.getElementById('cart-count-mobile');
     if(badgeMob) {
         badgeMob.innerText = totalItems;
@@ -1630,9 +1661,13 @@ function renderReceipt() {
     const totalEl = document.getElementById('receipt-total');
     const subtotalEl = document.getElementById('receipt-subtotal');
     
-    // Seleciona os novos elementos da Taxa de Serviço (Garante que existam no index.html)
+    // Elementos da Taxa de Serviço
     const serviceRow = document.getElementById('receipt-service-row');
     const serviceFeeEl = document.getElementById('receipt-service-fee');
+
+    // NOVOS: Elementos do Cupom no Recibo
+    const discountRow = document.getElementById('receipt-discount-row');
+    const discountValueEl = document.getElementById('receipt-discount-value');
 
     if (!list) return;
 
@@ -1658,14 +1693,14 @@ function renderReceipt() {
     // 2. Chama o cálculo do Frete atualizado
     let frete = calcularFrete();
 
-    // --- NOVA LÓGICA: Entrega grátis por valor (Botão "Entrega grátis acima de") ---
+    // --- LÓGICA: Entrega grátis por valor ---
     if (currentOrder.method === 'delivery' && configPedidos.delivFreeAbove > 0) {
         if (subtotal >= configPedidos.delivFreeAbove) {
             frete = 0;
         }
     }
 
-    // --- NOVA LÓGICA: Taxa de Serviço (Botão "Taxa de serviço") ---
+    // --- LÓGICA: Taxa de Serviço ---
     let taxaServico = 0;
     if (currentOrder.method === 'delivery' && configPedidos.delivServiceFee > 0) {
         taxaServico = parseFloat(configPedidos.delivServiceFee);
@@ -1673,6 +1708,36 @@ function renderReceipt() {
         if (serviceFeeEl) serviceFeeEl.innerText = `R$ ${taxaServico.toFixed(2).replace('.', ',')}`;
     } else {
         if (serviceRow) serviceRow.classList.add('hidden');
+    }
+
+    // --- NOVA LÓGICA: CÁLCULO DO DESCONTO DO CUPOM ---
+    let valorDesconto = 0;
+
+    if (cupomAtivo) {
+        // Se o subtotal ainda for válido para o cupom
+        if (subtotal >= cupomAtivo.min) {
+            if (cupomAtivo.tipo === 'fixo') {
+                valorDesconto = cupomAtivo.valor;
+            } else if (cupomAtivo.tipo === 'porcentagem') {
+                valorDesconto = subtotal * cupomAtivo.valor;
+            } else if (cupomAtivo.tipo === 'frete') {
+                valorDesconto = 0; 
+                frete = 0; // Zera o frete se for cupom de frete grátis
+            }
+
+            // Mostra a linha de desconto no resumo
+            if (discountRow) discountRow.classList.remove('hidden');
+            if (discountValueEl) {
+                const prefixo = cupomAtivo.tipo === 'frete' ? '' : '- ';
+                const textoValor = cupomAtivo.tipo === 'frete' ? 'Grátis' : `R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
+                discountValueEl.innerText = `${prefixo}${textoValor}`;
+            }
+        } else {
+            // Caso o valor tenha caído abaixo do mínimo, esconde a linha
+            if (discountRow) discountRow.classList.add('hidden');
+        }
+    } else {
+        if (discountRow) discountRow.classList.add('hidden');
     }
 
     // 3. Atualiza o Subtotal na tela
@@ -1686,6 +1751,7 @@ function renderReceipt() {
         } else {
             if (currentOrder.method === 'retirada') {
                 deliveryEl.innerText = '--';
+                deliveryEl.className = "text-gray-400";
             } else {
                 deliveryEl.innerText = 'Grátis';
                 deliveryEl.className = "text-green-600 font-bold";
@@ -1693,13 +1759,15 @@ function renderReceipt() {
         }
     }
 
-    // 5. Soma Final (Subtotal + Frete + Taxa de Serviço)
-    const totalFinal = subtotal + frete + taxaServico;
+    // 5. Soma Final (Subtotal + Frete + Taxa de Serviço - Desconto)
+    const totalFinal = (subtotal + frete + taxaServico) - valorDesconto;
     
     if (totalEl) totalEl.innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
     
-    // Sincroniza o total final para o objeto do pedido
+    // Sincroniza o total final para o objeto do pedido que vai para o Firebase/Mercado Pago
     currentOrder.total = totalFinal;
+    // Salva o cupom usado no pedido
+    if (cupomAtivo) currentOrder.coupon = cupomAtivo.id;
 }
 function toggleReceipt() { const el = document.getElementById('receipt-details'); const arr = document.getElementById('arrow-receipt'); if (el.classList.contains('hidden')) { el.classList.remove('hidden'); arr.classList.add('rotate-180'); } else { el.classList.add('hidden'); arr.classList.remove('rotate-180'); } }
 function closeOrderScreen() { document.getElementById('order-screen').classList.add('hidden'); }
@@ -2481,3 +2549,92 @@ window.copiarCupomSite = (codigo) => {
         }
     });
 };
+// --- SISTEMA DE CUPONS INTEGRADO ---
+let cupomAtivo = null;
+
+// Lista de cupons (Isso pode vir do seu Firebase futuramente)
+const listaCupons = [
+];
+
+// Função auxiliar para calcular o valor bruto do carrinho
+function obterSubtotalCart() {
+    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+}
+
+function abrirModalCupons() {
+    const modal = document.getElementById('coupon-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        renderizarListaCupons();
+    }
+}
+
+function fecharModalCupons() {
+    document.getElementById('coupon-modal').classList.add('hidden');
+}
+
+function renderizarListaCupons() {
+    const container = document.getElementById('coupons-list');
+    if (!container) return;
+    
+    const subtotal = obterSubtotalCart();
+    
+    container.innerHTML = listaCupons.map(cupom => {
+        const bloqueado = subtotal < cupom.min;
+        const isAtivo = cupomAtivo?.id === cupom.id;
+        
+        return `
+            <div class="coupon-card ${isAtivo ? 'active' : ''} ${bloqueado ? 'opacity-50 grayscale cursor-not-allowed' : ''}" 
+                 onclick="${!bloqueado ? `aplicarCupom('${cupom.id}')` : `showToast('Mínimo R$ ${cupom.min.toFixed(2)}', true)`}">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h4 class="font-black text-cyan-900">${cupom.titulo}</h4>
+                        <p class="text-[10px] text-gray-500">${cupom.descricao}</p>
+                        <p class="text-[9px] font-bold text-orange-500 mt-1 uppercase">Mínimo R$ ${cupom.min.toFixed(2)}</p>
+                    </div>
+                    ${isAtivo ? '<i class="fas fa-check-circle text-cyan-600"></i>' : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function aplicarCupom(cupomId) {
+    const cupom = listaCupons.find(c => c.id === cupomId);
+    if (!cupom) return;
+
+    cupomAtivo = cupom;
+    
+    const textoBotao = document.getElementById('coupon-selected-text');
+    if (textoBotao) {
+        textoBotao.innerText = `Cupom: ${cupom.id}`;
+        textoBotao.classList.add('text-cyan-600', 'font-bold');
+    }
+    
+    fecharModalCupons();
+    updateCartUI(); // Recalcula tudo
+    showToast(`Cupom ${cupom.id} aplicado!`);
+}
+
+function validarCupomManual() {
+    const codigo = document.getElementById('input-coupon-code').value.toUpperCase().trim();
+    if (!codigo) return showToast("Digite um código", true);
+
+    const cupom = listaCupons.find(c => c.id === codigo);
+    const subtotal = obterSubtotalCart();
+
+    if (!cupom) {
+        showToast("Cupom inválido", true);
+    } else if (subtotal < cupom.min) {
+        showToast(`Valor mínimo: R$ ${cupom.min.toFixed(2)}`, true);
+    } else {
+        aplicarCupom(cupom.id);
+        document.getElementById('input-coupon-code').value = '';
+    }
+}   
+
+// Expõe para o HTML (Necessário por causa do type="module")
+window.abrirModalCupons = abrirModalCupons;
+window.fecharModalCupons = fecharModalCupons;
+window.aplicarCupom = aplicarCupom;
+window.validarCupomManual = validarCupomManual;

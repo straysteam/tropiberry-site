@@ -22,67 +22,78 @@
     <section class="container mx-auto px-4 py-8 flex-grow">
         <h2 class="text-3xl font-bold text-cyan-900 mb-2 text-center">Nosso Cardápio Completo</h2>
         <div class="w-24 h-1.5 bg-yellow-400 mx-auto mb-8 rounded-full"></div>
+        
         <div id="category-filters" class="flex flex-nowrap gap-3 overflow-x-auto pb-4 px-4 -mx-4 md:mx-0 md:flex-wrap md:justify-center no-scrollbar touch-pan-x mb-8">
         </div>
 
-        <div class="flex flex-nowrap gap-3 overflow-x-auto pb-4 px-4 -mx-4 md:mx-0 md:flex-wrap md:justify-center no-scrollbar touch-pan-x mb-8">
-    </div>
-
         <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
-            </div>
+        </div>
     </section>
 
-    <div id="cart-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex justify-end">
-        <div class="bg-white w-full md:w-96 h-full shadow-2xl flex flex-col transform transition-transform duration-300 translate-x-full" id="cart-panel">
-            <div class="bg-cyan-600 p-4 flex justify-between items-center text-white shadow-md">
-                <h3 class="text-xl font-bold"><i class="fas fa-shopping-cart mr-2"></i>Seu Pedido</h3>
-                <button onclick="toggleCart()" class="text-white hover:text-yellow-300 text-2xl">&times;</button>
+    <div id="cart-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex justify-end backdrop-blur-sm">
+        <div class="bg-white w-full md:w-[450px] h-full shadow-2xl flex flex-col transform transition-transform duration-300 translate-x-full" id="cart-panel">
+            <div class="p-4 border-b flex justify-between items-center bg-white shrink-0">
+                <h3 class="text-lg font-bold text-gray-800 italic uppercase">Meu Pedido</h3>
+                <button onclick="toggleCart()" class="text-gray-400 hover:text-red-500 transition text-2xl">&times;</button>
             </div>
-            <div id="cart-items" class="flex-grow p-4 overflow-y-auto space-y-4 bg-gray-50"></div>
-            <div class="p-4 bg-white border-t border-gray-200">
-                <div class="flex justify-between text-xl font-bold text-cyan-900 mb-4"><span>Total:</span><span id="cart-total">R$ 0,00</span></div>
-                <button onclick="window.location.href='index.html?action=checkout'" class="w-full bg-cyan-600 text-white font-bold py-3 rounded-lg hover:bg-cyan-700 transition shadow-lg">Fechar Pedido</button>
+
+            <div id="cart-items" class="flex-grow p-4 overflow-y-auto space-y-4 bg-gray-50 custom-scrollbar">
+                </div>
+
+            <div class="p-4 bg-white border-t border-gray-100">
+                <button onclick="abrirModalCupons()" class="w-full flex items-center justify-between p-3 border rounded-xl hover:bg-gray-50 transition border-dashed border-cyan-600 group">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-ticket-alt text-cyan-600 group-hover:rotate-12 transition"></i>
+                        <span id="coupon-selected-text" class="text-sm font-bold text-gray-700 leading-none">Cupom de desconto</span>
+                    </div>
+                    <span class="text-xs text-cyan-600 font-bold uppercase">Selecionar</span>
+                </button>
+            </div>
+
+            <div class="p-6 bg-white border-t space-y-3 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
+                <div class="flex justify-between text-sm text-gray-500">
+                    <span>Subtotal</span>
+                    <span id="cart-subtotal">R$ 0,00</span>
+                </div>
+                
+                <div id="row-discount" class="flex justify-between text-sm text-green-600 hidden">
+                    <span>Desconto</span>
+                    <span id="cart-discount">- R$ 0,00</span>
+                </div>
+
+                <div class="flex justify-between text-xl font-black text-gray-900 pt-2 border-t">
+                    <span>Total</span>
+                    <span id="cart-total">R$ 0,00</span>
+                </div>
+                
+                <button onclick="window.location.href='index.html?action=checkout'" class="w-full bg-cyan-600 text-white font-black py-4 rounded-xl hover:bg-cyan-700 transition shadow-lg shadow-cyan-100">
+                    Escolher forma de pagamento
+                </button>
             </div>
         </div>
     </div>
 
-    <div id="toast-notification" class="fixed top-24 right-4 z-50 bg-white border-l-4 border-green-500 text-gray-700 px-6 py-4 rounded shadow-2xl flex items-center gap-3 translate-x-full opacity-0 pointer-events-none transition-all duration-300">
-        <div class="text-green-500 bg-green-100 rounded-full p-1"><i class="fas fa-check-circle text-xl"></i></div>
-        <div>
-            <p class="font-bold text-sm">Sucesso!</p>
-            <p class="text-xs text-gray-500" id="toast-message">Ação realizada.</p>
-        </div>
-    </div>
-
-    <button id="btn-open-menu-editor" onclick="toggleMenuEditor()" class="fixed bottom-24 right-4 bg-cyan-900 hover:bg-cyan-800 text-yellow-400 p-4 rounded-full shadow-2xl z-30 hidden transition-transform hover:scale-110 group">
-        <i class="fas fa-utensils text-xl group-hover:rotate-12 transition"></i>
-        <span class="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-white text-cyan-900 text-xs font-bold px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none shadow-sm">
-            Editar Cardápio
-        </span>
-    </button>
-
-    <div id="menu-editor-modal" class="fixed inset-0 bg-white z-[70] hidden flex flex-col animate-fade-in-up overflow-hidden">
-        <div class="bg-cyan-900 p-4 flex justify-between items-center text-white shadow-md shrink-0">
-             <h2 class="text-lg font-bold flex items-center gap-2"><i class="fas fa-edit"></i> Gerenciar Cardápio</h2>
-             <button onclick="toggleMenuEditor()" class="text-white hover:text-yellow-400 text-xl transition px-2"><i class="fas fa-times"></i></button>
-        </div>
-        <div class="flex-1 bg-gray-100 flex items-center justify-center">
-             <p class="text-gray-500">Para editar, use o painel principal em <a href="admin.html" class="text-cyan-600 underline">Painel Admin</a></p>
-        </div>
-    </div>
-
-   <script type="module" src="js/script.js"></script>
-
-    <script>
-        // Pequeno script inline para controlar o modal de editor (se necessário)
-        function toggleMenuEditor() {
-            const m = document.getElementById('menu-editor-modal');
-            if(m) m.classList.toggle('hidden');
-        }
-    </script>
-<div id="quick-view-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden relative">
+    <div id="coupon-modal" class="fixed inset-0 bg-black/60 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-pop-up">
+            <div class="p-6 border-b flex justify-between items-center bg-gray-50">
+                <h3 class="font-black text-xl text-gray-800 italic uppercase">Meus Cupons</h3>
+                <button onclick="fecharModalCupons()" class="text-gray-400 hover:text-red-500"><i class="fas fa-times"></i></button>
+            </div>
             
+            <div class="p-4">
+                <div class="relative flex gap-2">
+                    <input type="text" id="input-coupon-code" class="flex-1 border-2 border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 transition font-bold" placeholder="Digite o código">
+                    <button onclick="validarCupomManual()" class="bg-cyan-600 text-white px-6 rounded-xl font-bold">Aplicar</button>
+                </div>
+            </div>
+
+            <div id="coupons-list" class="p-4 max-h-80 overflow-y-auto space-y-3 bg-gray-50">
+                </div>
+        </div>
+    </div>
+
+    <div id="quick-view-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden relative">
             <button onclick="fecharModalRapido()" class="absolute top-4 right-4 z-20 bg-black/30 hover:bg-black/50 text-white rounded-full w-10 h-10 flex items-center justify-center transition">
                 <i class="fas fa-times"></i>
             </button>
@@ -95,20 +106,15 @@
                             <div id="modal-tags" class="flex flex-wrap gap-2"></div>
                         </div>
                     </div>
-
                     <div class="p-6 md:p-8 flex flex-col">
                         <h2 id="modal-name" class="text-2xl md:text-3xl font-bold text-cyan-900 mb-2 leading-tight"></h2>
                         <div id="modal-extra-info" class="flex flex-wrap gap-2 mb-4"></div>
                         <p id="modal-desc" class="text-gray-600 text-sm mb-6"></p>
-
                         <div class="flex items-end gap-3 mb-6 border-b pb-4">
                             <span class="text-xs text-gray-400 mb-1">Total</span>
                             <span id="modal-price" class="text-3xl font-extrabold text-green-600">R$ 0,00</span>
-                            <span id="modal-original-price" class="text-sm text-gray-400 line-through mb-1 hidden"></span>
                         </div>
-
                         <div id="modal-complements" class="space-y-4 mb-6 flex-1"></div>
-
                         <div class="mb-6">
                             <label class="font-bold text-gray-700 text-xs mb-1 block"><i class="fas fa-comment-alt mr-1"></i> Observação</label>
                             <textarea id="modal-obs" rows="2" class="w-full border-gray-300 border rounded-lg p-2 text-sm focus:ring-1 focus:ring-cyan-500 outline-none resize-none bg-gray-50" placeholder="Ex: Sem cebola..."></textarea>
@@ -128,7 +134,6 @@
                     <span id="modal-qtd" class="font-bold text-lg w-6 text-center text-gray-800">1</span>
                     <button onclick="mudarQtdDetalhe(1, 'modal')" class="text-green-500 font-bold text-lg w-8">+</button>
                 </div>
-                
                 <button id="modal-btn-add" onclick="adicionarAoCarrinhoDetalhado()" class="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition flex justify-between items-center w-full md:w-auto gap-4 disabled:opacity-50">
                     <span>Adicionar</span>
                     <span id="modal-total-btn" class="bg-black/20 px-2 py-0.5 rounded text-sm">R$ 0,00</span>
@@ -137,5 +142,18 @@
         </div>
     </div>
 
-    </body>
+    <div id="toast-notification" class="fixed top-24 right-4 z-[100] bg-white border-l-4 border-green-500 text-gray-700 px-6 py-4 rounded shadow-2xl flex items-center gap-3 translate-x-full opacity-0 pointer-events-none transition-all duration-300">
+        <div class="text-green-500 bg-green-100 rounded-full p-1"><i class="fas fa-check-circle text-xl"></i></div>
+        <div>
+            <p class="font-bold text-sm">Sucesso!</p>
+            <p class="text-xs text-gray-500" id="toast-message">Ação realizada.</p>
+        </div>
+    </div>
+
+    <button id="btn-open-menu-editor" class="fixed bottom-24 right-4 bg-cyan-900 hover:bg-cyan-800 text-yellow-400 p-4 rounded-full shadow-2xl z-30 hidden transition-transform hover:scale-110 group">
+        <i class="fas fa-utensils text-xl group-hover:rotate-12 transition"></i>
+    </button>
+
+    <script type="module" src="js/script.js"></script>
+</body>
 </html>
