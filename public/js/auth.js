@@ -19,6 +19,7 @@ import {
     getDoc, 
     serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyD9j8xNgkb3l1YBQ0vG0Y9b6Am-3c8hZgE",
@@ -90,16 +91,49 @@ getRedirectResult(auth)
 // --- FUNÇÃO AUXILIAR: SALVAR/GARANTIR USUÁRIO NO BANCO ---
 async function salvarUsuarioNoBanco(user) {
     const userRef = doc(db, "usuarios", user.email);
+    const messaging = getMessaging();
+    
     try {
+        // 1. Pega o Token do Celular (Endereço para notificações Push)
+        let fcmToken = null;
+        try {
+            // SUBSTITUA 'SUA_CHAVE_VAPID_AQUI' pela chave que você gerou no console do Firebase
+            fcmToken = await getToken(messaging, { 
+                vapidKey: 'BGjtkuoDdlHoWtS7I5YJ75WuO0n4_z4PNDo51FHin6tIRR6m1eeMkMLJCGHreTyipAjo0p_M-rI0930HFOngxy8' 
+            });
+        } catch (tokenErr) {
+            console.log("Notificações negadas ou erro ao obter token.");
+        }
+
         const docSnap = await getDoc(userRef);
+        
+        // Dados que SEMPRE devem ser salvos/atualizados
+        const dadosUsuario = {
+            email: user.email,
+            nome: user.displayName || user.email.split('@')[0],
+            ultimoAcesso: serverTimestamp()
+        };
+
+        // Se pegamos o token de notificação, adicionamos aos dados
+        if (fcmToken) {
+            dadosUsuario.fcmToken = fcmToken;
+        }
+
         if (!docSnap.exists()) {
+            // Se for usuário novo
             await setDoc(userRef, {
-                email: user.email,
-                nome: user.displayName || user.email.split('@')[0],
+                ...dadosUsuario,
                 admin: false, 
                 criadoEm: serverTimestamp()
             });
+        } else {
+            // Se já existir, apenas atualiza (garante que o e-mail e o token estejam lá)
+            await setDoc(userRef, dadosUsuario, { merge: true });
         }
+
+        // Salva uma cópia rápida no LocalStorage para o checkout não falhar
+        localStorage.setItem('tropyberry_user_email', user.email);
+
     } catch (error) {
         console.error("Erro ao verificar/salvar usuário:", error);
     }

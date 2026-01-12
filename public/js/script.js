@@ -16,6 +16,7 @@ import {
 
 import { monitorarEstadoAuth, fazerLogout, verificarAdminNoBanco, db as authDb } from './auth.js'; 
 import { renderizarHeaderGlobal, garantirModaisGlobais } from './components.js';
+import { iniciarMonitoramentoPedidosCliente } from './notifications.js';
 
 let currentUserIsAdmin = false;
 // Usa o banco já inicializado no auth.js
@@ -90,6 +91,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderizarHeaderGlobal();
     garantirModaisGlobais();
 
+if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/firebase-messaging-sw.js')
+        .then((registration) => {
+            console.log('Service Worker registrado com sucesso:', registration.scope);
+        })
+        .catch((err) => {
+            console.log('Falha ao registrar o Service Worker:', err);
+        });
+    }
+
     if (window.location.pathname.includes('produto.html')) {
         const params = new URLSearchParams(window.location.search);
         const productId = params.get('id');
@@ -110,29 +121,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     monitorarInfoLoja();
     
     // 2. Monitora o Login e preenche os botões no Header
+// 2. Monitora o Login e preenche os botões no Header
+   // 2. Monitora o Login e preenche os botões no Header
     monitorarEstadoAuth(async (user) => {
         const desktopAuthArea = document.getElementById('desktop-auth-area');
-        
-        // Elementos do Menu Dropdown/Modal
         const menuName = document.getElementById('menu-user-name');
         const menuEmail = document.getElementById('menu-user-email');
         const guestOptions = document.getElementById('menu-guest-options');
         const loggedOptions = document.getElementById('menu-logged-options');
         const adminLinks = document.getElementById('menu-admin-links');
-        // Adicione isso no final do seu script.js ou dentro do DOMContentLoaded
-const inputsEndereco = ['input-street', 'input-number', 'input-district'];
-inputsEndereco.forEach(id => {
-    document.getElementById(id)?.addEventListener('blur', () => {
-        // Só chama o Google se o modo for por distância
-        if (configPedidos.deliveryMode === 'distance') {
-            calcularDistanciaGoogle();
-        }
-    });
-});
+
+        // Gerenciador de inputs de endereço (Google Maps)
+        const inputsEndereco = ['input-street', 'input-number', 'input-district'];
+        inputsEndereco.forEach(id => {
+            document.getElementById(id)?.addEventListener('blur', () => {
+                if (configPedidos && configPedidos.deliveryMode === 'distance') {
+                    calcularDistanciaGoogle();
+                }
+            });
+        });
 
         if (user) {
             loggedUserEmail = user.email;
             currentUserIsAdmin = await verificarAdminNoBanco(user.email);
+
+            // --- FIX DE PAGAMENTO: Preenche o e-mail no checkout se estiver vazio ---
+            const emailInput = document.getElementById('input-email');
+            if (emailInput && !emailInput.value) {
+                emailInput.value = user.email;
+            }
+
+            // --- INICIALIZAÇÃO DE NOTIFICAÇÕES E PEDIDOS ---
+            iniciarMonitoramentoPedidosCliente(user.email);
+            
+            if ("Notification" in window) {
+                Notification.requestPermission();
+            }
+
+            // Se estiver na página de pedidos, carrega a lista automaticamente
+            if (window.location.pathname.includes('pedidos.html')) {
+                abrirMeusPedidos(); 
+            }
             
             // 1. Atualiza Header Desktop (Mostra Ícone e Nome)
             if(desktopAuthArea) {
@@ -169,6 +198,11 @@ inputsEndereco.forEach(id => {
             currentUserIsAdmin = false;
             loggedUserEmail = null;
 
+            // Se tentar acessar pedidos sem login, manda para o login
+            if (window.location.pathname.includes('pedidos.html')) {
+                window.location.href = 'login.html';
+            }
+
             // 1. Header Desktop (Mostra botões Entrar/Cadastrar)
             if(desktopAuthArea) {
                 desktopAuthArea.innerHTML = `
@@ -186,6 +220,10 @@ inputsEndereco.forEach(id => {
             
             atualizarInteratividadeBotaoLoja();
         }
+
+        // Chamadas finais de atualização de UI
+        if (typeof updateStoreStatusUI === 'function') updateStoreStatusUI();
+        if (typeof checkLastOrder === 'function') checkLastOrder();
     });
 
     updateStoreStatusUI();
@@ -1066,7 +1104,27 @@ function selectService(type) {
     showStep('step-address'); 
     renderReceipt(); 
 }
-function checkSavedAddress() { const s = localStorage.getItem('tropyberry_user'); if (s) { const d = JSON.parse(s); document.getElementById('input-name').value = d.name || ''; document.getElementById('input-phone').value = d.phone || ''; document.getElementById('input-street').value = d.street || ''; document.getElementById('input-number').value = d.number || ''; document.getElementById('input-district').value = d.district || ''; document.getElementById('input-comp').value = d.comp || ''; if(d.street) { document.getElementById('saved-address-card').classList.remove('hidden'); document.getElementById('saved-address-card').classList.add('flex'); document.getElementById('saved-address-text').innerText = `${d.street}, ${d.number}`; } } }
+function checkSavedAddress() { 
+    const s = localStorage.getItem('tropyberry_user'); 
+    if (s) { 
+        const d = JSON.parse(s); 
+        if (document.getElementById('input-name')) document.getElementById('input-name').value = d.name || ''; 
+        if (document.getElementById('input-phone')) document.getElementById('input-phone').value = d.phone || ''; 
+        // LINHA CORRIGIDA ABAIXO:
+        if (document.getElementById('input-email')) document.getElementById('input-email').value = d.email || ''; 
+        
+        if (document.getElementById('input-street')) document.getElementById('input-street').value = d.street || ''; 
+        if (document.getElementById('input-number')) document.getElementById('input-number').value = d.number || ''; 
+        if (document.getElementById('input-district')) document.getElementById('input-district').value = d.district || ''; 
+        if (document.getElementById('input-comp')) document.getElementById('input-comp').value = d.comp || ''; 
+        
+        if(d.street && document.getElementById('saved-address-card')) { 
+            document.getElementById('saved-address-card').classList.remove('hidden'); 
+            document.getElementById('saved-address-card').classList.add('flex'); 
+            document.getElementById('saved-address-text').innerText = `${d.street}, ${d.number}`; 
+        } 
+    } 
+}
 function useSavedAddress() { goToSummary(); }
 function goToPaymentMethod() {
     // 1. Calcula o subtotal atual para validar a trava de valor mínimo
@@ -2106,28 +2164,36 @@ window.toggleUserMenu = () => {
 };
 
 window.abrirMeusPedidos = async () => {
+    // 1. Esconde o menu de usuário e o overlay (útil se o acesso for pelo perfil)
     const userMenu = document.getElementById('user-menu-content');
     const overlay = document.getElementById('user-menu-overlay');
     if(userMenu) userMenu.classList.add('hidden');
     if(overlay) overlay.classList.add('hidden');
 
+    // 2. Identifica os elementos da tela
     const modal = document.getElementById('my-orders-modal');
     const list = document.getElementById('my-orders-list');
     
-    if(!modal) return;
-    modal.classList.remove('hidden');
+    // Se houver um modal (versão antiga), abre ele. Se não houver, o código continua para a página.
+    if(modal) modal.classList.remove('hidden');
 
+    // Se não houver onde listar os pedidos (erro de ID), interrompe
+    if(!list) return;
+
+    // 3. Verifica se o usuário está logado
     if (!loggedUserEmail) {
         list.innerHTML = `
-            <div class="flex flex-col items-center justify-center py-10 text-gray-400">
-                <i class="fas fa-user-lock text-4xl mb-3"></i>
-                <p>Faça login para ver seus pedidos.</p>
-                <button onclick="window.location.href='login.html'" class="mt-4 bg-cyan-600 text-white px-4 py-2 rounded-lg font-bold">Fazer Login</button>
+            <div class="flex flex-col items-center justify-center py-20 text-gray-400">
+                <i class="fas fa-user-lock text-5xl mb-4"></i>
+                <p class="font-bold text-gray-600">Acesse sua conta</p>
+                <p class="text-sm">Faça login para ver seus pedidos e acompanhar a entrega.</p>
+                <button onclick="window.location.href='login.html'" class="mt-6 bg-cyan-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-cyan-700 transition">Fazer Login</button>
             </div>`;
         return;
     }
 
     try {
+        // 4. Busca no Firebase: Pedidos Atuais + Histórico (ordenado pelos mais novos)
         const q = query(
             collection(db, "pedidos"), 
             where("customer.email", "==", loggedUserEmail),
@@ -2138,10 +2204,13 @@ window.abrirMeusPedidos = async () => {
         
         if (querySnapshot.empty) {
             list.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-10 text-gray-400">
-                    <i class="fas fa-receipt text-4xl mb-3"></i>
-                    <p>Você ainda não fez nenhum pedido.</p>
-                    <button onclick="fecharMeusPedidos()" class="mt-4 text-cyan-600 font-bold hover:underline">Ir para o Cardápio</button>
+                <div class="flex flex-col items-center justify-center py-20 text-gray-400">
+                    <i class="fas fa-receipt text-5xl mb-4"></i>
+                    <p class="font-bold text-gray-600">Nenhum pedido encontrado</p>
+                    <p class="text-sm">Você ainda não realizou pedidos conosco.</p>
+                    <button onclick="window.location.href='cardapio.html'" class="mt-6 text-cyan-600 font-bold hover:underline flex items-center gap-2">
+                        <i class="fas fa-arrow-left"></i> Ir para o Cardápio
+                    </button>
                 </div>`;
             return;
         }
@@ -2151,38 +2220,62 @@ window.abrirMeusPedidos = async () => {
             const order = doc.data();
             const date = order.createdAt ? order.createdAt.toDate().toLocaleDateString('pt-BR') + ' às ' + order.createdAt.toDate().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 'Data desc.';
             
+            // Configuração de cores e ícones baseada no status
             let statusColor = 'bg-gray-100 text-gray-600';
             let statusIcon = 'fa-clock';
+            let pulseClass = ''; // Para animar pedidos ativos
             
-            if(order.status === 'Aguardando') { statusColor = 'bg-orange-100 text-orange-600'; statusIcon = 'fa-hourglass-half'; }
-            if(order.status === 'Em Preparo') { statusColor = 'bg-blue-100 text-blue-600'; statusIcon = 'fa-fire'; }
-            if(order.status === 'Saiu para Entrega') { statusColor = 'bg-purple-100 text-purple-600'; statusIcon = 'fa-motorcycle'; }
-            if(order.status === 'Finalizado') { statusColor = 'bg-green-100 text-green-600'; statusIcon = 'fa-check-circle'; }
-            if(order.status === 'Cancelado' || order.status === 'Rejeitado') { statusColor = 'bg-red-100 text-red-600'; statusIcon = 'fa-times-circle'; }
+            if(order.status === 'Aguardando') { 
+                statusColor = 'bg-orange-100 text-orange-600'; 
+                statusIcon = 'fa-hourglass-half';
+                pulseClass = 'animate-pulse';
+            }
+            if(order.status === 'Em Preparo') { 
+                statusColor = 'bg-blue-100 text-blue-600'; 
+                statusIcon = 'fa-fire';
+                pulseClass = 'animate-pulse';
+            }
+            if(order.status === 'Saiu para Entrega') { 
+                statusColor = 'bg-purple-100 text-purple-600'; 
+                statusIcon = 'fa-motorcycle';
+                pulseClass = 'animate-bounce';
+            }
+            if(order.status === 'Finalizado') { 
+                statusColor = 'bg-green-100 text-green-600'; 
+                statusIcon = 'fa-check-circle'; 
+            }
+            if(order.status === 'Cancelado' || order.status === 'Rejeitado') { 
+                statusColor = 'bg-red-100 text-red-600'; 
+                statusIcon = 'fa-times-circle'; 
+            }
 
-            let itemsHtml = order.items.map(i => `<span class="block text-gray-600 text-xs">• ${i.quantity}x ${i.name}</span>`).join('');
+            const itemsHtml = order.items.map(i => `<span class="block text-gray-600 text-xs font-medium">• ${i.quantity}x ${i.name}</span>`).join('');
 
+            // Card do pedido (Destaque para pedidos ativos)
             html += `
-                <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition">
-                    <div class="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
+                <div class="bg-white border-2 ${order.status !== 'Finalizado' && order.status !== 'Cancelado' ? 'border-cyan-100 shadow-md' : 'border-gray-100'} rounded-2xl p-5 hover:shadow-lg transition-all duration-300">
+                    <div class="flex justify-between items-start mb-4 border-b border-gray-50 pb-3">
                         <div>
-                            <span class="text-xs font-bold text-gray-400">#${doc.id.slice(-5).toUpperCase()}</span>
-                            <p class="text-xs text-gray-500">${date}</p>
+                            <span class="text-[10px] font-black text-gray-400 tracking-widest uppercase">Pedido #${doc.id.slice(-5).toUpperCase()}</span>
+                            <p class="text-xs text-gray-500 font-medium mt-1"><i class="far fa-calendar-alt mr-1"></i> ${date}</p>
                         </div>
-                        <div class="${statusColor} px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                        <div class="${statusColor} ${pulseClass} px-3 py-1.5 rounded-full text-[10px] font-black flex items-center gap-2 uppercase tracking-wide border border-current/10">
                             <i class="fas ${statusIcon}"></i> ${order.status}
                         </div>
                     </div>
                     
-                    <div class="mb-3 pl-2 border-l-2 border-gray-100">
+                    <div class="mb-4 pl-3 border-l-2 border-cyan-50 space-y-1">
                         ${itemsHtml}
                     </div>
 
-                    <div class="flex justify-between items-center mt-2 pt-2 border-t border-dashed border-gray-200">
-                        <span class="text-sm font-bold text-gray-700">Total: R$ ${parseFloat(order.total).toFixed(2).replace('.', ',')}</span>
+                    <div class="flex justify-between items-center mt-2 pt-3 border-t border-dashed border-gray-100">
+                        <div class="flex flex-col">
+                            <span class="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">Valor Total</span>
+                            <span class="text-lg font-black text-gray-800">R$ ${parseFloat(order.total).toFixed(2).replace('.', ',')}</span>
+                        </div>
                         
-                        <button onclick="openOrderScreen('${doc.id}')" class="text-cyan-600 text-xs font-bold hover:bg-cyan-50 px-3 py-1.5 rounded transition border border-cyan-200">
-                            Ver Detalhes
+                        <button onclick="openOrderScreen('${doc.id}')" class="bg-cyan-50 text-cyan-700 text-xs font-black py-2.5 px-5 rounded-xl hover:bg-cyan-600 hover:text-white transition-all shadow-sm border border-cyan-100 active:scale-95">
+                            ACOMPANHAR <i class="fas fa-arrow-right ml-1"></i>
                         </button>
                     </div>
                 </div>
@@ -2196,7 +2289,14 @@ window.abrirMeusPedidos = async () => {
         if(e.message.includes("requires an index")) {
             console.warn("⚠️ NECESSÁRIO CRIAR ÍNDICE NO FIREBASE. VEJA O LINK NO CONSOLE.");
         }
-        list.innerHTML = '<p class="text-center text-red-500 py-4">Erro ao carregar pedidos. Tente novamente.</p>';
+        list.innerHTML = `
+            <div class="text-center py-10">
+                <div class="bg-red-50 text-red-500 p-4 rounded-xl inline-block mb-4">
+                    <i class="fas fa-exclamation-triangle text-2xl"></i>
+                </div>
+                <p class="text-gray-700 font-bold">Ops! Algo deu errado.</p>
+                <p class="text-xs text-gray-500 px-10">Não conseguimos carregar seus pedidos agora. Tente atualizar a página.</p>
+            </div>`;
     }
 };
 
@@ -2206,13 +2306,13 @@ window.fecharMeusPedidos = () => {
 // Função para salvar os dados do cliente no navegador (Local Storage)
 window.salvarDadosClienteAutomatico = function() {
     const dados = {
-        name: document.getElementById('input-name').value,
-        email: document.getElementById('input-email').value,
-        phone: document.getElementById('input-phone').value,
-        street: document.getElementById('input-street').value,
-        number: document.getElementById('input-number').value,
-        district: document.getElementById('input-district').value,
-        comp: document.getElementById('input-comp').value
+        name: document.getElementById('input-name')?.value || '',
+        email: document.getElementById('input-email')?.value || '', // Salvando o e-mail aqui
+        phone: document.getElementById('input-phone')?.value || '',
+        street: document.getElementById('input-street')?.value || '',
+        number: document.getElementById('input-number')?.value || '',
+        district: document.getElementById('input-district')?.value || '',
+        comp: document.getElementById('input-comp')?.value || ''
     };
     localStorage.setItem('tropyberry_user', JSON.stringify(dados));
 };

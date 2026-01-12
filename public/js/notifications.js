@@ -1,5 +1,21 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, updateDoc, orderBy, query, getDoc, setDoc, addDoc, serverTimestamp, getDocs, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { 
+    getFirestore, 
+    collection, 
+    onSnapshot, 
+    doc, 
+    updateDoc, 
+    orderBy, 
+    query, 
+    getDoc, 
+    setDoc, 
+    addDoc, 
+    serverTimestamp, 
+    getDocs, 
+    deleteDoc, 
+    limit,
+    where 
+} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { monitorarEstadoAuth, verificarAdminNoBanco, db as authDb, fazerLogout } from './auth.js';
 
@@ -9,7 +25,10 @@ const storage = getStorage(authDb.app);
 const notificationSound = document.getElementById('notif-sound');
 let lastNotifCount = 0;
 
-// === SISTEMA DE NOTIFICAÇÕES EM TEMPO REAL ===
+// Cache para o Cliente: Evita que notificações antigas disparem ao carregar a página
+let statusAnteriorPedidos = {};
+
+// === 1. SISTEMA DE NOTIFICAÇÕES PARA A LOJA (ADMIN) ===
 function iniciarNotificacoes() {
     const q = query(collection(db, "pedidos"), orderBy("createdAt", "desc"), limit(20));
     
@@ -26,7 +45,7 @@ function iniciarNotificacoes() {
                 html += `
                     <div class="p-3 border-b hover:bg-blue-50 cursor-pointer transition" onclick="navegarPara('view-pdv-wrapper')">
                         <div class="flex justify-between items-start">
-                            <span class="font-bold text-sm text-gray-800">Novo Pedido #${docSnap.id.slice(0,4)}</span>
+                            <span class="font-bold text-sm text-gray-800">Novo Pedido #${docSnap.id.slice(-4)}</span>
                             <span class="text-[10px] text-gray-400">${time}</span>
                         </div>
                         <p class="text-xs text-gray-600 mt-1">${order.customer?.name || 'Cliente'} - R$ ${(order.total || 0).toFixed(2)}</p>
@@ -37,33 +56,119 @@ function iniciarNotificacoes() {
         });
 
         const badge = document.getElementById('notif-badge');
-        if (newCount > 0) {
-            badge.innerText = newCount;
-            badge.classList.remove('hidden');
-            notifList.innerHTML = html;
-            
-            if (newCount > lastNotifCount) {
-                try { notificationSound.play(); } catch(e) {}
+        if (badge) {
+            if (newCount > 0) {
+                badge.innerText = newCount;
+                badge.classList.remove('hidden');
+                if (notifList) notifList.innerHTML = html;
+                
+                if (newCount > lastNotifCount) {
+                    try { notificationSound.play(); } catch(e) {}
+                }
+            } else {
+                badge.classList.add('hidden');
+                if (notifList) notifList.innerHTML = '<div class="p-4 text-center text-gray-400 text-xs">Nenhuma notificação nova</div>';
             }
-        } else {
-            badge.classList.add('hidden');
-            notifList.innerHTML = '<div class="p-4 text-center text-gray-400 text-xs">Nenhuma notificação nova</div>';
         }
         lastNotifCount = newCount;
     });
 }
 
+// === 2. SISTEMA DE NOTIFICAÇÕES PARA O CLIENTE ===
+// Esta função "escuta" apenas os pedidos do cliente logado
+export function iniciarMonitoramentoPedidosCliente(emailCliente) {
+    if (!emailCliente) return;
+
+    // Filtra pedidos do cliente que mudaram para status de ação
+    const q = query(
+        collection(db, "pedidos"),
+        where("customer.email", "==", emailCliente)
+    );
+
+    onSnapshot(q, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            const pedido = change.doc.data();
+            const pedidoId = change.doc.id;
+            const statusAtual = pedido.status;
+
+            // Se o pedido foi modificado e o status é diferente do que tínhamos no cache
+            if (change.type === "modified") {
+                if (statusAnteriorPedidos[pedidoId] && statusAnteriorPedidos[pedidoId] !== statusAtual) {
+                    enviarAlertaCliente(statusAtual, pedidoId);
+                }
+            }
+
+            // Atualiza o cache com o status atual
+            statusAnteriorPedidos[pedidoId] = statusAtual;
+        });
+    });
+}
+
+function enviarAlertaCliente(status, id) {
+    let msg = "";
+    let som = true;
+
+    switch (status) {
+        case 'Em Preparo':
+            msg = "Seu pedido foi aceito e está sendo preparado! 👨‍🍳";
+            break;
+        case 'Saiu para Entrega':
+            msg = "🛵 Saiu! Seu pedido está a caminho da sua casa.";
+            break;
+        case 'Pronto':
+            msg = "Seu pedido está pronto para retirada! 🛍️";
+            break;
+        case 'Finalizado':
+            msg = "Pedido entregue. Bom apetite! ❤️";
+            som = false; // Não tocar som ao finalizar se preferir
+            break;
+        case 'Cancelado':
+            msg = "Infelizmente seu pedido foi cancelado pela loja. ❌";
+            break;
+    }
+
+    if (msg) {
+        // 1. Notificação Visual (Toast do seu script.js)
+        if (window.showToast) {
+            window.showToast(msg, status === 'Cancelado');
+        }
+
+        // 2. Notificação Nativa (Push do Celular/App)
+        if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("TropiBerry Açaí", {
+                body: msg,
+                icon: "img/logosf.png",
+                tag: id // Evita notificações duplicadas do mesmo pedido
+            });
+        }
+        
+        // 3. Som de notificação (Opcional: usa o mesmo som do admin)
+        if (som) {
+            try { notificationSound.play(); } catch(e) {}
+        }
+    }
+}
+
 // Funções de UI do Header
 window.toggleNotificacoes = () => {
     const el = document.getElementById('notif-dropdown');
-    el.classList.toggle('hidden');
-    document.getElementById('perfil-dropdown').classList.add('hidden');
+    if(el) {
+        el.classList.toggle('hidden');
+        document.getElementById('perfil-dropdown')?.classList.add('hidden');
+    }
 }
 
 window.togglePerfil = () => {
     const el = document.getElementById('perfil-dropdown');
-    el.classList.toggle('hidden');
-    document.getElementById('notif-dropdown').classList.add('hidden');
+    if(el) {
+        el.classList.toggle('hidden');
+        document.getElementById('notif-dropdown')?.classList.add('hidden');
+    }
 }
 
-document.addEventListener('DOMContentLoaded', iniciarNotificacoes);
+// Inicializa o Admin se houver os elementos na tela
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('notif-list')) {
+        iniciarNotificacoes();
+    }
+});
