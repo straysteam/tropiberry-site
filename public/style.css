@@ -533,3 +533,16 @@ button[onclick="limparCarrinho()"]:hover {
 }
 .coupon-card::before { left: -12px; border-right: 2px solid #f3f4f6; }
 .coupon-card::after { right: -12px; border-left: 2px solid #f3f4f6; }
+/* Padding para iPhones novos (área do sensor de gestos) */
+.pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Garante que o corpo do site não fique escondido atrás da barra */
+body {
+    padding-bottom: 80px; /* Altura aproximada da tab bar mobile */
+}
+
+@media (min-width: 768px) {
+    body { padding-bottom: 0; }
+}
