@@ -81,6 +81,7 @@ window.abrirModalRapido = abrirModalRapido;
 window.fecharModalRapido = fecharModalRapido;
 window.toggleReceipt = toggleReceipt;
 
+
 // Variável para guardar o email do usuário logado
 let loggedUserEmail = null;
 
@@ -536,13 +537,13 @@ function renderizarGrupoComplemento(group, container, prefix) {
     
     let optionsHtml = '';
     group.options.forEach((opt, index) => {
-        // --- REGRA DE OCULTAR: Se estiver desativado no Admin, não aparece aqui ---
+        // --- REGRA DE OCULTAR: Se o item estiver com 'available: false' no Admin, ele não será renderizado ---
         if (opt.available === false) return; 
 
         const uniqueId = `${prefix}-g-${group.id}-opt-${index}`; 
         const priceHtml = opt.price > 0 ? `<span class="text-cyan-700 font-bold text-xs">+ R$ ${opt.price.toFixed(2).replace('.',',')}</span>` : '<span class="text-green-600 font-bold text-xs">Grátis</span>';
         
-        // REMOVIDO: onclick de ver detalhes e o texto "Ver detalhes"
+        // Estrutura limpa: Apenas o seletor, a imagem (se houver) e o nome do item
         optionsHtml += `
             <div class="flex items-center gap-2 mb-2">
                 <label class="flex-1 flex items-center justify-between p-3 border rounded-xl cursor-pointer hover:bg-cyan-50 transition bg-white" for="${uniqueId}">
@@ -703,7 +704,6 @@ function adicionarAoCarrinhoDetalhado() {
     if (!currentProductDetail) return;
 
     // === TRAVA FINAL DE SEGURANÇA ===
-    // Verifica de novo se todos os obrigatórios foram marcados
     const pendencias = currentComplements.filter(g => {
         if (!g.required) return false;
         const selected = selectedOptions[g.id] || [];
@@ -711,24 +711,20 @@ function adicionarAoCarrinhoDetalhado() {
     });
 
     if (pendencias.length > 0) {
-        // Se houver pendência, avisa o usuário e PARA TUDO.
         showToast(`Selecione: ${pendencias[0].title}`, true);
         
-        // Dá um efeito visual no grupo que falta preencher
         const cardFaltante = document.getElementById(`modal-group-card-${pendencias[0].id}`) || document.getElementById(`detail-group-card-${pendencias[0].id}`);
         if(cardFaltante) {
             cardFaltante.scrollIntoView({ behavior: 'smooth', block: 'center' });
             cardFaltante.classList.add('border-red-500', 'animate-pulse');
             setTimeout(() => cardFaltante.classList.remove('border-red-500', 'animate-pulse'), 2000);
         }
-        return; // <--- AQUI O CÓDIGO PARA E NÃO ADICIONA NO CARRINHO
+        return; 
     }
-    // =================================
 
     let complementsDescription = [];
     let addonsTotalPrice = 0;
 
-    // Captura os nomes e preços dos adicionais selecionados
     Object.values(selectedOptions).forEach(list => {
         list.forEach(opt => {
             complementsDescription.push(opt.name);
@@ -740,7 +736,6 @@ function adicionarAoCarrinhoDetalhado() {
     const modalObs = document.getElementById('modal-obs');
     const detailObs = document.getElementById('detail-obs');
     
-    // Verifica qual campo de observação está visível (Modal ou Página de Detalhes)
     if(!document.getElementById('quick-view-modal').classList.contains('hidden') && modalObs) {
         obs = modalObs.value;
     } else if (detailObs) {
@@ -749,7 +744,6 @@ function adicionarAoCarrinhoDetalhado() {
 
     if (obs) complementsDescription.push(`Obs: ${obs}`);
 
-    // Cria ID único baseado no tempo para diferenciar produtos iguais com opcionais diferentes
     const hasComplements = complementsDescription.length > 0;
     const cartItemId = hasComplements ? `${currentProductDetail.id}-${Date.now()}` : currentProductDetail.id;
 
@@ -760,22 +754,13 @@ function adicionarAoCarrinhoDetalhado() {
         price: currentProductDetail.price + addonsTotalPrice, 
         image: currentProductDetail.image,
         quantity: currentQtd,
-        details: complementsDescription.join(', ') // Detalhes salvos como string simples
+        details: complementsDescription.join(', ') 
     };
 
-    // 1. Adiciona ao array do carrinho
     cart.push(cartItem);
-    
-    // 2. Atualiza a interface do carrinho lateral
     updateCartUI();
-    
-    // 3. Executa animação visual do item voando
     animarVooParaCarrinho(window.event);
-
-    // 4. Aviso de sucesso
     showToast("Adicionado ao pedido!");
-    
-    // 5. Fecha o modal de visualização rápida
     fecharModalRapido();
 }
 
@@ -928,7 +913,6 @@ function updateCartUI() {
         cartItemsContainer.innerHTML = headerHtml;
 
         cart.forEach(item => {
-            // Voltando ao padrão de texto simples para os detalhes
             const detailsHtml = `<p class="text-[10px] text-gray-500 line-clamp-1 mb-1 italic">${item.details || ''}</p>`;
 
             const itemHtml = `
@@ -976,10 +960,31 @@ function updateCartUI() {
 
     localStorage.setItem('tropyberry_cart', JSON.stringify(cart));
 
-    // === NOVA LÓGICA DE CÁLCULO COM CUPOM ===
+    // === CÁLCULO DE VALORES (SUBTOTAL / FRETE / CUPOM) ===
     const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+    let valorFrete = 0;
     let valorDesconto = 0;
 
+    // 1. Lógica do Frete no Carrinho (Apenas para logados)
+    const rowFrete = document.getElementById('row-cart-delivery');
+    const valFrete = document.getElementById('cart-delivery-val');
+    
+    if (loggedUserEmail && cart.length > 0) {
+        // Simulamos o método delivery para obter a estimativa de custo
+        const backupMethod = currentOrder.method;
+        currentOrder.method = 'delivery'; 
+        valorFrete = calcularFrete();
+        currentOrder.method = backupMethod; // Restaura o estado original
+
+        if (rowFrete && valFrete) {
+            rowFrete.classList.remove('hidden');
+            valFrete.innerText = valorFrete > 0 ? `R$ ${valorFrete.toFixed(2).replace('.', ',')}` : "Grátis";
+        }
+    } else {
+        if(rowFrete) rowFrete.classList.add('hidden');
+    }
+
+    // 2. Lógica do Cupom
     if (cupomAtivo) {
         if (subtotal < cupomAtivo.min) {
             cupomAtivo = null;
@@ -995,7 +1000,6 @@ function updateCartUI() {
             } else if (cupomAtivo.tipo === 'porcentagem') {
                 valorDesconto = subtotal * cupomAtivo.valor;
             }
-
             const rowDiscount = document.getElementById('row-discount');
             const discountValueEl = document.getElementById('cart-discount');
             if (rowDiscount) rowDiscount.classList.remove('hidden');
@@ -1003,8 +1007,9 @@ function updateCartUI() {
         }
     }
 
-    const totalFinal = subtotal - valorDesconto;
+    const totalFinal = (subtotal + valorFrete) - valorDesconto;
 
+    // Atualiza os textos de valores no modal
     const subtotalEl = document.getElementById('cart-subtotal');
     if (subtotalEl) subtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
     
