@@ -536,39 +536,45 @@ function renderizarGrupoComplemento(group, container, prefix) {
     
     let optionsHtml = '';
     group.options.forEach((opt, index) => {
+        // --- REGRA DE OCULTAR: Se estiver desativado no Admin, não aparece aqui ---
+        if (opt.available === false) return; 
+
         const uniqueId = `${prefix}-g-${group.id}-opt-${index}`; 
-        const priceHtml = opt.price > 0 ? `<span class="text-cyan-700 font-bold">+ R$ ${opt.price.toFixed(2).replace('.',',')}</span>` : '<span class="text-green-600 font-bold text-xs">Grátis</span>';
+        const priceHtml = opt.price > 0 ? `<span class="text-cyan-700 font-bold text-xs">+ R$ ${opt.price.toFixed(2).replace('.',',')}</span>` : '<span class="text-green-600 font-bold text-xs">Grátis</span>';
         
+        // REMOVIDO: onclick de ver detalhes e o texto "Ver detalhes"
         optionsHtml += `
-            <label class="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-cyan-50 transition mb-2 bg-white" for="${uniqueId}">
-                <div class="flex items-center gap-3">
-                    <input type="${type}" name="${prefix}-group-${group.id}" id="${uniqueId}" 
-                        value="${index}" 
-                        onchange="toggleOption('${group.id}', ${index}, '${type}', '${prefix}')"
-                        class="w-5 h-5 text-cyan-600 focus:ring-cyan-500 border-gray-300 ${type === 'radio' ? '' : 'rounded'}">
-                    
-                    ${opt.image ? `<img src="${opt.image}" class="w-10 h-10 rounded object-cover border">` : ''}
-                    
-                    <div class="flex flex-col">
-                        <span class="font-bold text-gray-700 text-sm">${opt.name}</span>
+            <div class="flex items-center gap-2 mb-2">
+                <label class="flex-1 flex items-center justify-between p-3 border rounded-xl cursor-pointer hover:bg-cyan-50 transition bg-white" for="${uniqueId}">
+                    <div class="flex items-center gap-3">
+                        <input type="${type}" name="${prefix}-group-${group.id}" id="${uniqueId}" 
+                            value="${index}" 
+                            onchange="toggleOption('${group.id}', ${index}, '${type}', '${prefix}')"
+                            class="w-5 h-5 text-cyan-600 focus:ring-cyan-500 border-gray-300 ${type === 'radio' ? '' : 'rounded'}">
+                        
+                        <div class="flex items-center gap-3">
+                            ${opt.image ? `<img src="${opt.image}" class="w-10 h-10 rounded-lg object-cover border shadow-sm">` : ''}
+                            <div class="flex flex-col">
+                                <span class="font-bold text-gray-700 text-sm">${opt.name}</span>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                ${priceHtml}
-            </label>
+                    ${priceHtml}
+                </label>
+            </div>
         `;
     });
 
     const html = `
-        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200" id="${prefix}-group-card-${group.id}">
+        <div class="bg-gray-50 p-4 rounded-2xl border border-gray-200" id="${prefix}-group-card-${group.id}">
             <div class="flex justify-between items-start mb-3">
                 <div>
                     <h3 class="font-bold text-cyan-900 text-lg">${group.title}</h3>
-                    <p class="text-xs text-gray-500">
-                        ${isRequired ? '<span class="text-red-500 font-bold">OBRIGATÓRIO</span>' : '<span class="text-gray-400">Opcional</span>'} 
-                        • Escolha até ${group.max}
+                    <p class="text-[10px] font-bold ${isRequired ? 'text-red-500' : 'text-gray-400'} uppercase">
+                        ${isRequired ? 'OBRIGATÓRIO' : 'Opcional'} • Escolha até ${group.max}
                     </p>
                 </div>
-                <div id="${prefix}-badge-${group.id}" class="bg-gray-200 text-gray-500 text-[10px] px-2 py-1 rounded uppercase font-bold">
+                <div id="${prefix}-badge-${group.id}" class="bg-gray-200 text-gray-500 text-[10px] px-2 py-1 rounded-full uppercase font-bold">
                     Pendente
                 </div>
             </div>
@@ -722,6 +728,7 @@ function adicionarAoCarrinhoDetalhado() {
     let complementsDescription = [];
     let addonsTotalPrice = 0;
 
+    // Captura os nomes e preços dos adicionais selecionados
     Object.values(selectedOptions).forEach(list => {
         list.forEach(opt => {
             complementsDescription.push(opt.name);
@@ -733,7 +740,7 @@ function adicionarAoCarrinhoDetalhado() {
     const modalObs = document.getElementById('modal-obs');
     const detailObs = document.getElementById('detail-obs');
     
-    // Verifica qual campo de observação está visível
+    // Verifica qual campo de observação está visível (Modal ou Página de Detalhes)
     if(!document.getElementById('quick-view-modal').classList.contains('hidden') && modalObs) {
         obs = modalObs.value;
     } else if (detailObs) {
@@ -742,7 +749,7 @@ function adicionarAoCarrinhoDetalhado() {
 
     if (obs) complementsDescription.push(`Obs: ${obs}`);
 
-    // Cria ID único baseado nos complementos para diferenciar produtos iguais com opcionais diferentes
+    // Cria ID único baseado no tempo para diferenciar produtos iguais com opcionais diferentes
     const hasComplements = complementsDescription.length > 0;
     const cartItemId = hasComplements ? `${currentProductDetail.id}-${Date.now()}` : currentProductDetail.id;
 
@@ -753,22 +760,22 @@ function adicionarAoCarrinhoDetalhado() {
         price: currentProductDetail.price + addonsTotalPrice, 
         image: currentProductDetail.image,
         quantity: currentQtd,
-        details: complementsDescription.join(', ') 
+        details: complementsDescription.join(', ') // Detalhes salvos como string simples
     };
 
     // 1. Adiciona ao array do carrinho
     cart.push(cartItem);
     
-    // 2. Atualiza a interface
+    // 2. Atualiza a interface do carrinho lateral
     updateCartUI();
     
-    // 3. Animação
+    // 3. Executa animação visual do item voando
     animarVooParaCarrinho(window.event);
 
     // 4. Aviso de sucesso
     showToast("Adicionado ao pedido!");
     
-    // 5. Fecha o modal
+    // 5. Fecha o modal de visualização rápida
     fecharModalRapido();
 }
 
@@ -921,6 +928,9 @@ function updateCartUI() {
         cartItemsContainer.innerHTML = headerHtml;
 
         cart.forEach(item => {
+            // Voltando ao padrão de texto simples para os detalhes
+            const detailsHtml = `<p class="text-[10px] text-gray-500 line-clamp-1 mb-1 italic">${item.details || ''}</p>`;
+
             const itemHtml = `
                 <div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm group mb-2">
                     <img src="${item.image || 'https://via.placeholder.com/100'}" class="w-16 h-16 object-cover rounded-lg border">
@@ -931,8 +941,10 @@ function updateCartUI() {
                                 <i class="fas fa-trash-alt text-xs"></i>
                             </button>
                         </div>
-                        <p class="text-[10px] text-gray-500 line-clamp-1 mb-1 italic">${item.details || ''}</p>
-                        <div class="flex justify-between items-center mt-1">
+                        
+                        ${detailsHtml}
+
+                        <div class="flex justify-between items-center mt-2">
                             <span class="text-sm font-black text-cyan-700 font-sans">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
                             <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-2 py-1 scale-90">
                                 <button onclick="changeQuantity('${item.id}', -1)" class="text-red-500 font-bold w-4 hover:bg-white rounded transition">-</button>
@@ -969,7 +981,6 @@ function updateCartUI() {
     let valorDesconto = 0;
 
     if (cupomAtivo) {
-        // Validação de segurança: se o subtotal caiu abaixo do mínimo do cupom, remove ele
         if (subtotal < cupomAtivo.min) {
             cupomAtivo = null;
             const couponText = document.getElementById('coupon-selected-text');
@@ -979,14 +990,12 @@ function updateCartUI() {
             }
             document.getElementById('row-discount')?.classList.add('hidden');
         } else {
-            // Calcula o valor real do desconto
             if (cupomAtivo.tipo === 'fixo') {
                 valorDesconto = cupomAtivo.valor;
             } else if (cupomAtivo.tipo === 'porcentagem') {
                 valorDesconto = subtotal * cupomAtivo.valor;
             }
 
-            // Atualiza a linha de desconto na UI
             const rowDiscount = document.getElementById('row-discount');
             const discountValueEl = document.getElementById('cart-discount');
             if (rowDiscount) rowDiscount.classList.remove('hidden');
@@ -996,7 +1005,6 @@ function updateCartUI() {
 
     const totalFinal = subtotal - valorDesconto;
 
-    // Atualiza os textos de valores no modal
     const subtotalEl = document.getElementById('cart-subtotal');
     if (subtotalEl) subtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
     

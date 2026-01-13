@@ -128,33 +128,77 @@ window.prepararEdicaoGrupo = (id) => {
     document.getElementById('new-group-title').value = group.title;
     document.getElementById('new-group-category').value = group.internalCategory || 'complemento';
     document.getElementById('new-group-required').value = group.required.toString();
-    document.getElementById('new-group-min').value = group.min || 0;
+    
+    // LINHA RESTAURADA: Define a quantidade mínima
+    if(document.getElementById('new-group-min')) {
+        document.getElementById('new-group-min').value = group.min || 0;
+    }
+    
     document.getElementById('new-group-max').value = group.max || 1;
+    
+    // LINHA RESTAURADA: Abre o modal lateral de edição
+    document.getElementById('group-manager-modal').classList.remove('hidden');
     
     document.getElementById('btn-cancel-edit-group').classList.remove('hidden');
     document.getElementById('btn-save-group').innerText = "Atualizar Grupo";
 
-    // Carregar opções
     const optionsContainer = document.getElementById('new-group-options');
     optionsContainer.innerHTML = '';
+    
     group.options.forEach(opt => {
-        const rowId = Date.now() + Math.random();
+        // Gerando um ID único mais seguro para cada linha
+        const rowId = Math.random().toString(36).substr(2, 9);
         const html = `
             <div class="flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-200" id="opt-row-${rowId}">
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" class="option-available sr-only peer" ${opt.available !== false ? 'checked' : ''}>
+                    <div class="w-8 h-4 bg-gray-300 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+                </label>
+
                 <label class="w-8 h-8 flex-shrink-0 bg-white border border-gray-300 rounded cursor-pointer flex items-center justify-center hover:bg-gray-100 overflow-hidden">
                     <input type="file" class="hidden" onchange="uploadOptionImage(this, 'img-${rowId}', 'input-${rowId}')">
                     <img id="img-${rowId}" src="${opt.image || ''}" class="w-full h-full object-cover ${opt.image ? '' : 'hidden'}">
-                    <i class="fas fa-camera text-gray-400 text-xs ${opt.image ? 'hidden' : ''}"></i>
+                    <i class="fas fa-camera text-gray-400 text-[10px] ${opt.image ? 'hidden' : ''}"></i>
                     <input type="hidden" class="option-img-url" id="input-${rowId}" value="${opt.image || ''}">
                 </label>
-                <input type="text" class="option-name w-full border rounded p-1 text-xs" value="${opt.name}" placeholder="Nome">
-                <input type="number" step="0.01" class="option-price w-20 border rounded p-1 text-xs" value="${opt.price}" placeholder="R$">
-                <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>
+
+                <input type="text" class="option-name flex-1 border rounded p-1 text-xs font-bold" value="${opt.name}" placeholder="Nome">
+                <input type="number" step="0.01" class="option-price w-16 border rounded p-1 text-xs" value="${opt.price}" placeholder="R$">
+                
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-300 hover:text-red-500 p-1">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>`;
         optionsContainer.insertAdjacentHTML('beforeend', html);
     });
 };
+function adicionarLinhaOpcaoComStatus(opt = { name: '', price: 0, image: '', available: true }) {
+    const container = document.getElementById('new-group-options');
+    const rowId = Math.random().toString(36).substr(2, 9);
+    const html = `
+        <div class="flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-200" id="opt-row-${rowId}">
+            <label class="relative inline-flex items-center cursor-pointer group-is-available" title="Ativo/Inativo">
+                <input type="checkbox" class="option-available sr-only peer" ${opt.available !== false ? 'checked' : ''}>
+                <div class="w-8 h-4 bg-gray-300 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+            </label>
 
+            <label class="w-8 h-8 flex-shrink-0 bg-white border border-gray-200 rounded cursor-pointer flex items-center justify-center overflow-hidden">
+                <input type="file" class="hidden" onchange="uploadOptionImage(this, 'img-${rowId}', 'input-${rowId}')">
+                <img id="img-${rowId}" src="${opt.image || ''}" class="w-full h-full object-cover ${opt.image ? '' : 'hidden'}">
+                <i class="fas fa-camera text-gray-400 text-[10px] ${opt.image ? 'hidden' : ''}"></i>
+                <input type="hidden" class="option-img-url" id="input-${rowId}" value="${opt.image || ''}">
+            </label>
+
+            <input type="text" class="option-name flex-1 border rounded p-1 text-[10px] font-bold" value="${opt.name}" placeholder="Nome">
+            <input type="number" step="0.01" class="option-price w-14 border rounded p-1 text-[10px]" value="${opt.price}" placeholder="R$">
+            
+            <button type="button" onclick="this.parentElement.remove()" class="text-red-300 hover:text-red-500 p-1">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+}
 // NOVA FUNÇÃO: Duplicar grupo (para criar versões com preços diferentes)
 window.duplicarGrupo = (id) => {
     prepararEdicaoGrupo(id);
@@ -190,7 +234,7 @@ function renderAttachedGroupsInProductModal() {
     container.innerHTML = '';
 
     if (currentProductAttachedGroups.length === 0) {
-        container.innerHTML = '<div class="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">Nenhum complemento.<br>Clique em Criar/Vincular acima.</div>';
+        container.innerHTML = '<div class="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">Nenhum complemento vinculado.</div>';
         return;
     }
 
@@ -198,16 +242,25 @@ function renderAttachedGroupsInProductModal() {
         const group = allComplementGroups.find(g => g.id === groupId);
         if (!group) return;
 
+        // Adicionado: cursor-pointer e onclick="prepararEdicaoGrupo('${group.id}')"
         const html = `
-            <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 flex justify-between items-center">
-                <div class="flex items-center gap-3">
-                    <div class="bg-white w-8 h-8 rounded-full flex items-center justify-center text-cyan-700 font-bold border border-gray-200">${group.options.length}</div>
+            <div class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center hover:border-cyan-500 hover:bg-cyan-50 transition cursor-pointer group" 
+                 onclick="prepararEdicaoGrupo('${group.id}')">
+                <div class="flex items-center gap-4">
+                    <div class="bg-gray-100 w-10 h-10 rounded-full flex items-center justify-center text-cyan-700 font-bold border border-gray-200 group-hover:bg-white">
+                        ${group.options ? group.options.length : 0}
+                    </div>
                     <div>
-                        <p class="font-bold text-sm text-gray-800">${group.title}</p>
-                        <p class="text-xs text-gray-500">Max: ${group.max} • ${group.required ? 'Obrigatório' : 'Opcional'}</p>
+                        <p class="font-bold text-gray-800">${group.title}</p>
+                        <p class="text-xs text-gray-500 uppercase font-medium">Max: ${group.max} • ${group.required ? 'Obrigatório' : 'Opcional'}</p>
                     </div>
                 </div>
-                <button type="button" onclick="toggleGroupAttachment('${group.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold text-cyan-600 opacity-0 group-hover:opacity-100 transition">EDITAR ITENS <i class="fas fa-external-link-alt"></i></span>
+                    <button type="button" onclick="event.stopPropagation(); toggleGroupAttachment('${group.id}')" class="text-red-300 hover:text-red-600 p-2">
+                        <i class="fas fa-unlink"></i>
+                    </button>
+                </div>
             </div>
         `;
         container.innerHTML += html;
@@ -221,6 +274,11 @@ window.addOptionRow = () => {
     const rowId = Date.now();
     const html = `
         <div class="flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-200" id="opt-row-${rowId}">
+            <label class="flex items-center cursor-pointer" title="Item Disponível?">
+                <input type="checkbox" class="option-available sr-only peer" checked>
+                <div class="w-7 h-4 bg-gray-300 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-3 mt-1 ml-1"></div>
+            </label>
+
             <label class="w-8 h-8 flex-shrink-0 bg-white border border-gray-300 rounded cursor-pointer flex items-center justify-center hover:bg-gray-100 overflow-hidden">
                 <input type="file" class="hidden" onchange="uploadOptionImage(this, 'img-${rowId}', 'input-${rowId}')">
                 <img id="img-${rowId}" class="w-full h-full object-cover hidden">
@@ -228,8 +286,8 @@ window.addOptionRow = () => {
                 <input type="hidden" class="option-img-url" id="input-${rowId}">
             </label>
             
-            <input type="text" class="option-name w-full border rounded p-1 text-xs" placeholder="Nome (ex: 300ml)">
-            <input type="number" step="0.01" class="option-price w-20 border rounded p-1 text-xs" placeholder="R$ 0.00">
+            <input type="text" class="option-name w-full border rounded p-1 text-xs" placeholder="Nome">
+            <input type="number" step="0.01" class="option-price w-20 border rounded p-1 text-xs" placeholder="R$">
             <button type="button" onclick="document.getElementById('opt-row-${rowId}').remove()" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>
         </div>
     `;
@@ -267,36 +325,31 @@ window.salvarNovoGrupo = async function() {
         const name = row.querySelector('.option-name').value;
         const price = parseFloat(row.querySelector('.option-price').value) || 0;
         const image = row.querySelector('.option-img-url').value;
-        if(name) options.push({ name, price, image });
+        // CAPTURA DO STATUS:
+        const available = row.querySelector('.option-available').checked; 
+
+        if(name) options.push({ name, price, image, available });
     });
 
-    if(!title || options.length === 0) return alert("Preencha o título e pelo menos uma opção.");
+    if(!title || options.length === 0) return alert("Preencha o título e as opções.");
 
     try {
-        const groupData = {
-            title, 
-            required, 
-            min, 
-            max, 
-            options,
-            internalCategory: category
-        };
+        const groupData = { title, required, min, max, options, internalCategory: category };
 
         if (id) {
-            // EDITAR EXISTENTE
             await updateDoc(doc(db, "complementos", id), groupData);
-            showToast("Atualizado", "Grupo de complementos atualizado!");
+            showToast("Atualizado", "Grupo e itens atualizados!");
         } else {
-            // CRIAR NOVO
             const docRef = await addDoc(collection(db, "complementos"), groupData);
             toggleGroupAttachment(docRef.id);
-            showToast("Sucesso", "Novo grupo criado!");
+            showToast("Sucesso", "Grupo criado!");
         }
         
+        document.getElementById('group-manager-modal').classList.add('hidden');
         resetarFormGrupo();
     } catch(e) {
         console.error(e);
-        showToast("Erro", "Erro ao salvar grupo.", true);
+        showToast("Erro", "Falha ao salvar grupo.", true);
     }
 }
 
