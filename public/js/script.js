@@ -17,6 +17,7 @@ import {
 import { monitorarEstadoAuth, fazerLogout, verificarAdminNoBanco, db as authDb } from './auth.js'; 
 import { renderizarHeaderGlobal, garantirModaisGlobais } from './components.js';
 import { iniciarMonitoramentoPedidosCliente } from './notifications.js';
+import { pedirPermissaoNotificacao } from './notifications.js';
 
 let currentUserIsAdmin = false;
 // Usa o banco já inicializado no auth.js
@@ -1035,7 +1036,12 @@ function updateCartUI() {
         badgeMob.classList.toggle('hidden', totalItems === 0);
     }
 }
+
+// Sua função startCheckout atualizada:
 function startCheckout() {
+    // FIX: Chama o pedido de permissão assim que o usuário clica
+    pedirPermissaoNotificacao(); 
+
     if (cart.length === 0) return showToast("Carrinho vazio!");
     if (!isStoreOpen) return showToast("Loja Fechada!");
 

@@ -172,3 +172,17 @@ document.addEventListener('DOMContentLoaded', () => {
         iniciarNotificacoes();
     }
 });
+
+export async function pedirPermissaoNotificacao() {
+    if (!("Notification" in window)) {
+        console.log("Navegador não suporta notificações nativas.");
+        return;
+    }
+
+    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+            if (window.showToast) window.showToast("Notificações ativadas!");
+        }
+    }
+}
