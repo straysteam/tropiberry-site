@@ -971,18 +971,21 @@ function updateCartUI() {
     const valFrete = document.getElementById('cart-delivery-val');
     
     if (loggedUserEmail && cart.length > 0) {
-        // Simulamos o método delivery para obter a estimativa de custo
         const backupMethod = currentOrder.method;
         currentOrder.method = 'delivery'; 
         valorFrete = calcularFrete();
-        currentOrder.method = backupMethod; // Restaura o estado original
+        currentOrder.method = backupMethod;
 
         if (rowFrete && valFrete) {
             rowFrete.classList.remove('hidden');
-            valFrete.innerText = valorFrete > 0 ? `R$ ${valorFrete.toFixed(2).replace('.', ',')}` : "Grátis";
+            if (valorFrete === null) {
+                valFrete.innerText = "Calculando...";
+                valFrete.className = "text-orange-500 animate-pulse text-xs font-bold";
+            } else {
+                valFrete.innerText = valorFrete > 0 ? `R$ ${valorFrete.toFixed(2).replace('.', ',')}` : "Grátis";
+                valFrete.className = valorFrete > 0 ? "text-gray-700 font-bold" : "text-green-600 font-bold";
+            }
         }
-    } else {
-        if(rowFrete) rowFrete.classList.add('hidden');
     }
 
     // 2. Lógica do Cupom
@@ -1068,7 +1071,7 @@ function selectService(type) {
         // --- EXIBIÇÃO DINÂMICA ---
         const extraContainer = document.getElementById('extra-info-container');
         
-        // CORREÇÃO AQUI: O ID correto no seu HTML agora é 'timing-selector'
+        // O ID correto no seu HTML é 'timing-selector'
         const timingContainer = document.getElementById('timing-selector');
 
         if (extraContainer) {
@@ -1094,10 +1097,15 @@ function selectService(type) {
                         divNow.classList.add('opacity-50', 'bg-gray-100');
                         divNow.innerHTML = '<i class="fas fa-lock text-xl mb-1 block"></i><span class="text-xs font-bold">Fechado</span>';
                     }
+                    
                     // Força marcar "Agendar"
                     if (radioSchedule) {
                         radioSchedule.checked = true;
-                        toggleTimingUI(); // Abre os inputs de data
+                        // FIX: Chamamos explicitamente a função para abrir os campos de data/hora
+                        // Usamos um pequeno atraso (timeout) para garantir que o HTML já esteja visível
+                        setTimeout(() => {
+                            if(typeof toggleTimingUI === 'function') toggleTimingUI();
+                        }, 50);
                     }
                 } else {
                     // Se a loja estiver ABERTA, reseta o botão "Agora"
@@ -1112,6 +1120,8 @@ function selectService(type) {
                         divNow.classList.remove('opacity-50', 'bg-gray-100');
                         divNow.innerHTML = '<i class="fas fa-stopwatch text-xl mb-1 block"></i><span class="text-xs font-bold">Agora</span>';
                     }
+                    
+                    // Se estiver aberta, chamamos para garantir que os campos sumam caso "Agora" esteja marcado
                     toggleTimingUI();
                 }
             } else {
@@ -1462,6 +1472,12 @@ async function processPayment() {
 let countdownInterval = null;
 
 window.openOrderScreen = (orderId) => {
+    // === FIX: FECHA O MODAL DE LISTA DE PEDIDOS CASO ESTEJA ABERTO ===
+    const modalMeusPedidos = document.getElementById('my-orders-modal');
+    if (modalMeusPedidos) {
+        modalMeusPedidos.classList.add('hidden');
+    }
+
     // 1. Garante que a tela existe (caso tenha sido injetada agora)
     const screen = document.getElementById('order-screen');
     if(!screen) return;
@@ -1683,19 +1699,23 @@ function calcularFrete() {
 
     const mode = configPedidos.deliveryMode;
     
-    // --- CORREÇÃO AQUI ---
-    // Agora o modo 'distance' (configurado no painel) aciona a lógica do Google
-    if (mode === 'distance' || mode === 'google') {
-        // Se o cálculo do Google ainda não rodou ou deu zero, usa um valor mínimo de segurança
-        if (!freteGoogleCalculado || freteGoogleCalculado === 0) {
-             // Tenta calcular agora se tiver endereço
-             if(document.getElementById('input-street').value) {
+    // --- CORREÇÃO PARA IFOOD E DISTÂNCIA ---
+    if (mode === 'distance' || mode === 'google' || mode === 'ifood') {
+        
+        // Se o Google ainda não respondeu, retornamos NULL (sinal de que está calculando)
+        // Isso impede que o carrinho mostre "Grátis" por engano
+        if (!distanciaConfirmada || freteGoogleCalculado === 0) {
+             const inputRua = document.getElementById('input-street');
+             
+             // Se tiver endereço, tenta disparar o cálculo
+             if(inputRua && inputRua.value.length > 5) {
                  calcularDistanciaGoogle();
              }
-             // Enquanto calcula, mantém o valor antigo ou o mínimo
-             return currentDeliveryFee || parseFloat(configPedidos.delivMin) || 0;
+             
+             return null; // <--- IMPORTANTE: Retorna null para indicar "Calculando"
         }
         
+        // Se já calculou, retorna o valor da tabela (ex: 4.99)
         currentDeliveryFee = freteGoogleCalculado;
         return currentDeliveryFee;
     }
@@ -1704,24 +1724,18 @@ function calcularFrete() {
     if (mode === 'fixed') {
         currentDeliveryFee = parseFloat(configPedidos.deliveryFixedPrice) || 0;
     } 
-    // 4. Por Bairro (District) ou iFood (Tabela manual)
-    else if (mode === 'district' || mode === 'ifood') {
+    // 4. Por Bairro (Apenas se o modo for 'district' puro)
+    else if (mode === 'district') {
         const inputBairro = document.getElementById('input-district');
         const bairroCliente = inputBairro ? removerAcentos(inputBairro.value.trim().toLowerCase()) : "";
         
-        // Busca o bairro na lista salva
         const infoBairro = configPedidos.deliveryDistricts?.find(b => 
             removerAcentos(b.nome.toLowerCase()) === bairroCliente
         );
         
-        if (infoBairro) {
-            currentDeliveryFee = parseFloat(infoBairro.custo);
-        } else {
-            // Se não encontrar o bairro, usa uma taxa padrão (ex: R$ 10,00) ou 0
-            currentDeliveryFee = 10.00; 
-        }
+        currentDeliveryFee = infoBairro ? parseFloat(infoBairro.custo) : 10.00; 
     } else {
-        currentDeliveryFee = 0; // Frete Grátis
+        currentDeliveryFee = 0; 
     }
 
     return currentDeliveryFee;
@@ -2102,19 +2116,15 @@ window.calcularDistanciaGoogle = () => {
     const bairro = document.getElementById('input-district').value;
     
     if(!rua || !num || !bairro) return;
-
-    // Reseta a trava de segurança ao começar a calcular
     distanciaConfirmada = false; 
 
-    // Defina o endereço da sua loja aqui
-    const origin = "Av. Senador Ruy Carneiro, 123, João Pessoa, PB"; 
+    // Mantenha seu endereço de origem aqui
+    const origin = "Rua Ricardo Soares de Souza Neto, 456, João Pessoa, PB"; 
     const destination = `${rua}, ${num} - ${bairro}, João Pessoa, PB`;
 
     const labelFrete = document.getElementById('receipt-delivery');
     if(labelFrete) {
         labelFrete.innerText = "Calculando...";
-        labelFrete.classList.remove('text-green-600');
-        labelFrete.classList.add('text-orange-500', 'animate-pulse');
     }
 
     const service = new google.maps.DistanceMatrixService();
@@ -2125,39 +2135,41 @@ window.calcularDistanciaGoogle = () => {
         unitSystem: google.maps.UnitSystem.METRIC
     }, (response, status) => {
         if (status === 'OK' && response.rows[0].elements[0].status === 'OK') {
-            const distanciaMetros = response.rows[0].elements[0].distance.value;
-            const distanciaKm = distanciaMetros / 1000;
+            const distanciaKm = response.rows[0].elements[0].distance.value / 1000;
+            let valorFrete = 0;
+
+            // === TABELA DE RAIO IFOOD (Sua tabela implementada) ===
+            const km = distanciaKm;
             
-            const precoPorKm = configPedidos.deliveryPricePerKm || 1.50;
-            let valorFrete = distanciaKm * precoPorKm;
-
-            // === LÓGICA ESPECIAL MODO IFOOD ===
-            if (configPedidos.deliveryMode === 'ifood') {
-                // Regra: Menos de 4km é GRÁTIS
-                if (distanciaKm < 4) {
-                    valorFrete = 0;
-                }
-                // Acima de 4km cobra normal (o valor calculado acima)
-            }
-            // === FIM LÓGICA IFOOD ===
-
-            // Lógica Padrão (Mínimo) para outros modos
-            if (configPedidos.deliveryMode !== 'ifood') {
-                const valorMinimo = configPedidos.delivMin || 5.00;
-                if (valorFrete < valorMinimo) valorFrete = valorMinimo;
-            }
+            if (km <= 1.0) valorFrete = 4.99;
+            else if (km <= 2.0) valorFrete = 6.99;
+            else if (km <= 3.0) valorFrete = 7.99;
+            else if (km <= 4.0) valorFrete = 8.99;
+            else if (km <= 5.0) valorFrete = 10.99;
+            else if (km <= 6.0) valorFrete = 12.99;
+            else if (km <= 6.5) valorFrete = 13.99;
+            else if (km <= 7.0) valorFrete = 14.99;
+            else if (km <= 7.5) valorFrete = 15.99;
+            else if (km <= 8.0) valorFrete = 16.99;
+            else if (km <= 8.5) valorFrete = 17.99;
+            else if (km <= 9.0) valorFrete = 18.99;
+            else if (km <= 9.5) valorFrete = 19.99;
+            else if (km <= 10.0) valorFrete = 20.99;
+            else if (km <= 11.0) valorFrete = 19.99; // Dip da sua tabela
+            else if (km <= 11.5) valorFrete = 20.99;
+            else if (km <= 12.5) valorFrete = 22.99;
+            else valorFrete = 24.99; // Acima de 13km conforme sua tabela
 
             freteGoogleCalculado = valorFrete;
-            
-            // LIBERA A TRAVA: Distância calculada com sucesso!
             distanciaConfirmada = true; 
             
+            // Atualiza tanto o carrinho quanto o recibo
+            updateCartUI(); 
             renderReceipt(); 
 
         } else {
             console.error("Erro Google Maps:", status);
             freteGoogleCalculado = 0; 
-            distanciaConfirmada = false; // Mantém travado se der erro
             renderReceipt();
         }
     });
@@ -2356,6 +2368,18 @@ window.goToSummary = function() {
         
         if(!rua || !num || !bairro) return showToast("Preencha o endereço completo!", true);
         
+        // === TRAVA DE SEGURANÇA PARA O FRETE IFOOD/GOOGLE ===
+        // Se o modo for iFood ou Distância, não deixa avançar sem a resposta do Google
+        const modo = configPedidos.deliveryMode;
+        if (modo === 'ifood' || modo === 'distance' || modo === 'google') {
+            if (!distanciaConfirmada || freteGoogleCalculado === 0) {
+                showToast("Calculando frete... Aguarde a confirmação da distância.", true);
+                // Tenta disparar o cálculo novamente por garantia
+                window.calcularDistanciaGoogle();
+                return; // Bloqueia o avanço
+            }
+        }
+
         currentOrder.customer.address = `${rua}, ${num} - ${bairro}`;
     } else {
         currentOrder.customer.address = "Retirada na Loja";
@@ -2367,13 +2391,26 @@ window.goToSummary = function() {
     // 4. Preencher a tela de Resumo
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const frete = calcularFrete();
-    const totalFinal = subtotal + frete + (parseFloat(configPedidos.delivServiceFee) || 0);
+    
+    // Garantia para o cálculo não dar erro se o frete for null
+    const valorFreteReal = (frete === null) ? 0 : frete;
+    const totalFinal = subtotal + valorFreteReal + (parseFloat(configPedidos.delivServiceFee) || 0);
     
     currentOrder.total = totalFinal;
 
     document.getElementById('summary-address-display').innerText = currentOrder.customer.address;
     document.getElementById('summary-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
-    document.getElementById('summary-delivery').innerText = frete > 0 ? `R$ ${frete.toFixed(2).replace('.', ',')}` : "Grátis";
+    
+    // Ajuste visual do frete no resumo
+    const deliveryDisplay = document.getElementById('summary-delivery');
+    if (valorFreteReal > 0) {
+        deliveryDisplay.innerText = `R$ ${valorFreteReal.toFixed(2).replace('.', ',')}`;
+        deliveryDisplay.classList.remove('text-green-600');
+    } else {
+        deliveryDisplay.innerText = "Grátis";
+        deliveryDisplay.classList.add('text-green-600');
+    }
+
     document.getElementById('summary-total').innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
 
     const itemsContainer = document.getElementById('summary-items');
@@ -2393,28 +2430,33 @@ window.showStep = function(stepId) {
     const steps = ['step-service', 'step-address', 'step-summary', 'step-payment-method'];
     steps.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.classList.add('hidden'); // ISSO AQUI LIMPA O MODAL ANTIGO
+        if (el) el.classList.add('hidden'); 
     });
-    // 2. Mostra a etapa atual
+
     const target = document.getElementById(stepId);
     if (target) target.classList.remove('hidden');
 
-    // 3. CONTROLA OS BOTÕES FIXOS DO RODAPÉ
-    const btnAddress = document.getElementById('btn-next-address'); // Botão Azul "Revisar Pedido"
-    const btnSummary = document.getElementById('btn-next-summary'); // Botão Verde "Ir para Pagamento"
-    const btnEdit = document.getElementById('btn-edit-summary');    // Botão "Alterar Dados"
-    const btnPay = document.getElementById('btn-generate-pay');     // Botão "Finalizar"
+    const btnAddress = document.getElementById('btn-next-address'); 
+    const btnSummary = document.getElementById('btn-next-summary'); 
+    const btnEdit = document.getElementById('btn-edit-summary');    
+    const btnPay = document.getElementById('btn-generate-pay');     
 
-    // Esconde todos primeiro
     if(btnAddress) btnAddress.classList.add('hidden');
     if(btnSummary) btnSummary.classList.add('hidden');
     if(btnEdit) btnEdit.classList.add('hidden');
     if(btnPay) btnPay.classList.add('hidden');
 
-    // Mostra o botão certo para a etapa certa
     if (stepId === 'step-address') {
-        if(btnAddress) btnAddress.classList.remove('hidden'); // <--- AQUI MOSTRA O BOTÃO AZUL
+        if(btnAddress) btnAddress.classList.remove('hidden');
         checkSavedAddress();
+
+        // FIX: Toda vez que entrar na tela de endereço, 
+        // força a atualização visual do agendamento após a tela aparecer
+        setTimeout(() => {
+            if (typeof window.toggleTimingUI === 'function') {
+                window.toggleTimingUI();
+            }
+        }, 50);
     }
     else if (stepId === 'step-summary') {
         if(btnSummary) btnSummary.classList.remove('hidden');
