@@ -97,10 +97,11 @@ async function salvarUsuarioNoBanco(user) {
         // 1. Pega o Token do Celular (Endereço para notificações Push)
         let fcmToken = null;
         try {
-            // SUBSTITUA 'SUA_CHAVE_VAPID_AQUI' pela chave que você gerou no console do Firebase
+          const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
             fcmToken = await getToken(messaging, { 
-                vapidKey: 'BGjtkuoDdlHoWtS7I5YJ75WuO0n4_z4PNDo51FHin6tIRR6m1eeMkMLJCGHreTyipAjo0p_M-rI0930HFOngxy8' 
-            });
+        serviceWorkerRegistration: registration, // Passa o registro aqui
+        vapidKey: 'BGjtkuoDdlHoWtS7I5YJ75WuO0n4_z4PNDo51FHin6tIRR6m1eeMkMLJCGHreTyipAjo0p_M-rI0930HFOngxy8' 
+    });
         } catch (tokenErr) {
             console.log("Notificações negadas ou erro ao obter token.");
         }
