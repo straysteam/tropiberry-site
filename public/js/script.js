@@ -38,6 +38,7 @@ let currentDeliveryFee = 0;
 let freteGoogleCalculado = 0; 
 let googleDebounceTimer = null;
 let distanciaConfirmada = false;
+let ultimoEnderecoCalculado = "";
 
 
 // CACHE GLOBAL DE COMPLEMENTOS
@@ -93,7 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderizarHeaderGlobal();
     garantirModaisGlobais();
 
-if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/firebase-messaging-sw.js')
         .then((registration) => {
             console.log('Service Worker registrado com sucesso:', registration.scope);
@@ -123,8 +124,6 @@ if ('serviceWorker' in navigator) {
     monitorarInfoLoja();
     
     // 2. Monitora o Login e preenche os botões no Header
-// 2. Monitora o Login e preenche os botões no Header
-   // 2. Monitora o Login e preenche os botões no Header
     monitorarEstadoAuth(async (user) => {
         const desktopAuthArea = document.getElementById('desktop-auth-area');
         const menuName = document.getElementById('menu-user-name');
@@ -135,13 +134,14 @@ if ('serviceWorker' in navigator) {
 
         // Gerenciador de inputs de endereço (Google Maps)
         const inputsEndereco = ['input-street', 'input-number', 'input-district'];
-        inputsEndereco.forEach(id => {
-            document.getElementById(id)?.addEventListener('blur', () => {
-                if (configPedidos && configPedidos.deliveryMode === 'distance') {
-                    calcularDistanciaGoogle();
-                }
-            });
-        });
+inputsEndereco.forEach(id => {
+    document.getElementById(id)?.addEventListener('blur', () => {
+        // ADICIONADO: 'ifood' na verificação
+        if (configPedidos && (configPedidos.deliveryMode === 'distance' || configPedidos.deliveryMode === 'ifood')) {
+            calcularDistanciaGoogle();
+        }
+    });
+});
 
         if (user) {
             loggedUserEmail = user.email;
@@ -230,21 +230,29 @@ if ('serviceWorker' in navigator) {
 
     updateStoreStatusUI();
     checkLastOrder();
-});
 
-// === FUNÇÃO REUTILIZÁVEL: GERA AS TAGS ===
-function gerarHTMLTags(tags) {
-    if (!tags || tags.length === 0) return '';
-    let html = '<div class="flex flex-wrap gap-2 mt-2">';
-    tags.forEach(tag => {
-        const style = TAG_CONFIG[tag] || TAG_CONFIG['default'];
-        html += `
-            <span class="${style.classes} text-[10px] font-bold px-2 py-1 rounded-full shadow-sm uppercase flex items-center gap-1">
-                <i class="${style.icon}"></i> ${tag}
-            </span>`;
-    });
-    html += '</div>';
-    return html;
+    // === ADIÇÃO: SINCRONIZAÇÃO DE CUPONS COM O PAINEL DE MARKETING ===
+    if (typeof monitorarCuponsDoBanco === 'function') {
+        monitorarCuponsDoBanco();
+    }
+});
+function calcularDescontoCupom(subtotal, frete, cupom) {
+    if (!cupom) return 0;
+    let desconto = 0;
+
+    if (cupom.tipo === 'fixo') {
+        desconto = parseFloat(cupom.valor) || 0;
+    } else if (cupom.tipo === 'porcentagem') {
+        const fator = cupom.valor > 1 ? cupom.valor / 100 : cupom.valor;
+        desconto = subtotal * fator;
+    } else if (cupom.tipo === 'frete') {
+        if (frete !== null) {
+            const limite = parseFloat(cupom.valor) || 4.99;
+            // O desconto é o frete, limitado ao teto do cupom (Padrão iFood)
+            desconto = Math.min(frete, limite);
+        }
+    }
+    return Math.max(0, desconto);
 }
 
 // === NOVO: MONITORAMENTO DE COMPLEMENTOS PARA O CARDÁPIO ===
@@ -943,7 +951,6 @@ function updateCartUI() {
         });
     }
 
-    // === BOTÃO "VOLTAR PARA PEDIDO" ===
     const savedOrder = localStorage.getItem('tropyberry_last_order');
     if (savedOrder) {
         const orderData = JSON.parse(savedOrder);
@@ -966,29 +973,29 @@ function updateCartUI() {
     let valorFrete = 0;
     let valorDesconto = 0;
 
-    // 1. Lógica do Frete no Carrinho (Apenas para logados)
+    // 1. Lógica do Frete no Carrinho
     const rowFrete = document.getElementById('row-cart-delivery');
     const valFrete = document.getElementById('cart-delivery-val');
     
     if (loggedUserEmail && cart.length > 0) {
         const backupMethod = currentOrder.method;
         currentOrder.method = 'delivery'; 
-        valorFrete = calcularFrete();
-        currentOrder.method = backupMethod;
+        const freteCalculado = calcularFrete();
+        valorFrete = (freteCalculado === null) ? 0 : freteCalculado;
 
         if (rowFrete && valFrete) {
             rowFrete.classList.remove('hidden');
-            if (valorFrete === null) {
+            if (freteCalculado === null) {
                 valFrete.innerText = "Calculando...";
                 valFrete.className = "text-orange-500 animate-pulse text-xs font-bold";
             } else {
-                valFrete.innerText = valorFrete > 0 ? `R$ ${valorFrete.toFixed(2).replace('.', ',')}` : "Grátis";
-                valFrete.className = valorFrete > 0 ? "text-gray-700 font-bold" : "text-green-600 font-bold";
+                valFrete.innerText = freteCalculado > 0 ? `R$ ${freteCalculado.toFixed(2).replace('.', ',')}` : "Grátis";
+                valFrete.className = freteCalculado > 0 ? "text-gray-700 font-bold" : "text-green-600 font-bold";
             }
         }
     }
 
-    // 2. Lógica do Cupom
+    // 2. Lógica do Cupom (ATUALIZADA)
     if (cupomAtivo) {
         if (subtotal < cupomAtivo.min) {
             cupomAtivo = null;
@@ -999,40 +1006,55 @@ function updateCartUI() {
             }
             document.getElementById('row-discount')?.classList.add('hidden');
         } else {
+            // Lógica para tipo FIXO
             if (cupomAtivo.tipo === 'fixo') {
                 valorDesconto = cupomAtivo.valor;
-            } else if (cupomAtivo.tipo === 'porcentagem') {
-                valorDesconto = subtotal * cupomAtivo.valor;
+            } 
+            // Lógica para tipo PORCENTAGEM (Trata se o user pôs 10 ou 0.1)
+            else if (cupomAtivo.tipo === 'porcentagem') {
+                const fator = cupomAtivo.valor > 1 ? cupomAtivo.valor / 100 : cupomAtivo.valor;
+                valorDesconto = subtotal * fator;
             }
+            // Lógica para tipo FRETE (IGUAL AO RECIBO)
+            else if (cupomAtivo.tipo === 'frete') {
+                const limiteCupom = parseFloat((cupomAtivo.valor || 4.99).toFixed(2));
+                // O desconto é o valor do frete, desde que não ultrapasse o limite do cupom
+                if (valorFrete <= limiteCupom) {
+                    valorDesconto = valorFrete;
+                } else {
+                    valorDesconto = 0; // Mantém sua regra: se frete > limite, não aplica
+                }
+            }
+
             const rowDiscount = document.getElementById('row-discount');
             const discountValueEl = document.getElementById('cart-discount');
-            if (rowDiscount) rowDiscount.classList.remove('hidden');
-            if (discountValueEl) discountValueEl.innerText = `- R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
+            if (rowDiscount) {
+                if (valorDesconto > 0) {
+                    rowDiscount.classList.remove('hidden');
+                    if (discountValueEl) discountValueEl.innerText = `- R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
+                } else {
+                    rowDiscount.classList.add('hidden');
+                }
+            }
         }
     }
 
     const totalFinal = (subtotal + valorFrete) - valorDesconto;
 
-    // Atualiza os textos de valores no modal
     const subtotalEl = document.getElementById('cart-subtotal');
     if (subtotalEl) subtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
-    
     cartTotalElement.innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
 
-    // === ATUALIZAÇÃO DE BADGES E CONTADORES ===
     const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
-
     if (cartCountBadge) {
         cartCountBadge.innerText = totalItems;
         cartCountBadge.classList.toggle('hidden', totalItems === 0);
     }
-
     const badgeDesk = document.getElementById('cart-count-desktop'); 
     if(badgeDesk) {
         badgeDesk.innerText = totalItems;
         badgeDesk.classList.toggle('hidden', totalItems === 0);
     }
-
     const badgeMob = document.getElementById('cart-count-mobile');
     if(badgeMob) {
         badgeMob.innerText = totalItems;
@@ -1053,6 +1075,10 @@ function startCheckout() {
     if (!checkoutModal) {
         window.location.href = 'index.html?action=checkout';
         return;
+    }
+    if (loggedUserEmail && !distanciaConfirmada && cart.length > 0) {
+        // Se temos um email mas o frete ainda está nulo, tenta disparar o cálculo automático
+        window.calcularDistanciaGoogle();
     }
 
     checkoutModal.classList.remove('hidden');
@@ -1136,22 +1162,37 @@ function selectService(type) {
 function checkSavedAddress() { 
     const s = localStorage.getItem('tropyberry_user'); 
     if (s) { 
-        const d = JSON.parse(s); 
+        const d = JSON.parse(s);
+        
+        // Preenchimento dos campos básicos
         if (document.getElementById('input-name')) document.getElementById('input-name').value = d.name || ''; 
         if (document.getElementById('input-phone')) document.getElementById('input-phone').value = d.phone || ''; 
-        // LINHA CORRIGIDA ABAIXO:
         if (document.getElementById('input-email')) document.getElementById('input-email').value = d.email || ''; 
         
+        // Preenchimento do endereço
         if (document.getElementById('input-street')) document.getElementById('input-street').value = d.street || ''; 
         if (document.getElementById('input-number')) document.getElementById('input-number').value = d.number || ''; 
         if (document.getElementById('input-district')) document.getElementById('input-district').value = d.district || ''; 
         if (document.getElementById('input-comp')) document.getElementById('input-comp').value = d.comp || ''; 
         
+        // Lógica visual: Mostra o card de endereço salvo se ele existir no seu HTML
         if(d.street && document.getElementById('saved-address-card')) { 
             document.getElementById('saved-address-card').classList.remove('hidden'); 
             document.getElementById('saved-address-card').classList.add('flex'); 
             document.getElementById('saved-address-text').innerText = `${d.street}, ${d.number}`; 
-        } 
+        }
+
+        // Gatilho automático para o Frete:
+        // Se já temos rua, número e bairro, dispara o cálculo do Google imediatamente
+        if(d.street && d.number && d.district) {
+            console.log("Endereço salvo detectado, calculando frete...");
+            setTimeout(() => {
+                // Chama a função global que você definiu para o Google Maps
+                if (typeof window.calcularDistanciaGoogle === 'function') {
+                    window.calcularDistanciaGoogle();
+                }
+            }, 500);
+        }
     } 
 }
 function useSavedAddress() { goToSummary(); }
@@ -1255,15 +1296,23 @@ document.getElementById('input-district')?.addEventListener('input', () => {
 async function processPayment() {
     const payMethod = document.querySelector('input[name="pay-method"]:checked')?.value;
 
-    // Recalcula totais
+    // 1. Recalcula Subtotal
     const subtotal = cart.reduce((acc, item) => {
         let p = item.price;
         if (typeof p === 'string') p = parseFloat(p.replace('R$', '').replace(',', '.').trim());
         return acc + (p * item.quantity);
     }, 0);
 
-    const frete = (typeof calcularFrete === 'function') ? calcularFrete() : 0;
-    const totalFinal = subtotal + frete;
+    // 2. Recalcula Frete (Garante 0 se for null)
+    const frete = (typeof calcularFrete === 'function') ? (calcularFrete() || 0) : 0;
+
+    // 3. NOVO: Calcula o Desconto do Cupom (Sincronizado com o carrinho e resumo)
+    const valorDesconto = (typeof calcularDescontoCupom === 'function') 
+        ? calcularDescontoCupom(subtotal, frete, cupomAtivo) 
+        : 0;
+
+    // 4. Define Total Final Líquido (Subtotal + Frete - Cupom)
+    const totalFinal = (subtotal + frete) - valorDesconto;
 
     if (!payMethod) return showToast("Selecione um método de pagamento", true);
 
@@ -1277,35 +1326,26 @@ async function processPayment() {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
 
         try {
-            // 1. LIMPEZA ABSOLUTA DOS DADOS
+            // 1. LIMPEZA ABSOLUTA DOS DADOS (Mantendo seus passos originais)
             const cleanItems = cart.map(item => {
-                // Passo A: Converte tudo para string primeiro
                 let strPrice = String(item.price);
-                
-                // Passo B: Remove tudo que não for número, ponto ou vírgula
                 strPrice = strPrice.replace(/[^0-9.,]/g, '');
-
-                // Passo C: Normaliza vírgula para ponto
                 strPrice = strPrice.replace(',', '.');
-
-                // Passo D: Converte para FLOAT e depois arredonda para 2 casas
                 let finalPrice = parseFloat(strPrice);
-                
-                // Passo E: Segurança final - garante que é número
                 if (isNaN(finalPrice)) finalPrice = 1.00;
-                finalPrice = Number(finalPrice.toFixed(2)); // Truque para garantir 2 casas mas manter como Number
+                finalPrice = Number(finalPrice.toFixed(2));
 
                 return {
                     id: String(item.originalId || item.id),
                     title: String(item.name).substring(0, 250),
                     quantity: parseInt(item.quantity),
-                    unit_price: finalPrice, // <--- Aqui está indo o NÚMERO
+                    unit_price: finalPrice,
                     currency_id: "BRL",
                     description: String(item.details || 'Sem adicionais').substring(0, 200)
                 };
             });
 
-            // Adiciona Frete
+            // Adiciona Frete como item
             if (frete > 0) {
                 cleanItems.push({
                     id: "frete",
@@ -1314,6 +1354,18 @@ async function processPayment() {
                     unit_price: Number(frete.toFixed(2)),
                     currency_id: "BRL",
                     description: "Entrega Delivery"
+                });
+            }
+
+            // NOVO: Adiciona o Desconto como um item negativo (Padrão iFood/Mercado Pago)
+            if (valorDesconto > 0) {
+                cleanItems.push({
+                    id: "cupom_desconto",
+                    title: `Cupom: ${cupomAtivo.code}`,
+                    quantity: 1,
+                    unit_price: -Number(valorDesconto.toFixed(2)),
+                    currency_id: "BRL",
+                    description: "Desconto aplicado"
                 });
             }
 
@@ -1329,32 +1381,27 @@ async function processPayment() {
                 items: cleanItems
             };
 
-            // =================================================================
-            // 🕵️ DEBUGGER DA VERDADE (OLHE ISSO NO CONSOLE)
-            // =================================================================
-            console.log("👇 COPIE O TEXTO ABAIXO SE DER ERRO 👇");
-            const jsonString = JSON.stringify(dadosParaEnvio, null, 2);
-            console.log(jsonString); 
-            // Verifique no console: "unit_price": 10.50 (SEM ASPAS É NÚMERO)
-            // Se estiver "unit_price": "10.50" (COM ASPAS É ERRO)
-            // =================================================================
+            // 🕵️ DEBUGGER DA VERDADE
+            console.log("📤 Enviando para API (Cartão):", JSON.stringify(dadosParaEnvio, null, 2));
 
             // 2. CHAMA API
             const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(dadosParaEnvio) // Envia o JSON stringificado
+                body: JSON.stringify(dadosParaEnvio)
             });
 
             const data = await response.json();
-            console.log("✅ RESPOSTA API:", data);
 
             // 3. SUCESSO OU ERRO
             if (data.init_point || data.sandbox_init_point) {
-                // Salva no Banco e Redireciona...
+                // Salva no Banco com detalhes de Cupom e Frete
                 const docRef = await addDoc(collection(db, "pedidos"), {
                     customer: currentOrder.customer,
                     items: cart,
+                    frete: frete,
+                    desconto: valorDesconto,
+                    cupom: cupomAtivo ? cupomAtivo.code : null,
                     total: totalFinal,
                     paymentMethod: 'card',
                     method: currentOrder.method,
@@ -1370,11 +1417,9 @@ async function processPayment() {
                 
                 window.location.href = data.init_point || data.sandbox_init_point;
                 return;
-
             } else {
                 throw new Error(data.error || "Erro desconhecido na API.");
             }
-
         } catch (e) {
             console.error("❌ ERRO NO PROCESSO:", e);
             showToast("Erro: " + (e.message || "Tente novamente"), true);
@@ -1384,9 +1429,8 @@ async function processPayment() {
     }
 
     // =================================================================
-    // PIX (MANTÉM O PADRÃO)
+    // PIX
     // =================================================================
-    
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PIX...';
 
@@ -1397,7 +1441,6 @@ async function processPayment() {
              const cleanItems = cart.map(item => {
                 let p = String(item.price).replace(/[^0-9.,]/g, '').replace(',', '.');
                 let finalPrice = Number(parseFloat(p).toFixed(2));
-                
                 return {
                     id: String(item.originalId || item.id),
                     title: item.name,
@@ -1408,13 +1451,12 @@ async function processPayment() {
             });
 
             if (frete > 0) {
-                cleanItems.push({
-                    id: "frete",
-                    title: "Taxa de Entrega",
-                    unit_price: Number(frete.toFixed(2)),
-                    quantity: 1,
-                    currency_id: "BRL"
-                });
+                cleanItems.push({ id: "frete", title: "Taxa de Entrega", unit_price: Number(frete.toFixed(2)), quantity: 1, currency_id: "BRL" });
+            }
+
+            // NOVO: Adiciona desconto no PIX
+            if (valorDesconto > 0) {
+                cleanItems.push({ id: "cupom", title: "Desconto Cupom", unit_price: -Number(valorDesconto.toFixed(2)), quantity: 1, currency_id: "BRL" });
             }
 
             const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", {
@@ -1429,7 +1471,6 @@ async function processPayment() {
             });
 
             const data = await response.json();
-
             if (data.success || data.qr_code) {
                 pixData.qr_code = data.qr_code;
                 pixData.qr_code_base64 = data.qr_code_base64;
@@ -1441,6 +1482,9 @@ async function processPayment() {
         const docRef = await addDoc(collection(db, "pedidos"), {
             customer: currentOrder.customer,
             items: cart,
+            frete: frete,
+            desconto: valorDesconto,
+            cupom: cupomAtivo ? cupomAtivo.code : null,
             total: totalFinal,
             paymentMethod: payMethod,
             method: currentOrder.method,
@@ -1459,7 +1503,7 @@ async function processPayment() {
         showToast("Pedido enviado!");
 
     } catch (e) {
-        console.error("Erro completo:", e);
+        console.error("Erro completo:", e); 
         showToast("Falha ao gerar pedido: " + e.message, true);
     } finally {
         if (payMethod !== 'card') {
@@ -1686,53 +1730,38 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function calcularFrete() {
-    // 1. Se não for delivery, frete é zero
-    if (!currentOrder.method || currentOrder.method !== 'delivery') {
-        currentDeliveryFee = 0;
-        return 0;
-    }
-
-    // 2. Se não tiver configuração carregada
+    // 1. Se não tiver configuração carregada
     if (!configPedidos || !configPedidos.deliveryMode) {
         return 0;
     }
 
     const mode = configPedidos.deliveryMode;
     
-    // --- CORREÇÃO PARA IFOOD E DISTÂNCIA ---
+    // --- PRIORIDADE: Verificação de modos automáticos (Google/iFood) ---
     if (mode === 'distance' || mode === 'google' || mode === 'ifood') {
-        
-        // Se o Google ainda não respondeu, retornamos NULL (sinal de que está calculando)
-        // Isso impede que o carrinho mostre "Grátis" por engano
-        if (!distanciaConfirmada || freteGoogleCalculado === 0) {
-             const inputRua = document.getElementById('input-street');
-             
-             // Se tiver endereço, tenta disparar o cálculo
-             if(inputRua && inputRua.value.length > 5) {
-                 calcularDistanciaGoogle();
-             }
-             
-             return null; // <--- IMPORTANTE: Retorna null para indicar "Calculando"
+        // Se o Google já respondeu, retorna o valor salvo
+        if (distanciaConfirmada) {
+            return freteGoogleCalculado;
         }
-        
-        // Se já calculou, retorna o valor da tabela (ex: 4.99)
-        currentDeliveryFee = freteGoogleCalculado;
-        return currentDeliveryFee;
+        // Se ainda não confirmou, retorna NULL para mostrar "Calculando..." no carrinho
+        return null; 
+    }
+
+    // 2. Se não for delivery, para os outros modos (Fixo/Bairro), frete é zero
+    if (!currentOrder.method || currentOrder.method !== 'delivery') {
+        currentDeliveryFee = 0;
+        return 0;
     }
 
     // 3. Preço Fixo
     if (mode === 'fixed') {
         currentDeliveryFee = parseFloat(configPedidos.deliveryFixedPrice) || 0;
     } 
-    // 4. Por Bairro (Apenas se o modo for 'district' puro)
+    // 4. Por Bairro
     else if (mode === 'district') {
         const inputBairro = document.getElementById('input-district');
         const bairroCliente = inputBairro ? removerAcentos(inputBairro.value.trim().toLowerCase()) : "";
-        
-        const infoBairro = configPedidos.deliveryDistricts?.find(b => 
-            removerAcentos(b.nome.toLowerCase()) === bairroCliente
-        );
-        
+        const infoBairro = configPedidos.deliveryDistricts?.find(b => removerAcentos(b.nome.toLowerCase()) === bairroCliente);
         currentDeliveryFee = infoBairro ? parseFloat(infoBairro.custo) : 10.00; 
     } else {
         currentDeliveryFee = 0; 
@@ -1746,30 +1775,29 @@ function removerAcentos(str) {
 
 function renderReceipt() {
     const list = document.getElementById('receipt-items-list');
-    
-    // Elementos visuais de preço
     const deliveryEl = document.getElementById('receipt-delivery');
     const totalEl = document.getElementById('receipt-total');
     const subtotalEl = document.getElementById('receipt-subtotal');
-    
-    // Elementos da Taxa de Serviço
     const serviceRow = document.getElementById('receipt-service-row');
     const serviceFeeEl = document.getElementById('receipt-service-fee');
-
-    // NOVOS: Elementos do Cupom no Recibo
     const discountRow = document.getElementById('receipt-discount-row');
     const discountValueEl = document.getElementById('receipt-discount-value');
+
+    // IDs da tela de Resumo Final (Checkout)
+    const summaryTotalEl = document.getElementById('summary-total');
+    const summarySubtotalEl = document.getElementById('summary-subtotal');
+    const summaryDeliveryEl = document.getElementById('summary-delivery');
+    const summaryDiscountRow = document.getElementById('summary-discount-row');
+    const summaryDiscountVal = document.getElementById('summary-discount');
 
     if (!list) return;
 
     list.innerHTML = '';
     let subtotal = 0;
 
-    // 1. Renderiza os Itens e calcula o Subtotal
     cart.forEach(item => {
         const t = item.price * item.quantity;
         subtotal += t;
-        
         list.innerHTML += `
             <div class="flex justify-between items-start mb-2 border-b border-gray-50 pb-2">
                 <div>
@@ -1781,17 +1809,13 @@ function renderReceipt() {
             </div>`;
     });
 
-    // 2. Chama o cálculo do Frete atualizado
     let frete = calcularFrete();
+    const valorFreteNum = (frete === null) ? 0 : frete;
 
-    // --- LÓGICA: Entrega grátis por valor ---
     if (currentOrder.method === 'delivery' && configPedidos.delivFreeAbove > 0) {
-        if (subtotal >= configPedidos.delivFreeAbove) {
-            frete = 0;
-        }
+        if (subtotal >= configPedidos.delivFreeAbove) frete = 0;
     }
 
-    // --- LÓGICA: Taxa de Serviço ---
     let taxaServico = 0;
     if (currentOrder.method === 'delivery' && configPedidos.delivServiceFee > 0) {
         taxaServico = parseFloat(configPedidos.delivServiceFee);
@@ -1801,63 +1825,77 @@ function renderReceipt() {
         if (serviceRow) serviceRow.classList.add('hidden');
     }
 
-    // --- NOVA LÓGICA: CÁLCULO DO DESCONTO DO CUPOM ---
+    // === CÁLCULO DE DESCONTO UNIFICADO (CORREÇÃO CIRÚRGICA) ===
     let valorDesconto = 0;
-
     if (cupomAtivo) {
-        // Se o subtotal ainda for válido para o cupom
-        if (subtotal >= cupomAtivo.min) {
+        const minVal = parseFloat(cupomAtivo.min) || 0;
+        const limiteCupom = parseFloat(cupomAtivo.valor) || 4.99;
+
+        if (subtotal >= minVal) {
             if (cupomAtivo.tipo === 'fixo') {
                 valorDesconto = cupomAtivo.valor;
             } else if (cupomAtivo.tipo === 'porcentagem') {
-                valorDesconto = subtotal * cupomAtivo.valor;
+                const fator = cupomAtivo.valor > 1 ? cupomAtivo.valor / 100 : cupomAtivo.valor;
+                valorDesconto = subtotal * fator;
             } else if (cupomAtivo.tipo === 'frete') {
-                valorDesconto = 0; 
-                frete = 0; // Zera o frete se for cupom de frete grátis
+                if (frete !== null) {
+                    // O desconto é o menor valor entre o frete real e o que o cupom cobre
+                    valorDesconto = Math.min(valorFreteNum, limiteCupom);
+                }
             }
-
-            // Mostra a linha de desconto no resumo
-            if (discountRow) discountRow.classList.remove('hidden');
-            if (discountValueEl) {
-                const prefixo = cupomAtivo.tipo === 'frete' ? '' : '- ';
-                const textoValor = cupomAtivo.tipo === 'frete' ? 'Grátis' : `R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
-                discountValueEl.innerText = `${prefixo}${textoValor}`;
-            }
-        } else {
-            // Caso o valor tenha caído abaixo do mínimo, esconde a linha
-            if (discountRow) discountRow.classList.add('hidden');
         }
-    } else {
-        if (discountRow) discountRow.classList.add('hidden');
     }
 
-    // 3. Atualiza o Subtotal na tela
-    if (subtotalEl) subtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
-
-    // 4. Atualiza a Taxa de Entrega na tela
-    if (deliveryEl) {
-        if (frete > 0) {
-            deliveryEl.innerText = `R$ ${frete.toFixed(2).replace('.', ',')}`;
-            deliveryEl.className = "text-gray-800 font-bold"; 
-        } else {
-            if (currentOrder.method === 'retirada') {
-                deliveryEl.innerText = '--';
-                deliveryEl.className = "text-gray-400";
+    // --- ATUALIZA UI DE DESCONTO (CARRINHO E RESUMO) ---
+    const atualizarLinhaDesconto = (row, valEl) => {
+        if (row && valEl) {
+            if (valorDesconto > 0) {
+                row.classList.remove('hidden');
+                // Adiciona a classe flex caso o seu CSS precise para alinhar
+                row.style.display = 'flex'; 
+                valEl.innerText = `- R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
             } else {
-                deliveryEl.innerText = 'Grátis';
-                deliveryEl.className = "text-green-600 font-bold";
+                row.classList.add('hidden');
+                row.style.display = 'none';
             }
         }
-    }
+    };
+    
+    // Aplica nos IDs do carrinho lateral
+    atualizarLinhaDesconto(discountRow, discountValueEl);
+    // Aplica nos IDs do modal de resumo final
+    atualizarLinhaDesconto(summaryDiscountRow, summaryDiscountVal);
 
-    // 5. Soma Final (Subtotal + Frete + Taxa de Serviço - Desconto)
-    const totalFinal = (subtotal + frete + taxaServico) - valorDesconto;
+    // --- ATUALIZA SUBTOTAL EM AMBOS OS LUGARES ---
+    if (subtotalEl) subtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+    if (summarySubtotalEl) summarySubtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+
+    // --- ATUALIZA FRETE EM AMBOS OS LUGARES ---
+    const formatFrete = (el) => {
+        if (!el) return;
+        if (frete === null) { 
+            el.innerText = "Calculando..."; 
+            el.className = "text-orange-500 animate-pulse text-[10px] font-bold"; 
+        } else if (frete > 0) { 
+            el.innerText = `R$ ${frete.toFixed(2).replace('.', ',')}`; 
+            el.className = "text-gray-800 font-bold text-sm"; 
+        } else { 
+            el.innerText = 'Grátis'; 
+            el.className = "text-green-600 font-bold text-sm"; 
+        }
+    };
+    formatFrete(deliveryEl);
+    formatFrete(summaryDeliveryEl);
+
+    // --- CÁLCULO TOTAL FINAL (O ponto mais importante) ---
+    // Agora o total final subtrai o valorDesconto corretamente
+    const totalFinal = (subtotal + valorFreteNum + taxaServico) - valorDesconto;
     
     if (totalEl) totalEl.innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
+    if (summaryTotalEl) summaryTotalEl.innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
     
-    // Sincroniza o total final para o objeto do pedido que vai para o Firebase/Mercado Pago
+    // Salva o total correto no objeto global para o processamento de pagamento
     currentOrder.total = totalFinal;
-    // Salva o cupom usado no pedido
     if (cupomAtivo) currentOrder.coupon = cupomAtivo.id;
 }
 function toggleReceipt() { const el = document.getElementById('receipt-details'); const arr = document.getElementById('arrow-receipt'); if (el.classList.contains('hidden')) { el.classList.remove('hidden'); arr.classList.add('rotate-180'); } else { el.classList.add('hidden'); arr.classList.remove('rotate-180'); } }
@@ -1868,22 +1906,30 @@ function copyPixScreen() { const inp = document.getElementById('pix-copy-paste-s
 function toggleCart() { 
     const m = document.getElementById('cart-modal'); 
     const p = document.getElementById('cart-panel'); 
-    // CORREÇÃO: Não esconde mais o botão ao abrir o carrinho para evitar sumiço
-    // const btn = document.getElementById('last-order-btn'); 
     
     if(!m) return; 
     
     if (m.classList.contains('hidden')) { 
+        // === AUTO-CÁLCULO DE FRETE AO ABRIR O CARRINHO ===
+        if (configPedidos && ['ifood','distance','google'].includes(configPedidos.deliveryMode)) {
+            if (!distanciaConfirmada) {
+                // Tenta pegar dos inputs ou do localStorage através da função de cálculo
+                console.log("📦 Carrinho aberto → Verificando necessidade de cálculo de frete...");
+                window.calcularDistanciaGoogle();
+            }
+        }
+
         m.classList.remove('hidden'); 
         setTimeout(() => p.classList.remove('translate-x-full'), 10); 
-        // if(btn) btn.classList.add('hidden'); // REMOVIDO PARA O BOTÃO NÃO SUMIR
+        
+        // Garante que a UI esteja atualizada ao abrir
+        updateCartUI(); 
     } else { 
         p.classList.add('translate-x-full'); 
         setTimeout(() => m.classList.add('hidden'), 300); 
         checkLastOrder(); 
     } 
 }
-
 function saveLastOrder(id) { localStorage.setItem('tropyberry_last_order', JSON.stringify({ id, timestamp: Date.now() })); checkLastOrder(); }
 function checkLastOrder() { 
     const saved = localStorage.getItem('tropyberry_last_order'); 
@@ -2110,22 +2156,44 @@ async function carregarConfiguracoesSite() {
     }
 }
 
+// Variável global para controle de loop (adicione no topo do arquivo)
+let ultimoEnderecoProcessado = "";
+
 window.calcularDistanciaGoogle = () => {
-    const rua = document.getElementById('input-street').value;
-    const num = document.getElementById('input-number').value;
-    const bairro = document.getElementById('input-district').value;
+    // 1. Tenta pegar dos inputs do checkout
+    let rua = document.getElementById('input-street')?.value || "";
+    let num = document.getElementById('input-number')?.value || "";
+    let bairro = document.getElementById('input-district')?.value || "";
     
-    if(!rua || !num || !bairro) return;
+    // 2. Se os inputs estiverem vazios (carrinho aberto sem checkout iniciado), busca no localStorage
+    if (!rua || !num || !bairro) {
+        const salvo = localStorage.getItem('tropyberry_user');
+        if (salvo) {
+            const d = JSON.parse(salvo);
+            rua = d.street || "";
+            num = d.number || "";
+            bairro = d.district || "";
+        }
+    }
+
+    // Se mesmo com localStorage não temos endereço, não há como calcular
+    if(!rua || !num || !bairro) {
+        console.log("⚠️ Endereço incompleto para cálculo automático.");
+        return;
+    }
+
+    // Trava para evitar chamadas duplicadas inúteis
+    const enderecoAtual = `${rua}${num}${bairro}`;
+    if (enderecoAtual === ultimoEnderecoProcessado && distanciaConfirmada) return;
+    ultimoEnderecoProcessado = enderecoAtual;
+
     distanciaConfirmada = false; 
 
-    // Mantenha seu endereço de origem aqui
     const origin = "Rua Ricardo Soares de Souza Neto, 456, João Pessoa, PB"; 
     const destination = `${rua}, ${num} - ${bairro}, João Pessoa, PB`;
 
     const labelFrete = document.getElementById('receipt-delivery');
-    if(labelFrete) {
-        labelFrete.innerText = "Calculando...";
-    }
+    if(labelFrete) labelFrete.innerText = "Calculando...";
 
     const service = new google.maps.DistanceMatrixService();
     service.getDistanceMatrix({
@@ -2137,10 +2205,9 @@ window.calcularDistanciaGoogle = () => {
         if (status === 'OK' && response.rows[0].elements[0].status === 'OK') {
             const distanciaKm = response.rows[0].elements[0].distance.value / 1000;
             let valorFrete = 0;
-
-            // === TABELA DE RAIO IFOOD (Sua tabela implementada) ===
             const km = distanciaKm;
-            
+
+            // Sua tabela iFood mantida integralmente
             if (km <= 1.0) valorFrete = 4.99;
             else if (km <= 2.0) valorFrete = 6.99;
             else if (km <= 3.0) valorFrete = 7.99;
@@ -2155,26 +2222,28 @@ window.calcularDistanciaGoogle = () => {
             else if (km <= 9.0) valorFrete = 18.99;
             else if (km <= 9.5) valorFrete = 19.99;
             else if (km <= 10.0) valorFrete = 20.99;
-            else if (km <= 11.0) valorFrete = 19.99; // Dip da sua tabela
+            else if (km <= 11.0) valorFrete = 19.99; 
             else if (km <= 11.5) valorFrete = 20.99;
             else if (km <= 12.5) valorFrete = 22.99;
-            else valorFrete = 24.99; // Acima de 13km conforme sua tabela
+            else valorFrete = 24.99;
 
             freteGoogleCalculado = valorFrete;
             distanciaConfirmada = true; 
             
-            // Atualiza tanto o carrinho quanto o recibo
+            console.log(`✅ Frete calculado: R$ ${valorFrete}`);
+            
+            // Atualiza ambas as UIs (Carrinho lateral e Recibo se estiver aberto)
             updateCartUI(); 
             renderReceipt(); 
-
         } else {
             console.error("Erro Google Maps:", status);
-            freteGoogleCalculado = 0; 
+            freteGoogleCalculado = 7.00; // Valor de segurança para não travar a venda
+            distanciaConfirmada = true; 
+            updateCartUI();
             renderReceipt();
         }
     });
 };
-
 window.toggleUserMenu = () => {
     const overlay = document.getElementById('user-menu-overlay');
     const menu = document.getElementById('user-menu-content');
@@ -2368,42 +2437,65 @@ window.goToSummary = function() {
         
         if(!rua || !num || !bairro) return showToast("Preencha o endereço completo!", true);
         
-        // === TRAVA DE SEGURANÇA PARA O FRETE IFOOD/GOOGLE ===
-        // Se o modo for iFood ou Distância, não deixa avançar sem a resposta do Google
         const modo = configPedidos.deliveryMode;
         if (modo === 'ifood' || modo === 'distance' || modo === 'google') {
             if (!distanciaConfirmada || freteGoogleCalculado === 0) {
-                showToast("Calculando frete... Aguarde a confirmação da distância.", true);
-                // Tenta disparar o cálculo novamente por garantia
+                showToast("Calculando frete... Aguarde a confirmação da distância.", false);
                 window.calcularDistanciaGoogle();
-                return; // Bloqueia o avanço
+                setTimeout(() => { if(distanciaConfirmada) window.goToSummary(); }, 1500);
+                return;
             }
         }
-
         currentOrder.customer.address = `${rua}, ${num} - ${bairro}`;
     } else {
         currentOrder.customer.address = "Retirada na Loja";
     }
 
-    // 3. SALVAR AUTOMATICAMENTE NO NAVEGADOR
     window.salvarDadosClienteAutomatico();
 
-    // 4. Preencher a tela de Resumo
+    // === CÁLCULO DE VALORES COM CUPOM NO RESUMO (REVISADO) ===
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const frete = calcularFrete();
-    
-    // Garantia para o cálculo não dar erro se o frete for null
     const valorFreteReal = (frete === null) ? 0 : frete;
-    const totalFinal = subtotal + valorFreteReal + (parseFloat(configPedidos.delivServiceFee) || 0);
+    
+    // Lógica do Desconto (Cupom) - Garantindo que subtraia do Total Final
+    let valorDesconto = 0;
+    if (cupomAtivo) {
+        // Converte para número para evitar erros de comparação de texto
+        const minCarrinho = parseFloat(cupomAtivo.min) || 0;
+        
+        if (subtotal >= minCarrinho) {
+            if (cupomAtivo.tipo === 'fixo') {
+                valorDesconto = parseFloat(cupomAtivo.valor);
+            } else if (cupomAtivo.tipo === 'porcentagem') {
+                const fator = cupomAtivo.valor > 1 ? cupomAtivo.valor / 100 : cupomAtivo.valor;
+                valorDesconto = subtotal * fator;
+            } else if (cupomAtivo.tipo === 'frete') {
+                const limiteCupom = parseFloat((cupomAtivo.valor || 4.99).toFixed(2));
+                
+                // Se o frete for menor ou igual ao limite do cupom (ex: 4.99), o desconto é o valor integral do frete
+                if (valorFreteReal <= limiteCupom) {
+                    valorDesconto = valorFreteReal;
+                }
+            }
+        }
+    }
+
+    const taxaServico = (currentOrder.method === 'delivery') ? (parseFloat(configPedidos.delivServiceFee) || 0) : 0;
+    
+    // AQUI O TOTAL FINAL RECEBE A SUBTRAÇÃO DO DESCONTO (Sincronizado com o carrinho)
+    const totalFinal = (subtotal + valorFreteReal + taxaServico) - valorDesconto;
     
     currentOrder.total = totalFinal;
 
+    // --- ATUALIZAÇÃO DA UI DO MODAL DE RESUMO ---
     document.getElementById('summary-address-display').innerText = currentOrder.customer.address;
     document.getElementById('summary-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
     
-    // Ajuste visual do frete no resumo
     const deliveryDisplay = document.getElementById('summary-delivery');
-    if (valorFreteReal > 0) {
+    if (frete === null) {
+        deliveryDisplay.innerText = "Calculando...";
+    } else if (valorFreteReal > 0) {
         deliveryDisplay.innerText = `R$ ${valorFreteReal.toFixed(2).replace('.', ',')}`;
         deliveryDisplay.classList.remove('text-green-600');
     } else {
@@ -2411,17 +2503,31 @@ window.goToSummary = function() {
         deliveryDisplay.classList.add('text-green-600');
     }
 
+    // EXIBIÇÃO DO DESCONTO NO RESUMO
+    const summaryDiscountRow = document.getElementById('summary-discount-row');
+    const summaryDiscountVal = document.getElementById('summary-discount');
+    if (summaryDiscountRow && summaryDiscountVal) {
+        if (valorDesconto > 0) {
+            summaryDiscountRow.classList.remove('hidden');
+            summaryDiscountVal.innerText = `- R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
+        } else {
+            summaryDiscountRow.classList.add('hidden');
+        }
+    }
+
+    // Atualiza o Total Final com o desconto aplicado (Garante o R$ 15,00 na tela)
     document.getElementById('summary-total').innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
 
     const itemsContainer = document.getElementById('summary-items');
-    itemsContainer.innerHTML = cart.map(item => `
-        <div class="flex justify-between border-b border-gray-50 pb-1">
-            <span class="text-gray-600">${item.quantity}x ${item.name}</span>
-            <span class="font-bold">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
-        </div>
-    `).join('');
+    if (itemsContainer) {
+        itemsContainer.innerHTML = cart.map(item => `
+            <div class="flex justify-between border-b border-gray-50 pb-1">
+                <span class="text-gray-600">${item.quantity}x ${item.name}</span>
+                <span class="font-bold">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+            </div>
+        `).join('');
+    }
 
-    // 5. Mudar de tela
     showStep('step-summary');
 };
 
@@ -2714,9 +2820,10 @@ window.copiarCupomSite = (codigo) => {
 let cupomAtivo = null;
 
 // Lista de cupons (Isso pode vir do seu Firebase futuramente)
-const listaCupons = [
-];
+// No script.js, defina o cupom diretamente na lista
+let listaCupons = [
 
+];
 // Função auxiliar para calcular o valor bruto do carrinho
 function obterSubtotalCart() {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
@@ -2739,21 +2846,38 @@ function renderizarListaCupons() {
     if (!container) return;
     
     const subtotal = obterSubtotalCart();
+    // Pega o frete atual (se não estiver confirmado, tratamos como 0 para não bloquear tudo antes do Google responder)
+    const freteAtual = distanciaConfirmada ? freteGoogleCalculado : 0;
     
     container.innerHTML = listaCupons.map(cupom => {
-        const bloqueado = subtotal < cupom.min;
+        // REGRA 1: Bloqueio por valor mínimo do carrinho
+        const subtotalInvalido = subtotal < cupom.min;
+        
+        // REGRA 2: Bloqueio por distância (Frete acima de 4.99)
+        // Se o cupom for tipo frete e o valor do frete for maior que o que o cupom cobre
+        const freteInvalido = cupom.tipo === 'frete' && freteAtual > cupom.valor;
+        
+        const bloqueado = subtotalInvalido || freteInvalido;
         const isAtivo = cupomAtivo?.id === cupom.id;
+
+        // Mensagem de erro específica para o card
+        let msgErro = "";
+        if (subtotalInvalido) msgErro = `Mínimo R$ ${cupom.min.toFixed(2)}`;
+        else if (freteInvalido) msgErro = `Apenas para clientes próximos`;
         
         return `
             <div class="coupon-card ${isAtivo ? 'active' : ''} ${bloqueado ? 'opacity-50 grayscale cursor-not-allowed' : ''}" 
-                 onclick="${!bloqueado ? `aplicarCupom('${cupom.id}')` : `showToast('Mínimo R$ ${cupom.min.toFixed(2)}', true)`}">
+                 onclick="${!bloqueado ? `aplicarCupom('${cupom.id}')` : `showToast('${msgErro}', true)`}">
                 <div class="flex justify-between items-center">
                     <div>
                         <h4 class="font-black text-cyan-900">${cupom.titulo}</h4>
                         <p class="text-[10px] text-gray-500">${cupom.descricao}</p>
-                        <p class="text-[9px] font-bold text-orange-500 mt-1 uppercase">Mínimo R$ ${cupom.min.toFixed(2)}</p>
+                        <p class="text-[9px] font-bold text-orange-500 mt-1 uppercase">
+                            ${msgErro ? msgErro : 'Disponível para você'}
+                        </p>
                     </div>
                     ${isAtivo ? '<i class="fas fa-check-circle text-cyan-600"></i>' : ''}
+                    ${bloqueado ? '<i class="fas fa-lock text-gray-400 text-xs"></i>' : ''}
                 </div>
             </div>
         `;
@@ -2764,6 +2888,12 @@ function aplicarCupom(cupomId) {
     const cupom = listaCupons.find(c => c.id === cupomId);
     if (!cupom) return;
 
+    // TRAVA DE SEGURANÇA: Verifica distância novamente antes de aplicar
+    const freteAtual = distanciaConfirmada ? freteGoogleCalculado : 0;
+    if (cupom.tipo === 'frete' && freteAtual > cupom.valor) {
+        return showToast("Este cupom é válido apenas para fretes de R$ 4,99", true);
+    }
+
     cupomAtivo = cupom;
     
     const textoBotao = document.getElementById('coupon-selected-text');
@@ -2773,26 +2903,51 @@ function aplicarCupom(cupomId) {
     }
     
     fecharModalCupons();
-    updateCartUI(); // Recalcula tudo
+    updateCartUI(); // Recalcula tudo (incluindo o desconto que agora deve bater)
     showToast(`Cupom ${cupom.id} aplicado!`);
 }
 
 function validarCupomManual() {
-    const codigo = document.getElementById('input-coupon-code').value.toUpperCase().trim();
-    if (!codigo) return showToast("Digite um código", true);
+    const codigoInput = document.getElementById('input-coupon-code').value.toUpperCase().trim();
+    if (!codigoInput) return showToast("Digite um código", true);
 
-    const cupom = listaCupons.find(c => c.id === codigo);
+    const cupom = listaCupons.find(c => c.code === codigoInput);
     const subtotal = obterSubtotalCart();
+    const freteAtual = distanciaConfirmada ? freteGoogleCalculado : 0;
 
     if (!cupom) {
         showToast("Cupom inválido", true);
     } else if (subtotal < cupom.min) {
-        showToast(`Valor mínimo: R$ ${cupom.min.toFixed(2)}`, true);
+        showToast(`Valor mínimo: R$ ${cupom.min.toFixed(2).replace('.', ',')}`, true);
+    } else if (cupom.tipo === 'frete' && freteAtual > cupom.valor) {
+        // BARRA O CÓDIG    O MANUAL SE O FRETE FOR ALTO
+        showToast("Este cupom é apenas para clientes de João Pessoa (raio próximo)", true);
     } else {
-        aplicarCupom(cupom.id);
+        aplicarCupom(cupom.id); 
         document.getElementById('input-coupon-code').value = '';
     }
-}   
+}
+function sincronizarCuponsComBanco() {
+    if (!db) return;
+    onSnapshot(collection(db, "marketing_cupons"), (snapshot) => {
+        listaCupons = snapshot.docs
+            .map(d => ({ 
+                id: d.id, 
+                ...d.data() 
+            }))
+            .filter(c => c.ativo === true);
+        
+        console.log("🎟️ Cupons ativos:", listaCupons);
+    });
+}
+// Função auxiliar para evitar que o cálculo dispare mil vezes seguidas
+function debounce(func, timeout = 1000) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { func.apply(this, args); }, timeout);
+    };
+}
 
 // Expõe para o HTML (Necessário por causa do type="module")
 window.abrirModalCupons = abrirModalCupons;
