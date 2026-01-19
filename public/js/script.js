@@ -794,8 +794,13 @@ function carregarProdutosDoBanco() {
         snapshot.forEach(doc => products.push({ id: doc.id, ...doc.data() }));
         const grid = document.getElementById('product-grid');
         if (grid) {
-            if (window.location.pathname.includes('cardapio.html')) { renderProducts('product-grid', null); } 
-            else { renderProducts('product-grid', 'destaques'); }
+            // --- MUDANÇA AQUI: Remova o .html ---
+            if (window.location.pathname.includes('cardapio')) { 
+                renderProducts('product-grid', null); 
+            } 
+            else { 
+                renderProducts('product-grid', 'destaques'); 
+            }
         }
     });
 }
@@ -806,7 +811,12 @@ async function carregarCategoriasSite() {
         const snapshot = await getDocs(q);
         categories = [];
         snapshot.forEach(doc => categories.push(doc.data()));
-        if(window.location.pathname.includes('cardapio.html')) { renderizarBotoesCategorias(); }
+
+        // --- MUDANÇA AQUI: Remova o .html ---
+        // Agora ele funciona em "cardapio.html" (Local) e "/cardapio" (Firebase)
+        if(window.location.pathname.includes('cardapio')) { 
+            renderizarBotoesCategorias(); 
+        }
     } catch(e) { console.error("Erro categorias:", e); }
 }
 function renderizarBotoesCategorias() {
