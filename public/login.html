@@ -3,9 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - TROPIBERRY</title>
+    
+    <title>TROPIBERRY | O Melhor Açaí de João Pessoa</title>
+    
+    <meta name="description" content="Monte seu copo do seu jeito e receba em casa! Peça agora pelo nosso cardápio digital oficial.">
+    <meta name="theme-color" content="#0891b2">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://tropiberry.web.app/">
+    <meta property="og:title" content="TROPIBERRY | O Melhor Açaí de João Pessoa">
+    <meta property="og:description" content="O açaí mais refrescante da cidade! Confira nosso cardápio, monte seu pedido e acompanhe a entrega em tempo real.">
+    <meta property="og:image" content="https://tropiberry.web.app/img/logo1.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://tropiberry.web.app/">
+    <meta property="twitter:title" content="TROPIBERRY | Açaíteria">
+    <meta property="twitter:description" content="Peça seu açaí agora! Cardápio completo e entregas rápidas em João Pessoa.">
+    <meta property="twitter:image" content="https://tropiberry.web.app/img/logo1.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600&family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <link rel="icon" type="image/png" href="https://tropiberry.web.app/img/logosf.png">
+
+    <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-blue-50 h-screen flex items-center justify-center font-sans">
 
@@ -42,7 +67,7 @@
                         <input type="password" id="senha-login" class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-cyan-500" placeholder="******" required>
                     </div>
                     <div class="text-right mt-1">
-                        <button type="button" id="btn-esqueci" class="text-xs text-cyan-600 hover:underline">Esqueci minha senha</button>
+                        <button type="button" id="btn-abrir-esqueci" class="text-xs text-cyan-600 hover:underline">Esqueci minha senha</button>
                     </div>
                 </div>
                 
@@ -56,7 +81,40 @@
         </div>
     </div>
 
-    <div id="toast-notification" class="fixed top-5 right-4 z-[100] bg-white border-l-4 border-green-500 text-gray-700 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 translate-x-full opacity-0 pointer-events-none transition-all duration-300">
+    <div id="modal-forgot-password" class="fixed inset-0 bg-black/60 z-[150] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-pop-up">
+            <div class="bg-cyan-900 p-6 text-center text-white relative">
+                <button onclick="fecharModal()" class="absolute top-4 right-4 text-white/50 hover:text-white transition">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 border border-white/10">
+                    <i class="fas fa-key text-2xl text-yellow-400"></i>
+                </div>
+                <h3 class="text-xl font-bold italic uppercase tracking-tight">Recuperar Senha</h3>
+                <p class="text-cyan-200 text-xs mt-1">Enviaremos um link seguro para o seu e-mail.</p>
+            </div>
+
+            <div class="p-8 space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Seu e-mail de cadastro</label>
+                    <div class="relative">
+                        <i class="fas fa-envelope absolute left-3 top-3.5 text-gray-400"></i>
+                        <input type="email" id="email-recovery" class="w-full pl-10 pr-4 py-3 border border-gray-100 bg-gray-50 rounded-xl focus:outline-none focus:border-cyan-500 transition" placeholder="exemplo@email.com">
+                    </div>
+                </div>
+
+                <button id="btn-send-recovery" class="w-full bg-cyan-600 text-white font-black py-4 rounded-xl hover:bg-cyan-700 transition shadow-lg shadow-cyan-100 flex items-center justify-center gap-2">
+                    ENVIAR LINK <i class="fas fa-paper-plane text-xs"></i>
+                </button>
+
+                <button onclick="fecharModal()" class="w-full text-gray-400 text-[10px] font-bold uppercase tracking-widest hover:text-gray-600 transition">
+                    Cancelar e Voltar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-notification" class="fixed top-5 right-4 z-[200] bg-white border-l-4 border-green-500 text-gray-700 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 translate-x-full opacity-0 pointer-events-none transition-all duration-300">
         <div class="text-green-500 bg-green-100 rounded-full p-2">
             <i class="fas fa-check-circle text-xl"></i>
         </div>
@@ -67,8 +125,17 @@
     </div>
 
     <script type="module">
-        import { fazerLogin, loginComGoogle, recuperarSenha } from './js/auth.js';
+        import { fazerLogin, loginComGoogle, recuperarSenha, monitorarEstadoAuth } from './js/auth.js';
 
+        // Redirecionamento Automático: Se o Firebase detectar o login, sai da tela na hora.
+        monitorarEstadoAuth((user) => {
+            if (user) {
+                console.log("Login confirmado, redirecionando...");
+                window.location.replace("index.html");
+            }
+        });
+
+        // Evento de Login Normal
         document.getElementById('form-login').addEventListener('submit', (e) => {
             e.preventDefault();
             const email = document.getElementById('email-login').value;
@@ -76,13 +143,46 @@
             fazerLogin(email, senha);
         });
 
+        // Login Google
         document.getElementById('btn-google').addEventListener('click', () => {
             loginComGoogle();
         });
 
-        document.getElementById('btn-esqueci').addEventListener('click', () => {
-            const email = document.getElementById('email-login').value;
-            recuperarSenha(email);
+        // --- LÓGICA DO MODAL DE RECUPERAÇÃO ---
+        const modal = document.getElementById('modal-forgot-password');
+        const emailLoginInput = document.getElementById('email-login');
+        const emailRecoveryInput = document.getElementById('email-recovery');
+
+        window.fecharModal = () => {
+            modal.classList.add('hidden');
+        };
+
+        // Abre o modal e já preenche o e-mail se o usuário tiver digitado algo no login
+        document.getElementById('btn-abrir-esqueci').addEventListener('click', () => {
+            modal.classList.remove('hidden');
+            if(emailLoginInput.value) {
+                emailRecoveryInput.value = emailLoginInput.value;
+            }
+            emailRecoveryInput.focus();
+        });
+
+        // Enviar o link de recuperação
+        document.getElementById('btn-send-recovery').addEventListener('click', async () => {
+            const email = emailRecoveryInput.value;
+            if(!email) {
+                alert("Por favor, digite seu e-mail.");
+                return;
+            }
+            
+            const btn = document.getElementById('btn-send-recovery');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ENVIANDO...';
+
+            await recuperarSenha(email);
+
+            btn.disabled = false;
+            btn.innerHTML = 'ENVIAR LINK <i class="fas fa-paper-plane text-xs"></i>';
+            fecharModal();
         });
     </script>
 </body>

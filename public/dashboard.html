@@ -3,13 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel TropyBerry</title>
-    
+    <title>Painel Administrativo | TROPIBERRY</title>
+
+    <meta name="description" content="Gestão interna da Tropiberry - Pedidos, Produtos e Financeiro.">
+    <meta name="theme-color" content="#0891b2">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://tropiberry.web.app/admin">
+    <meta property="og:title" content="Painel Administrativo | TROPIBERRY">
+    <meta property="og:description" content="Acesse o gestor de pedidos e controle sua loja em tempo real.">
+    <meta property="og:image" content="https://tropiberry.web.app/img/logo1.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://tropiberry.web.app/admin">
+    <meta property="twitter:title" content="Painel Administrativo | TROPIBERRY">
+    <meta property="twitter:description" content="Acesse o gestor de pedidos e controle sua loja em tempo real.">
+    <meta property="twitter:image" content="https://tropiberry.web.app/img/logo1.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     
+    <link rel="icon" type="image/png" href="https://tropiberry.web.app/img/logosf.png">
+
     <style>
         body { font-family: 'Roboto', sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; }
         
@@ -50,7 +69,7 @@
         /* Delivery Option Card */
         .delivery-option-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 1rem; }
         .delivery-option-card:hover { border-color: #0891b2; background-color: #ecfeff; }
-       .delivery-option-card.selected { border-color: #0891b2; background-color: #eff6ff; box-shadow: 0 0 0 2px #0891b2; }
+        .delivery-option-card.selected { border-color: #0891b2; background-color: #eff6ff; box-shadow: 0 0 0 2px #0891b2; }
 
         @media print { body > *:not(#receipt-area) { display: none !important; } #receipt-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; } }
     </style>

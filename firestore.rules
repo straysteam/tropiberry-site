@@ -1,18 +1,56 @@
-rules_version='2'
-
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 1, 16);
+
+    // Função para verificar se é você (Admin)
+    function isAdmin() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/usuarios/$(request.auth.token.email)) &&
+             get(/databases/$(database)/documents/usuarios/$(request.auth.token.email)).data.admin == true;
+    }
+
+    // FINANCEIRO: Só o Admin vê ou mexe
+    match /movimentacoes/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // CONFIGURAÇÕES: Cliente lê (pra ver se tá aberto), Admin manda
+    match /config/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // EQUIPE: Apenas Admin (Segurança máxima aqui)
+    match /equipe/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // PRODUTOS E CATEGORIAS: Público lê, Admin edita
+    match /produtos/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /categorias/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+match /pedidos/{pedidoId} {
+  allow create: if true;
+  // Só lê se for Admin OU se o e-mail do pedido for o mesmo da pessoa logada
+  allow read: if isAdmin() || (request.auth != null && request.auth.token.email == resource.data.customer.email);
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
+}
+// Adicione isso para liberar a leitura dos adicionais e embalagens
+match /complementos/{id} {
+  allow read: if true;
+  allow write: if isAdmin();
+}
+    // USUÁRIOS: Regra padrão de proteção de perfil
+    match /usuarios/{email} {
+      allow read: if request.auth != null && (request.auth.token.email == email || isAdmin());
+      allow write: if isAdmin();
     }
   }
 }

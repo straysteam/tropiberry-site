@@ -142,10 +142,13 @@ async function salvarUsuarioNoBanco(user) {
 
 // --- FUNÇÕES DE EXPORTAÇÃO ---
 
+// --- No arquivo js/auth.js ---
+
 export async function criarConta(email, senha) {
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
-        await salvarUsuarioNoBanco(userCredential.user);
+        // REMOVA O AWAIT AQUI: Deixe rodar em segundo plano
+        salvarUsuarioNoBanco(userCredential.user); 
         window.location.href = "index.html" + appParam;
     } catch (error) {
         mostrarToast("Erro ao cadastrar: " + error.message, 'erro');
@@ -155,7 +158,8 @@ export async function criarConta(email, senha) {
 export async function fazerLogin(email, senha) {
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, senha);
-        await salvarUsuarioNoBanco(userCredential.user);
+        // REMOVA O AWAIT AQUI: O login já aconteceu, o redirecionamento deve ser imediato
+        salvarUsuarioNoBanco(userCredential.user); 
         window.location.href = "index.html" + appParam;
     } catch (error) {
         mostrarToast("Email ou senha incorretos.", 'erro');
@@ -168,7 +172,8 @@ export async function loginComGoogle() {
             await signInWithRedirect(auth, googleProvider);
         } else {
             const result = await signInWithPopup(auth, googleProvider);
-            await salvarUsuarioNoBanco(result.user);
+            // REMOVA O AWAIT AQUI
+            salvarUsuarioNoBanco(result.user);
             window.location.href = "index.html";
         }
     } catch (error) {
