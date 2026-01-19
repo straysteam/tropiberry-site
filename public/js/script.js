@@ -291,14 +291,18 @@ function renderProducts(containerId, filterCategory) {
         return true;
     });
 
-    // Atualiza botões de filtro
-    if(window.location.pathname.includes('cardapio.html')) {
-        document.querySelectorAll('.btn-filter').forEach(btn => {
-            const btnCat = btn.getAttribute('data-cat');
-            if(btnCat === (filterCategory || 'all')) btn.className = "btn-filter px-4 py-2 bg-cyan-600 text-white rounded-full text-sm font-bold hover:bg-cyan-700 transition shadow-md";
-            else btn.className = "btn-filter px-4 py-2 bg-white border border-cyan-600 text-cyan-600 rounded-full text-sm font-bold hover:bg-cyan-50 transition";
-        });
-    }
+
+if(window.location.pathname.includes('cardapio')) {
+    document.querySelectorAll('.btn-filter').forEach(btn => {
+        const btnCat = btn.getAttribute('data-cat');
+        // Se a categoria do botão for a selecionada (ou se for 'all' quando o filtro for nulo)
+        if(btnCat === (filterCategory || 'all')) {
+            btn.className = "btn-filter px-4 py-2 bg-cyan-600 text-white rounded-full text-sm font-bold hover:bg-cyan-700 transition shadow-md";
+        } else {
+            btn.className = "btn-filter px-4 py-2 bg-white border border-cyan-600 text-cyan-600 rounded-full text-sm font-bold hover:bg-cyan-50 transition";
+        }
+    });
+}
 
     if (listaParaExibir.length === 0) {
         if (products.length > 0) {
