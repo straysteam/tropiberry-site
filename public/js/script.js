@@ -104,15 +104,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    if (window.location.pathname.includes('produto.html')) {
-        const params = new URLSearchParams(window.location.search);
-        const productId = params.get('id');
-        if (productId) {
-            setTimeout(() => carregarPaginaProduto(productId), 500);
-        } else {
-            window.location.href = 'cardapio.html';
-        }
+// Procure por essa verificação no início ou no monitoramento de página do script.js
+if (window.location.pathname.includes('produto')) { // Removido o .html
+    const params = new URLSearchParams(window.location.search);
+    const productId = params.get('id');
+    
+    if (productId) {
+        // No Firebase, precisamos garantir que o Firebase Auth/DB carregou antes de pedir o produto
+        setTimeout(() => {
+            if (typeof carregarPaginaProduto === 'function') {
+                carregarPaginaProduto(productId);
+            }
+        }, 500); 
     }
+}
 
     await carregarCategoriasSite();
     await carregarConfiguracoesSite();
@@ -390,13 +395,15 @@ function renderProducts(containerId, filterCategory) {
 async function carregarDadosProduto(id, containerPrefix) {
     if (!db) return;
     
-    // IDs de controle de UI
+    // IDs de controle de UI - Captura de forma segura
     const loadingEl = document.getElementById(`${containerPrefix}-loading`);
     const contentEl = document.getElementById(`${containerPrefix}-content`);
-    const detailContainer = document.getElementById('product-detail-container'); 
+    const detailContainer = document.getElementById('product-detail-container') || document.getElementById('detail-content'); 
     
+    // Mostra o loading e esconde o conteúdo antes de começar
     if(loadingEl) loadingEl.classList.remove('hidden');
     if(contentEl) contentEl.classList.add('hidden');
+    // Se estivermos na página de detalhes, garante que o container principal suma durante a busca
     if(containerPrefix === 'detail' && detailContainer) detailContainer.classList.add('hidden');
 
     try {
@@ -404,7 +411,7 @@ async function carregarDadosProduto(id, containerPrefix) {
         const docSnap = await getDoc(docRef);
 
         if (!docSnap.exists()) {
-            if(loadingEl) loadingEl.innerHTML = '<p class="text-red-500">Produto não encontrado.</p>';
+            if(loadingEl) loadingEl.innerHTML = '<p class="text-red-500 font-bold p-10">Produto não encontrado.</p>';
             return;
         }
 
@@ -412,10 +419,15 @@ async function carregarDadosProduto(id, containerPrefix) {
         currentQtd = 1; 
         selectedOptions = {}; 
 
-        // Preenche Imagem e Textos
-        document.getElementById(`${containerPrefix}-img`).src = currentProductDetail.image || 'https://via.placeholder.com/400';
-        document.getElementById(`${containerPrefix}-name`).innerText = currentProductDetail.name;
-        document.getElementById(`${containerPrefix}-desc`).innerText = currentProductDetail.description || '';
+        // Preenche Imagem e Textos com verificação de existência do elemento
+        const imgEl = document.getElementById(`${containerPrefix}-img`);
+        if(imgEl) imgEl.src = currentProductDetail.image || 'https://via.placeholder.com/400';
+        
+        const nameEl = document.getElementById(`${containerPrefix}-name`);
+        if(nameEl) nameEl.innerText = currentProductDetail.name;
+        
+        const descEl = document.getElementById(`${containerPrefix}-desc`);
+        if(descEl) descEl.innerText = currentProductDetail.description || '';
         
         // Tags
         const tagsContainer = document.getElementById(`${containerPrefix}-tags`);
@@ -423,13 +435,12 @@ async function carregarDadosProduto(id, containerPrefix) {
             tagsContainer.innerHTML = generatingTagsHTML(currentProductDetail.tags);
         }
 
-        // Info Extra
+        // Info Extra (Serve X pessoas, Peso, etc)
         const infoContainer = document.getElementById(`${containerPrefix}-extra-info`);
         if(infoContainer) {
             let infoHtml = '';
             if(currentProductDetail.serves > 1) infoHtml += `<span class="bg-blue-50 text-cyan-800 text-xs font-bold px-3 py-1 rounded-lg"><i class="fas fa-user-friends"></i> Serve ${currentProductDetail.serves}</span>`;
-            if(currentProductDetail.weight) infoHtml += `<span class="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-lg"><i class="fas fa-weight-hanging"></i> ${currentProductDetail.weight}${currentProductDetail.unit}</span>`;
-            infoHtml += `<span class="bg-green-50 text-green-700 text-xs font-bold px-3 py-1 rounded-lg"><i class="fas fa-motorcycle"></i> Entrega Disponível</span>`;
+            if(currentProductDetail.weight) infoHtml += `<span class="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-lg"><i class="fas fa-weight-hanging"></i> ${currentProductDetail.weight}${currentProductDetail.unit || 'g'}</span>`;
             infoContainer.innerHTML = infoHtml;
         }
 
@@ -437,14 +448,15 @@ async function carregarDadosProduto(id, containerPrefix) {
         const compsContainer = document.getElementById(`${containerPrefix}-complements`) || document.getElementById('complements-section');
         let minPackagingCost = 0; 
 
+        // O uso do || [] evita que o código quebre se o produto não tiver complementos
         if (currentProductDetail.complementIds && currentProductDetail.complementIds.length > 0) {
-            minPackagingCost = await carregarComplementosDoProduto(currentProductDetail.complementIds, compsContainer, containerPrefix);
+            minPackagingCost = await carregarComplementosDoProduto(currentProductDetail.complementIds || [], compsContainer, containerPrefix);
         } else {
             if(compsContainer) compsContainer.innerHTML = '';
         }
 
         // Define Preço para Exibição
-        let basePriceDisplay = currentProductDetail.price;
+        let basePriceDisplay = currentProductDetail.price || 0;
         if (basePriceDisplay === 0 && minPackagingCost > 0) {
             basePriceDisplay = minPackagingCost;
         }
@@ -453,14 +465,14 @@ async function carregarDadosProduto(id, containerPrefix) {
         const hasComplements = currentProductDetail.complementIds && currentProductDetail.complementIds.length > 0;
         
         if(priceEl) {
-             if(hasComplements) {
+             if(hasComplements && basePriceDisplay > 0) {
                  priceEl.innerHTML = `<span class="text-sm text-gray-500 font-normal mr-1">A partir de</span> R$ ${basePriceDisplay.toFixed(2).replace('.', ',')}`;
              } else {
                  priceEl.innerText = `R$ ${basePriceDisplay.toFixed(2).replace('.', ',')}`;
              }
         }
 
-        // Preço Original
+        // Preço Original (Desconto)
         const op = document.getElementById(`${containerPrefix}-original-price`);
         if (op) {
             if (currentProductDetail.originalPrice > basePriceDisplay) {
@@ -471,21 +483,22 @@ async function carregarDadosProduto(id, containerPrefix) {
             }
         }
 
-        // Qtd
-        const qtdEl = document.getElementById(`${containerPrefix}-qtd`);
+        // Quantidade inicial
+        const qtdEl = document.getElementById(`${containerPrefix}-qtd`) || document.getElementById(`${containerPrefix}-qtd-mobile`);
         if(qtdEl) qtdEl.innerText = '1';
 
-        // Mostra
+        // === FINALIZAÇÃO: Esconde o loading e mostra os dados ===
         if(loadingEl) loadingEl.classList.add('hidden');
         if(contentEl) contentEl.classList.remove('hidden');
-        if(containerPrefix === 'detail' && detailContainer) detailContainer.classList.remove('hidden');
+        // Importante: Mostra o container que foi escondido no início
+        if(detailContainer) detailContainer.classList.remove('hidden');
 
         atualizarTotalDetalhe(containerPrefix);
         if(containerPrefix === 'detail') verificarBotaoAdmin(id);
 
     } catch (e) {
-        console.error("Erro ao carregar produto:", e);
-        if(loadingEl) loadingEl.innerHTML = '<p class="text-red-500">Erro ao carregar.</p>';
+        console.error("Erro fatal ao carregar produto:", e);
+        if(loadingEl) loadingEl.innerHTML = '<p class="text-red-500 p-10">Erro de conexão. Verifique sua internet.</p>';
     }
 }
 
