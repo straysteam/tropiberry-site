@@ -128,8 +128,7 @@ if (window.location.pathname.includes('produto')) { // Removido o .html
     monitorarStatusLojaNoBanco();
     monitorarInfoLoja();
     
-    // 2. Monitora o Login e preenche os botões no Header
-    monitorarEstadoAuth(async (user) => {
+monitorarEstadoAuth(async (user) => {
         const desktopAuthArea = document.getElementById('desktop-auth-area');
         const menuName = document.getElementById('menu-user-name');
         const menuEmail = document.getElementById('menu-user-email');
@@ -137,64 +136,59 @@ if (window.location.pathname.includes('produto')) { // Removido o .html
         const loggedOptions = document.getElementById('menu-logged-options');
         const adminLinks = document.getElementById('menu-admin-links');
 
-        // Gerenciador de inputs de endereço (Google Maps)
-        const inputsEndereco = ['input-street', 'input-number', 'input-district'];
-inputsEndereco.forEach(id => {
-    document.getElementById(id)?.addEventListener('blur', () => {
-        // ADICIONADO: 'ifood' na verificação
-        if (configPedidos && (configPedidos.deliveryMode === 'distance' || configPedidos.deliveryMode === 'ifood')) {
-            calcularDistanciaGoogle();
-        }
-    });
-});
-
         if (user) {
+            // USUÁRIO LOGADO
             loggedUserEmail = user.email;
-            monitorarFidelidadeUser(user.email);
+            
+            // Lógica de Fidelidade (Corrigido de 'usuario' para 'user')
+            if (typeof monitorarFidelidadeUser === 'function') {
+                monitorarFidelidadeUser(user.email);
+            }
+
             currentUserIsAdmin = await verificarAdminNoBanco(user.email);
 
-            // --- FIX DE PAGAMENTO: Preenche o e-mail no checkout se estiver vazio ---
+            // Preenche e-mail no checkout
             const emailInput = document.getElementById('input-email');
             if (emailInput && !emailInput.value) {
                 emailInput.value = user.email;
             }
 
-            // --- INICIALIZAÇÃO DE NOTIFICAÇÕES E PEDIDOS ---
+            // Inicialização de Notificações e Pedidos
             iniciarMonitoramentoPedidosCliente(user.email);
-            iniciarMonitoramentoFidelidade(usuario.email);
             
             if ("Notification" in window) {
                 Notification.requestPermission();
             }
 
-            // Se estiver na página de pedidos, carrega a lista automaticamente
             if (window.location.pathname.includes('pedidos.html')) {
                 abrirMeusPedidos(); 
             }
             
-            // 1. Atualiza Header Desktop (Mostra Ícone e Nome)
+            // Define o nome de exibição (fallback para o email se não houver nome)
+            const userName = user.displayName || user.email.split('@')[0];
+
+            // 1. Atualiza Header Desktop
             if(desktopAuthArea) {
                 desktopAuthArea.innerHTML = `
                     <div class="flex items-center gap-3 cursor-pointer hover:bg-cyan-700 p-2 rounded-lg transition" onclick="toggleUserMenu()">
                         <div class="text-right hidden lg:block">
-                            <p class="text-xs font-bold text-white leading-none">${user.displayName || 'Cliente'}</p>
+                            <p class="text-xs font-bold text-white leading-none">${userName}</p>
                             <p class="text-[10px] text-cyan-200 leading-none">Minha Conta</p>
                         </div>
-                        <div class="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white border border-white/30">
-                            <i class="fas fa-user"></i>
+                        <div class="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white border border-white/30 font-bold">
+                            ${userName.charAt(0).toUpperCase()}
                         </div>
                     </div>
                 `;
             }
 
-            // 2. Atualiza o Menu Dropdown/Modal (Conteúdo)
-            if(menuName) menuName.innerText = user.displayName || 'Cliente TropyBerry';
+            // 2. Atualiza o Menu Dropdown/Modal
+            if(menuName) menuName.innerText = userName;
             if(menuEmail) menuEmail.innerText = user.email;
             
             if(guestOptions) guestOptions.classList.add('hidden');
             if(loggedOptions) loggedOptions.classList.remove('hidden');
             
-            // Mostra opções de admin se for admin
             if(adminLinks) {
                 if(currentUserIsAdmin) adminLinks.classList.remove('hidden');
                 else adminLinks.classList.add('hidden');
@@ -204,15 +198,14 @@ inputsEndereco.forEach(id => {
             if(currentProductDetail) verificarBotaoAdmin(currentProductDetail.id);
 
         } else {
+            // USUÁRIO DESLOGADO
             currentUserIsAdmin = false;
             loggedUserEmail = null;
 
-            // Se tentar acessar pedidos sem login, manda para o login
             if (window.location.pathname.includes('pedidos.html')) {
                 window.location.href = 'login.html';
             }
 
-            // 1. Header Desktop (Mostra botões Entrar/Cadastrar)
             if(desktopAuthArea) {
                 desktopAuthArea.innerHTML = `
                     <a href="login.html" class="text-sm font-bold text-white hover:text-yellow-300 transition">Entrar</a>
@@ -220,7 +213,6 @@ inputsEndereco.forEach(id => {
                 `;
             }
 
-            // 2. Menu Dropdown (Modo Visitante)
             if(menuName) menuName.innerText = "Visitante";
             if(menuEmail) menuEmail.innerText = "Faça login para aproveitar";
             
@@ -230,15 +222,11 @@ inputsEndereco.forEach(id => {
             atualizarInteratividadeBotaoLoja();
         }
 
-        // Chamadas finais de atualização de UI
         if (typeof updateStoreStatusUI === 'function') updateStoreStatusUI();
         if (typeof checkLastOrder === 'function') checkLastOrder();
     });
 
-    updateStoreStatusUI();
-    checkLastOrder();
-
-    // === ADIÇÃO: SINCRONIZAÇÃO DE CUPONS COM O PAINEL DE MARKETING ===
+    // Sincronização de Cupons
     if (typeof monitorarCuponsDoBanco === 'function') {
         monitorarCuponsDoBanco();
     }
@@ -2983,38 +2971,42 @@ let currentMonthRef = new Date().toISOString().slice(0, 7); // Formato "2026-01"
 
 // --- Adicione estas funções ao final do arquivo ---
 
-async function gerenciarInicioFidelidade() {
+// Expõe a função para o HTML poder usar o onclick
+window.gerenciarInicioFidelidade = () => {
     if (!loggedUserEmail) {
         showToast("Faça login para começar a ganhar selos!", true);
-        setTimeout(() => window.location.href = 'login.html', 1500);
+        setTimeout(() => window.location.href = 'login.html', 1200);
         return;
     }
     document.getElementById('modal-fidelidade').classList.add('hidden');
-    showToast("Você já está participando! Selos válidos até o fim deste mês.");
-}
+    showToast("Você já está participando! Selos válidos apenas para este mês.");
+};
 
 function monitorarFidelidadeUser(email) {
     if(!db || !email) return;
     
     const userRef = doc(db, "usuarios", email);
+    const currentMonth = new Date().toISOString().slice(0, 7); // Formato "2026-01"
 
     onSnapshot(userRef, async (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            const mesBanco = data.mesReferenciaFidelidade || "";
             let selos = data.selosFidelidade || 0;
+            const mesBanco = data.mesReferenciaFidelidade || "";
 
-            // Lógica de Reset Mensal: Se o mês mudou e ele não tinha completado 10
-            if (mesBanco !== currentMonthRef && selos < 10) {
+            // RESET MENSAL AUTOMÁTICO (Se o mês mudou e não completou 10)
+            if (mesBanco !== "" && mesBanco !== currentMonth && selos < 10) {
                 selos = 0;
                 await updateDoc(userRef, { 
                     selosFidelidade: 0, 
-                    mesReferenciaFidelidade: currentMonthRef 
+                    mesReferenciaFidelidade: currentMonth 
                 });
+            } else if (mesBanco === "") {
+                // Primeira vez: marca o mês atual
+                await updateDoc(userRef, { mesReferenciaFidelidade: currentMonth }, { merge: true });
             }
 
-            userSeals = selos;
-            renderizarSelosVisual(userSeals);
+            renderizarSelosVisual(selos);
         }
     });
 }
@@ -3028,9 +3020,7 @@ function renderizarSelosVisual(count) {
     let html = '';
     for (let i = 1; i <= 10; i++) {
         if (i <= count) {
-            html += `<div class="aspect-square bg-orange-500 rounded-full flex items-center justify-center text-white border-2 border-orange-600 shadow-md animate-pop-up">
-                        <i class="fas fa-check"></i>
-                     </div>`;
+            html += `<div class="aspect-square bg-orange-500 rounded-full flex items-center justify-center text-white border-2 border-orange-600 shadow-md animate-pop-up"><i class="fas fa-check"></i></div>`;
         } else {
             html += `<div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-300"></div>`;
         }
@@ -3038,19 +3028,8 @@ function renderizarSelosVisual(count) {
     container.innerHTML = html;
 
     if (count >= 10) {
-        statusTxt.innerText = "PARABÉNS! VOCÊ GANHOU UM AÇAÍ!";
-        statusTxt.className = "text-white bg-green-500 rounded-full px-4 py-1 animate-bounce font-black text-xs mt-2";
-        btn.innerText = "RESGATAR BRINDE NO PRÓXIMO PEDIDO";
-        btn.classList.replace('bg-orange-500', 'bg-green-600');
-        btn.onclick = () => { 
-            showToast("Para resgatar, adicione uma observação no seu próximo pedido!");
-            document.getElementById('modal-fidelidade').classList.add('hidden');
-        };
-    } else {
-        statusTxt.innerText = "Peça 10 e o 11º é por nossa conta!";
-        statusTxt.className = "text-yellow-100 text-sm font-bold";
-        btn.innerText = "CONTINUAR PONTUANDO";
-        btn.classList.replace('bg-green-600', 'bg-orange-500');
+        if(statusTxt) statusTxt.innerHTML = "🎁 <span class='animate-bounce text-green-400'>AÇAÍ GRÁTIS DISPONÍVEL!</span>";
+        if(btn) btn.innerText = "BRINDE LIBERADO!";
     }
 }
 
