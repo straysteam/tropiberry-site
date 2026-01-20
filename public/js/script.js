@@ -161,6 +161,7 @@ inputsEndereco.forEach(id => {
 
             // --- INICIALIZAÇÃO DE NOTIFICAÇÕES E PEDIDOS ---
             iniciarMonitoramentoPedidosCliente(user.email);
+            iniciarMonitoramentoFidelidade(usuario.email);
             
             if ("Notification" in window) {
                 Notification.requestPermission();

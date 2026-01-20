@@ -186,3 +186,28 @@ export async function pedirPermissaoNotificacao() {
         }
     }
 }
+// === 3. MONITOR DE FIDELIDADE (SELOS) ===
+export function iniciarMonitoramentoFidelidade(emailCliente) {
+    if (!emailCliente) return;
+
+    // Escuta mudanças no documento do usuário específico
+    const userRef = doc(db, "usuarios", emailCliente);
+
+    onSnapshot(userRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const dados = docSnap.data();
+            const selosAtuais = dados.fidelidade || 0;
+
+            // Recupera quanto tínhamos no cache para comparar
+            const selosAntigos = parseInt(localStorage.getItem('cache_selos') || "0");
+
+            // Só dispara se o número de selos aumentou
+            if (selosAtuais > selosAntigos) {
+                verificarProgressoFidelidade(emailCliente);
+            }
+
+            // Atualiza o cache para a próxima mudança
+            localStorage.setItem('cache_selos', selosAtuais.toString());
+        }
+    });
+}
