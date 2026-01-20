@@ -617,10 +617,9 @@ window.importarProdutosIniciais = async function() {
 }
 function renderizarLista(filter) {
     const container = document.getElementById('products-container');
-    if (!container) return; // Segurança caso o container não exista na tela
+    if (!container) return; 
     
     container.innerHTML = '';
-    
     const list = filter === 'all' ? allProducts : allProducts.filter(p => p.category === filter);
     
     if(list.length === 0) { 
@@ -629,19 +628,27 @@ function renderizarLista(filter) {
     }
 
     list.forEach(p => {
+        // --- NOVO: Lógica para gerar o HTML das tags do produto ---
+        let tagsHtml = '';
+        if (p.tags && p.tags.length > 0) {
+            tagsHtml = '<div class="flex flex-wrap gap-1 mt-2">';
+            p.tags.forEach(tag => {
+                tagsHtml += `<span class="text-[8px] bg-cyan-50 text-cyan-600 px-1.5 py-0.5 rounded font-bold border border-cyan-100 uppercase tracking-tighter">${tag}</span>`;
+            });
+            tagsHtml += '</div>';
+        }
+
         const html = `
             <div class="bg-white border rounded-lg shadow-sm hover:shadow-md transition flex p-4 items-center gap-4 cursor-pointer" onclick="abrirModalEdicao('${p.id}')">
                 
                 <div class="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden shrink-0 relative">
-                    <img 
-                        src="${p.image || 'https://via.placeholder.com/100'}" 
-                        class="absolute inset-0 w-full h-full object-cover"
-                        loading="lazy"
-                    >
+                    <img src="${p.image || 'https://via.placeholder.com/100'}" class="absolute inset-0 w-full h-full object-cover" loading="lazy">
                 </div>
 
-                <div class="flex-1 min-w-0"> <h4 class="font-bold text-gray-800 truncate">${p.name}</h4>
+                <div class="flex-1 min-w-0"> 
+                    <h4 class="font-bold text-gray-800 truncate">${p.name}</h4>
                     <p class="text-xs text-gray-500 line-clamp-1">${p.description || 'Sem descrição'}</p>
+                    
                     <div class="mt-1 flex flex-wrap gap-2">
                         <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-bold uppercase">${p.category}</span>
                         ${p.complementIds && p.complementIds.length > 0 ? 
@@ -650,6 +657,8 @@ function renderizarLista(filter) {
                             </span>` : ''
                         }
                     </div>
+                    
+                    ${tagsHtml}
                 </div>
 
                 <div class="text-right shrink-0">

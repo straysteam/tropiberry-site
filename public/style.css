@@ -546,3 +546,21 @@ body {
 @media (min-width: 768px) {
     body { padding-bottom: 0; }
 }
+/* Estilos para as Tags no Painel Admin */
+.tag-selected { 
+    background-color: #0891b2 !important; 
+    color: white !important; 
+    border-color: #0891b2 !important; 
+    box-shadow: 0 4px 6px -1px rgba(8, 145, 178, 0.2);
+}
+
+.tag-default { 
+    background-color: #f3f4f6 !important; 
+    color: #4b5563 !important; 
+    border-color: #e5e7eb !important; 
+}
+
+.tag-item {
+    transition: all 0.2s ease;
+    user-select: none;
+}
