@@ -710,23 +710,70 @@
         });
     }
 
-    window.atualizarStatus = async (id, status) => {
-        try { 
-            await updateDoc(doc(db, "pedidos", id), { 
-                status: status,
-                updatedAt: serverTimestamp() // Isso força o onSnapshot do cliente a disparar
-            }); 
-            
-            // Notificação opcional no Dashboard
-            window.showToast("Status Atualizado", `Pedido #${id.slice(0,4)} movido para ${status}`);
+window.atualizarStatus = async (id, status) => {
+    try { 
+        const pedidoRef = doc(db, "pedidos", id);
+        const pedidoSnap = await getDoc(pedidoRef);
+        const pedidoDados = pedidoSnap.data();
 
-            // GATILHO DO BOT: Dispara a mensagem automática conforme o novo status
-            if (typeof window.enviarNotificacaoWhats === "function") {
-                window.enviarNotificacaoWhats(id, status);
+        await updateDoc(pedidoRef, { 
+            status: status,
+            updatedAt: serverTimestamp()
+        }); 
+        
+        window.showToast("Status Atualizado", `Pedido #${id.slice(0,4)} movido para ${status}`);
+
+        // --- LÓGICA DE FIDELIDADE (Acionada ao Finalizar) ---
+        if (status === 'Finalizado') {
+            await processarFidelidadeAoFinalizar({ id, ...pedidoDados });
+        }
+
+        if (typeof window.enviarNotificacaoWhats === "function") {
+            window.enviarNotificacaoWhats(id, status);
+        }
+        
+    } catch(e) { console.error("Erro ao atualizar status:", e); }
+}
+async function processarFidelidadeAoFinalizar(pedido) {
+    if (!pedido.customer.email) return;
+
+    const userRef = doc(db, "usuarios", pedido.customer.email);
+    const currentMonth = new Date().toISOString().slice(0, 7); // Ex: "2026-01"
+
+    try {
+        const userDoc = await getDoc(userRef);
+        if (!userDoc.exists()) return;
+
+        const userData = userDoc.data();
+        let selosAtuais = userData.selosFidelidade || 0;
+        
+        // REGRA DE RESETE APÓS BRINDE: 
+        // Se ele já tinha 10 e você finalizou mais um, significa que ele usou o brinde ou iniciou novo ciclo
+        if (selosAtuais >= 10) {
+            await updateDoc(userRef, { 
+                selosFidelidade: 0, 
+                mesReferenciaFidelidade: currentMonth 
+            });
+            return;
+        }
+
+        // REGRA DE CONCESSÃO: Pedido >= R$ 20,00
+        if (pedido.total >= 20) {
+            // Se o mês mudou, o cliente perde os selos antigos (regra mensal)
+            if (userData.mesReferenciaFidelidade !== currentMonth) {
+                await updateDoc(userRef, { 
+                    selosFidelidade: 1, 
+                    mesReferenciaFidelidade: currentMonth 
+                });
+            } else {
+                // Mesmo mês, apenas soma
+                await updateDoc(userRef, { 
+                    selosFidelidade: selosAtuais + 1 
+                });
             }
-            
-        } catch(e) { console.error("Erro ao atualizar status:", e); }
-    }
+        }
+    } catch (e) { console.error("Erro ao processar fidelidade:", e); }
+}
 
     window.filtrarStatus = (filtro) => {
         currentStatusFilter = filtro;

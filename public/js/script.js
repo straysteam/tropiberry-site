@@ -150,6 +150,7 @@ inputsEndereco.forEach(id => {
 
         if (user) {
             loggedUserEmail = user.email;
+            monitorarFidelidadeUser(user.email);
             currentUserIsAdmin = await verificarAdminNoBanco(user.email);
 
             // --- FIX DE PAGAMENTO: Preenche o e-mail no checkout se estiver vazio ---
@@ -2975,9 +2976,86 @@ function debounce(func, timeout = 1000) {
         timer = setTimeout(() => { func.apply(this, args); }, timeout);
     };
 }
+// --- Adicione estas variáveis no topo do script.js ---
+let userSeals = 0;
+let currentMonthRef = new Date().toISOString().slice(0, 7); // Formato "2026-01"
+
+// --- Adicione estas funções ao final do arquivo ---
+
+async function gerenciarInicioFidelidade() {
+    if (!loggedUserEmail) {
+        showToast("Faça login para começar a ganhar selos!", true);
+        setTimeout(() => window.location.href = 'login.html', 1500);
+        return;
+    }
+    document.getElementById('modal-fidelidade').classList.add('hidden');
+    showToast("Você já está participando! Selos válidos até o fim deste mês.");
+}
+
+function monitorarFidelidadeUser(email) {
+    if(!db || !email) return;
+    
+    const userRef = doc(db, "usuarios", email);
+
+    onSnapshot(userRef, async (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const mesBanco = data.mesReferenciaFidelidade || "";
+            let selos = data.selosFidelidade || 0;
+
+            // Lógica de Reset Mensal: Se o mês mudou e ele não tinha completado 10
+            if (mesBanco !== currentMonthRef && selos < 10) {
+                selos = 0;
+                await updateDoc(userRef, { 
+                    selosFidelidade: 0, 
+                    mesReferenciaFidelidade: currentMonthRef 
+                });
+            }
+
+            userSeals = selos;
+            renderizarSelosVisual(userSeals);
+        }
+    });
+}
+
+function renderizarSelosVisual(count) {
+    const container = document.getElementById('selos-container');
+    const statusTxt = document.getElementById('fidelidade-status-texto');
+    const btn = document.getElementById('btn-fidelidade-acao');
+    if (!container) return;
+    
+    let html = '';
+    for (let i = 1; i <= 10; i++) {
+        if (i <= count) {
+            html += `<div class="aspect-square bg-orange-500 rounded-full flex items-center justify-center text-white border-2 border-orange-600 shadow-md animate-pop-up">
+                        <i class="fas fa-check"></i>
+                     </div>`;
+        } else {
+            html += `<div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-300"></div>`;
+        }
+    }
+    container.innerHTML = html;
+
+    if (count >= 10) {
+        statusTxt.innerText = "PARABÉNS! VOCÊ GANHOU UM AÇAÍ!";
+        statusTxt.className = "text-white bg-green-500 rounded-full px-4 py-1 animate-bounce font-black text-xs mt-2";
+        btn.innerText = "RESGATAR BRINDE NO PRÓXIMO PEDIDO";
+        btn.classList.replace('bg-orange-500', 'bg-green-600');
+        btn.onclick = () => { 
+            showToast("Para resgatar, adicione uma observação no seu próximo pedido!");
+            document.getElementById('modal-fidelidade').classList.add('hidden');
+        };
+    } else {
+        statusTxt.innerText = "Peça 10 e o 11º é por nossa conta!";
+        statusTxt.className = "text-yellow-100 text-sm font-bold";
+        btn.innerText = "CONTINUAR PONTUANDO";
+        btn.classList.replace('bg-green-600', 'bg-orange-500');
+    }
+}
 
 // Expõe para o HTML (Necessário por causa do type="module")
 window.abrirModalCupons = abrirModalCupons;
 window.fecharModalCupons = fecharModalCupons;
 window.aplicarCupom = aplicarCupom;
 window.validarCupomManual = validarCupomManual;
+window.gerenciarInicioFidelidade = gerenciarInicioFidelidade;

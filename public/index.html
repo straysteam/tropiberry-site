@@ -812,21 +812,16 @@
                 <i class="fas fa-star text-2xl text-orange-500"></i>
             </div>
             <h3 class="text-2xl font-black text-white uppercase italic tracking-tighter">Fidelidade Tropi</h3>
-            <p class="text-yellow-100 text-sm font-bold">Peça 10 e o 11º é por nossa conta!</p>
+            <p id="fidelidade-status-texto" class="text-yellow-100 text-sm font-bold">Peça 10 e o 11º é por nossa conta!</p>
         </div>
         
         <div class="p-8 text-center">
-            <p class="text-gray-600 text-sm mb-6">A cada compra acima de <b>R$ 20,00</b>, você ganha 1 selo no seu cartão virtual. Ao completar 10 selos, você retira um Açaí de 300ml totalmente grátis!</p>
+            <p class="text-gray-600 text-sm mb-6">A cada compra acima de <b>R$ 20,00</b>, você ganha 1 selo. Ao completar 10, ganhe um <b>Açaí de 300ml Grátis</b>!</p>
             
-            <div class="grid grid-cols-5 gap-2 mb-8">
-                <div class="aspect-square bg-orange-100 rounded-full flex items-center justify-center text-orange-400 border-2 border-dashed border-orange-200"><i class="fas fa-check"></i></div>
-                <div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
-                <div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
-                <div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
-                <div class="aspect-square bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
+            <div id="selos-container" class="grid grid-cols-5 gap-3 mb-8">
                 </div>
 
-            <button onclick="document.getElementById('modal-fidelidade').classList.add('hidden')" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-xl transition-all">
+            <button id="btn-fidelidade-acao" onclick="gerenciarInicioFidelidade()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-xl transition-all">
                 COMEÇAR A PONTUAR
             </button>
         </div>
