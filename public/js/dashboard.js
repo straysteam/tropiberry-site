@@ -3044,31 +3044,45 @@ async function processarFidelidadeAoFinalizar(pedido) {
     };
 
     window.atualizarComandaPDV = () => {
-        const container = document.getElementById('pos-order-items');
-        const totalEl = document.getElementById('pos-total');
-        if(!container) return;
-        
-        container.innerHTML = '';
-        let total = 0;
+    const container = document.getElementById('pos-order-items');
+    const totalEl = document.getElementById('pos-total');
+    const subtotalEl = document.getElementById('pos-subtotal');
+    const taxEl = document.getElementById('pos-tax');
 
-        currentTableOrder.forEach((item, idx) => {
-            total += (item.price * item.quantity);
-            container.innerHTML += `
-                <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg mb-2 border">
-                    <div class="flex-1">
-                        <p class="text-xs font-bold text-gray-800">${item.name}</p>
-                        <p class="text-[10px] text-cyan-600">R$ ${item.price.toFixed(2)}</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="window.changePosQtd(${idx}, -1)" class="w-6 h-6 bg-white border rounded text-red-500">-</button>
-                        <span class="text-xs font-bold">${item.quantity}</span>
-                        <button onclick="window.changePosQtd(${idx}, 1)" class="w-6 h-6 bg-white border rounded text-green-500">+</button>
-                    </div>
+    if(!container) return;
+    
+    container.innerHTML = '';
+    let subtotal = 0;
+
+    currentTableOrder.forEach((item, idx) => {
+        subtotal += (item.price * item.quantity);
+        container.innerHTML += `
+            <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg mb-2 border">
+                <div class="flex-1">
+                    <p class="text-xs font-bold text-gray-800">${item.name}</p>
+                    <p class="text-[10px] text-cyan-600">R$ ${item.price.toFixed(2).replace('.', ',')}</p>
                 </div>
-            `;
-        });
-        if(totalEl) totalEl.innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
-    };
+                <div class="flex items-center gap-2">
+                    <button onclick="window.changePosQtd(${idx}, -1)" class="w-7 h-7 bg-white border rounded text-red-500 hover:bg-red-50 font-bold">-</button>
+                    <span class="text-xs font-bold w-4 text-center">${item.quantity}</span>
+                    <button onclick="window.changePosQtd(${idx}, 1)" class="w-7 h-7 bg-white border rounded text-green-500 hover:bg-green-50 font-bold">+</button>
+                </div>
+            </div>
+        `;
+    });
+
+    // Calcula 10% e o Total Final
+    const taxaServico = subtotal * 0.10; 
+    const total = subtotal + taxaServico;
+
+    // Joga os valores na tela
+    if(subtotalEl) subtotalEl.innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+    if(taxEl) taxEl.innerText = `R$ ${taxaServico.toFixed(2).replace('.', ',')}`;
+    if(totalEl) totalEl.innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+
+    // SALVAMENTO AUTOMÁTICO NO BANCO (Mata o problema de sair e voltar)
+    window.salvarComandaNoBanco(subtotal, taxaServico, total);
+};
     window.renderizarProdutosPOS = (filtroTexto = '') => {
         const container = document.getElementById('pos-products-grid');
         if (!container) return;
@@ -3164,147 +3178,529 @@ async function processarFidelidadeAoFinalizar(pedido) {
         // Chama a função de impressão real que já existe no seu dashboard.js
         window.imprimirPedidoReal(cupomFull);
     };
-    // ===============================================
-    // SISTEMA DE MARKETING DEFINITIVO
-    // ===============================================
+    // =========================================================
+    // MÓDULO DE MARKETING ÚNICO E LIMPO
+    // =========================================================
 
-    // 1. Função para carregar os dados do Firebase para o Dashboard
+    let marketingListenerActive = false;
+
     window.iniciarMonitorMarketing = () => {
-        console.log("📡 Iniciando monitor de Marketing...");
-        
-        // Monitor de Banners (Destaques)
-        onSnapshot(collection(db, "marketing_banners"), (snapshot) => {
-            const banners = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            const container = document.getElementById('banners-container');
-            if (!container) return;
+        if(marketingListenerActive) return; 
+        marketingListenerActive = true;
 
-            if (banners.length === 0) {
-                container.innerHTML = `
-                    <div class="p-10 text-center w-full border-2 border-dashed rounded-3xl">
-                        <p class="text-gray-400 mb-4">Nenhum destaque no banco de dados.</p>
-                        <button onclick="window.criarDestaquesPadrao()" class="bg-cyan-600 text-white px-4 py-2 rounded-lg font-bold text-xs">
-                            GERAR CLUBE E COMBO AGORA
-                        </button>
-                    </div>`;
-                return;
-            }
-
-            container.innerHTML = banners.map(b => `
-                <div class="banner-card group ${b.ativo ? '' : 'grayscale opacity-60'}">
-                    <div class="banner-bg bg-gradient-to-br ${b.gradient || 'from-cyan-600 to-cyan-900'}">
-                        <div class="shine-effect"></div>
-                    </div>
-                    <div class="relative z-20 flex flex-col justify-between h-full p-6 text-white">
-                        <div>
-                            <span class="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-[9px] font-black uppercase border border-white/10">${b.tag}</span>
-                            <h2 class="text-2xl font-black mt-2 leading-tight">${b.title}</h2>
-                            <p class="text-white/80 text-xs">${b.subtitle}</p>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="toggleStatusMarketing('marketing_banners', '${b.id}', ${b.ativo})" class="bg-white text-cyan-900 px-4 py-1.5 rounded-lg text-[10px] font-black shadow-md">
-                                ${b.ativo ? 'DESATIVAR' : 'ATIVAR'}
-                            </button>
-                            <button onclick="deletarItemMarketing('marketing_banners', '${b.id}')" class="bg-red-500 text-white p-1.5 rounded-lg">
-                                <i class="fas fa-trash text-[10px]"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="pop-out-image absolute -right-4 -bottom-4">
-                        <img src="${b.img}" class="w-28 h-28 object-contain ${b.id === 'casal' ? 'rounded-full border-4 border-white' : ''}">
-                    </div>
-                </div>
-            `).join('') + `<div class="min-w-[50px] h-1 flex-shrink-0"></div>`;
-        });
-
-        // Monitor de Cupons
+        // 1. MONITOR DE CUPONS
         onSnapshot(collection(db, "marketing_cupons"), (snapshot) => {
             const cupons = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             const container = document.getElementById('coupons-container');
             if (container) {
-                container.innerHTML = cupons.map(c => `
-                    <div class="group relative bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden p-6 ${c.ativo ? '' : 'opacity-50 grayscale'}">
-                        <div class="ticket-notch notch-left"></div>
-                        <div class="ticket-notch notch-right"></div>
-                        <div class="flex items-center gap-4">
-                            <div class="${c.color || 'bg-cyan-600'} w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg">
-                                ${c.icon || '🎟️'}
+                if(cupons.length === 0) {
+                    container.innerHTML = '<p class="text-gray-400 p-4 text-sm">Nenhum cupom ativo no momento.</p>';
+                } else {
+                    container.innerHTML = cupons.map(c => {
+                        let valorBadge = '';
+                        if(c.tipo === 'fixo') valorBadge = `R$ ${parseFloat(c.valor || 0).toFixed(2)} OFF`;
+                        else if(c.tipo === 'porcentagem') valorBadge = `${c.valor}% OFF`;
+                        else if(c.tipo === 'frete') {
+                            valorBadge = `FRETE GRÁTIS`;
+                            if (c.kmLimit > 0) valorBadge += ` (Até ${c.kmLimit}km)`;
+                        }
+
+                        return `
+                        <div class="group relative bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden p-6 ${c.ativo ? '' : 'opacity-50 grayscale'}">
+                            <div class="ticket-notch notch-left"></div>
+                            <div class="ticket-notch notch-right"></div>
+                            <div class="flex items-center gap-4">
+                                <div class="bg-cyan-600 w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shrink-0">🎟️</div>
+                                <div class="flex-1 overflow-hidden">
+                                    <h3 class="font-black text-cyan-900 text-xl leading-none truncate">${c.titulo || c.title || 'Cupom'}</h3>
+                                    <p class="text-gray-500 text-[10px] mt-1 line-clamp-2">${c.descricao || c.desc || 'Desconto'}</p>
+                                    <p class="text-cyan-700 text-[10px] font-bold mt-1 bg-cyan-50 inline-block px-2 py-0.5 rounded">Mínimo: R$ ${parseFloat(c.min || 0).toFixed(2)}</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input type="checkbox" ${c.ativo ? 'checked' : ''} onchange="window.toggleStatusMarketing('marketing_cupons', '${c.id}', ${c.ativo})" class="sr-only peer">
+                                    <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                                </label>
                             </div>
-                            <div class="flex-1">
-                                <h3 class="font-black text-cyan-900 text-xl leading-none">${c.title}</h3>
-                                <p class="text-gray-500 text-[10px] mt-1">${c.desc}</p>
+                            <div class="mt-6 pt-4 border-t border-dashed flex justify-between items-center">
+                                <span class="font-mono font-black text-cyan-600 tracking-tighter bg-cyan-50 px-3 py-1 rounded-lg">${c.code || c.id}</span>
+                                <span class="font-black text-orange-500 text-sm whitespace-nowrap">${valorBadge}</span>
+                                <button onclick="window.deletarItemMarketing('marketing_cupons', '${c.id}')" class="text-red-400 hover:text-red-600 text-[10px] font-bold bg-red-50 px-2 py-1 rounded transition ml-2">EXCLUIR</button>
                             </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" ${c.ativo ? 'checked' : ''} onchange="toggleStatusMarketing('marketing_cupons', '${c.id}', ${c.ativo})" class="sr-only peer">
-                                <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                            </label>
                         </div>
-                        <div class="mt-6 pt-4 border-t border-dashed flex justify-between items-center">
-                            <span class="font-mono font-black text-cyan-600 tracking-tighter">${c.code}</span>
-                            <button onclick="deletarItemMarketing('marketing_cupons', '${c.id}')" class="text-red-400 hover:text-red-600 text-[10px] font-bold">EXCLUIR</button>
+                    `}).join('');
+                }
+            }
+        });
+
+        // 2. MONITOR DE DESTAQUES (BANNERS)
+        onSnapshot(collection(db, "marketing_banners"), (snapshot) => {
+            const banners = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const container = document.getElementById('banners-container');
+            if (container) {
+                if(banners.length === 0) {
+                    container.innerHTML = `
+                        <div class="w-full bg-orange-50 border-2 border-dashed border-orange-200 rounded-2xl p-6 text-center">
+                            <p class="text-orange-600 font-bold mb-2">Nenhum destaque criado no banco de dados.</p>
+                            <button onclick="window.gerarBannersPadrao()" class="bg-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition shadow-lg">
+                                GERAR BANNERS DO SITE AGORA
+                            </button>
                         </div>
-                    </div>
-                `).join('');
+                    `;
+                } else {
+                    container.innerHTML = banners.map(b => `
+                        <div class="min-w-[280px] w-80 h-40 rounded-2xl bg-gradient-to-br ${b.gradient || 'from-cyan-600 to-cyan-900'} relative overflow-hidden shadow-lg shrink-0 group ${b.ativo ? '' : 'opacity-50 grayscale'}">
+                            <div class="absolute right-0 bottom-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                            <img src="${b.img}" class="absolute right-[-20px] bottom-[-20px] w-36 h-36 object-contain drop-shadow-2xl opacity-90 group-hover:scale-110 transition-transform">
+                            
+                            <div class="relative z-10 p-5 h-full flex flex-col justify-between">
+                                <div>
+                                    <span class="bg-yellow-400 text-cyan-950 text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-sm">${b.tag || 'DESTAQUE'}</span>
+                                    <h3 class="text-xl font-black text-white leading-tight mt-2 italic uppercase tracking-tighter">${b.title}</h3>
+                                    <p class="text-cyan-100 text-xs font-medium leading-tight max-w-[60%]">${b.subtitle}</p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" ${b.ativo ? 'checked' : ''} onchange="window.toggleStatusMarketing('marketing_banners', '${b.id}', ${b.ativo})" class="sr-only peer">
+                                        <div class="w-7 h-4 bg-white/30 rounded-full peer peer-checked:bg-green-400 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-full"></div>
+                                    </label>
+                                    <button onclick="window.deletarItemMarketing('marketing_banners', '${b.id}')" class="text-white/50 hover:text-red-400 transition"><i class="fas fa-trash text-xs"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
             }
         });
     };
 
-    // 2. FUNÇÃO PARA CRIAR O CLUBE E O COMBO NO BANCO (Caso esteja vazio)
-    window.criarDestaquesPadrao = async () => {
+    window.gerarBannersPadrao = async () => {
         try {
-            // Criar Clube do Açaí
             await addDoc(collection(db, "marketing_banners"), {
-                title: "Clube do Açai",
-                subtitle: "Vantagens exclusivas",
-                tag: "O QUERIDINHO",
-                gradient: "from-cyan-600 to-cyan-950",
-                img: "img/logosf.png",
-                ativo: true,
-                createdAt: serverTimestamp()
+                title: "Clube do Açaí", subtitle: "Peça 10 e ganhe 1 grátis", tag: "FIDELIDADE",
+                gradient: "from-cyan-600 to-cyan-900", img: "img/logo1.png", ativo: true, createdAt: serverTimestamp()
             });
-
-            // Criar Combo Casal
             await addDoc(collection(db, "marketing_banners"), {
-                title: "Hora do Casal",
-                subtitle: "2 Copos de 500ml",
-                tag: "COMBO TOP",
-                gradient: "from-blue-500 to-cyan-700",
-                img: "img/fotoPrincipal2.png",
-                ativo: true,
-                createdAt: serverTimestamp()
+                title: "Combo Casal", subtitle: "Açaí em dobro com desconto", tag: "OFERTÃO",
+                gradient: "from-yellow-400 to-orange-600", img: "img/principal2.png", ativo: true, createdAt: serverTimestamp()
             });
-
-            window.showToast("Sucesso", "Destaques criados com sucesso!");
-        } catch (e) {
-            console.error(e);
-            window.showToast("Erro", "Falha ao criar padrões.", true);
+            window.showToast("Sucesso", "Destaques gerados com sucesso!");
+        } catch(e) { 
+            console.error(e); 
+            alert("🚨 ERRO FIREBASE: " + e.message); // Dedo-duro ativado
+            window.showToast("Erro", "Olhe o alerta na tela.", true); 
         }
     };
 
-    // 3. Ações de Status e Exclusão
+    window.criarNovoDestaque = async () => {
+        const nome = prompt("Digite o Título do Novo Destaque (Ex: Promoção de Inverno):");
+        if(!nome) return;
+        try {
+            await addDoc(collection(db, "marketing_banners"), {
+                title: nome, subtitle: "Nova Promoção", tag: "NOVIDADE",
+                gradient: "from-blue-600 to-blue-900", img: "img/logo1.png",
+                ativo: true, createdAt: serverTimestamp()
+            });
+            window.showToast("Sucesso", "Novo destaque adicionado!");
+        } catch(e) { 
+            console.error(e); 
+            alert("🚨 ERRO FIREBASE: " + e.message); 
+            window.showToast("Erro", "Olhe o alerta na tela.", true); 
+        }
+    };
+
+    window.criarNovoCupom = () => {
+        document.getElementById('modal-novo-cupom').classList.remove('hidden');
+        document.getElementById('cupom-codigo').value = '';
+        document.getElementById('cupom-titulo').value = '';
+        document.getElementById('cupom-desc').value = '';
+        document.getElementById('cupom-tipo').value = 'fixo';
+        document.getElementById('cupom-valor').value = '';
+        document.getElementById('cupom-minimo').value = '';
+        document.getElementById('cupom-km').value = ''; 
+        window.mudarTipoCupom();
+    };
+
+    window.mudarTipoCupom = () => {
+        const tipo = document.getElementById('cupom-tipo').value;
+        const inputValor = document.getElementById('cupom-valor');
+        const labelValor = document.getElementById('label-cupom-valor');
+        const freteOpcoes = document.getElementById('cupom-frete-opcoes');
+
+        if(tipo === 'frete') {
+            inputValor.value = '0';
+            inputValor.disabled = true;
+            inputValor.classList.add('bg-gray-100', 'opacity-50');
+            freteOpcoes.classList.remove('hidden'); 
+        } else {
+            inputValor.disabled = false;
+            inputValor.classList.remove('bg-gray-100', 'opacity-50');
+            labelValor.innerText = tipo === 'fixo' ? 'Valor do Desconto (R$)' : 'Porcentagem (%)';
+            freteOpcoes.classList.add('hidden'); 
+        }
+    };
+
+    window.salvarNovoCupom = async () => {
+        const code = document.getElementById('cupom-codigo').value.trim().toUpperCase();
+        const titulo = document.getElementById('cupom-titulo').value.trim();
+        const desc = document.getElementById('cupom-desc').value.trim();
+        const tipo = document.getElementById('cupom-tipo').value;
+        const valor = parseFloat(document.getElementById('cupom-valor').value) || 0;
+        const min = parseFloat(document.getElementById('cupom-minimo').value) || 0;
+        const kmLimit = parseFloat(document.getElementById('cupom-km').value) || 0;
+
+        if(!code || !titulo) return window.showToast("Atenção", "Preencha o código e o título.", true);
+
+        const btn = document.querySelector('#modal-novo-cupom button.bg-cyan-600');
+        const txtOrg = btn ? btn.innerText : 'CRIAR CUPOM';
+        if(btn) { btn.innerText = 'SALVANDO...'; btn.disabled = true; }
+
+        try {
+            await addDoc(collection(db, "marketing_cupons"), {
+                code: code, titulo: titulo, descricao: desc, tipo: tipo,
+                valor: valor, min: min, kmLimit: tipo === 'frete' ? kmLimit : 0, 
+                ativo: true, createdAt: serverTimestamp()
+            });
+
+            window.showToast("Sucesso", "Cupom criado com sucesso!");
+            document.getElementById('modal-novo-cupom').classList.add('hidden');
+        } catch (e) {
+            console.error("Erro ao criar cupom:", e);
+            alert("🚨 ERRO FIREBASE: " + e.message); // Dedo-duro ativado
+            window.showToast("Erro", "Olhe o alerta na tela.", true);
+        } finally {
+            if(btn) { btn.innerText = txtOrg; btn.disabled = false; }
+        }
+    };
+
     window.toggleStatusMarketing = async (colecao, id, statusAtual) => {
-        await updateDoc(doc(db, colecao, id), { ativo: !statusAtual });
+        try { await updateDoc(doc(db, colecao, id), { ativo: !statusAtual }); } catch(e) { console.error(e); }
     };
 
     window.deletarItemMarketing = async (colecao, id) => {
-        if(confirm("Remover permanentemente?")) await deleteDoc(doc(db, colecao, id));
+        if(confirm("Excluir permanentemente?")) {
+            try { await deleteDoc(doc(db, colecao, id)); } catch(e) { console.error(e); }
+        }
     };
 
-    // 4. Botões de Criar Manual
-    window.criarNovoDestaque = async () => {
-        const nome = prompt("Título do Destaque:");
-        if(!nome) return;
-        await addDoc(collection(db, "marketing_banners"), {
-            title: nome, subtitle: "Nova Promoção", tag: "NOVIDADE",
-            gradient: "from-cyan-600 to-cyan-900", img: "img/logosf.png",
-            ativo: true, createdAt: serverTimestamp()
-        });
-    };
+    window.voltarParaListaDeMesas = () => {
+    // Usa a navegação existente para voltar para a tela de PDV principal (onde as mesas ficam)
+    window.navegarPara('view-pdv-wrapper'); 
+};
 
-    window.criarNovoCupom = async () => {
-        const code = prompt("Código do Cupom:");
-        if(!code) return;
-        await addDoc(collection(db, "marketing_cupons"), {
-            code: code.toUpperCase(), title: "Cupom Novo", desc: "Válido hoje",
-            icon: "🎟️", color: "bg-cyan-600", ativo: true, createdAt: serverTimestamp()
+// No dashboard.js
+window.abrirMesaParaPedido = (numeroMesa) => {
+    // Define qual mesa está sendo editada
+    window.currentTablePOS = numeroMesa;
+
+    // Atualiza os títulos no HTML novo
+    document.getElementById('current-table-number-title').innerText = numeroMesa;
+
+    // Limpa a comanda e prepara para novos itens (mude isso conforme sua lógica de dados)
+    // updateOrderDOM(); 
+
+    // Navega para a tela que acabamos de criar
+    window.navegarPara('view-pos');
+};
+
+// =========================================================
+// NOVAS FUNÇÕES DO PDV DAS MESAS
+// =========================================================
+
+// 1. O SALVAMENTO AUTOMÁTICO DA MESA
+// 1. O SALVAMENTO AUTOMÁTICO DA MESA (COM CORREÇÃO DE MESA LIVRE)
+let timeoutSalvar;
+window.salvarComandaNoBanco = (subtotal, taxaServico, total) => {
+    clearTimeout(timeoutSalvar);
+    timeoutSalvar = setTimeout(async () => {
+        if (!currentTablePOS) return; 
+
+        const existingOrder = allOrders.find(o => 
+            o.method === 'mesa' && 
+            parseInt(o.tableNumber) === parseInt(currentTablePOS) && 
+            !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
+        );
+
+        // A MÁGICA DA MESA LIVRE AQUI:
+        // Se a comanda ficou vazia e existia um pedido, a gente DELETA o pedido do banco!
+        // Assim o sistema entende que a mesa esvaziou e muda a cor dela pra Livre.
+        if (currentTableOrder.length === 0) {
+            if (existingOrder) {
+                try {
+                    await deleteDoc(doc(db, "pedidos", existingOrder.id));
+                    console.log("Mesa esvaziada! Pedido deletado.");
+                } catch (e) { console.log("Erro ao liberar mesa:", e); }
+            }
+            return; // Para o código aqui pra ele não criar um pedido zerado de novo
+        }
+
+        // Se tem itens e já existia pedido -> ATUALIZA
+        if (existingOrder) {
+            try {
+                await updateDoc(doc(db, "pedidos", existingOrder.id), {
+                    items: currentTableOrder,
+                    total: total,
+                    taxaServico: taxaServico,
+                    updatedAt: serverTimestamp()
+                });
+            } catch (e) { console.log("Erro ao salvar:", e); }
+        } 
+        // Se tem itens e não existia pedido -> CRIA O PEDIDO NOVO
+        else if (currentTableOrder.length > 0) {
+            try {
+                await addDoc(collection(db, "pedidos"), { 
+                    method: 'mesa', 
+                    tableNumber: currentTablePOS, 
+                    items: currentTableOrder, 
+                    total: total, 
+                    taxaServico: taxaServico,
+                    status: 'Em Preparo', 
+                    customer: { name: `Mesa ${currentTablePOS}`, phone: '-' }, 
+                    paymentMethod: 'pendente', 
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp() 
+                });
+            } catch (e) { console.log("Erro ao criar:", e); }
+        }
+    }, 800); 
+};
+
+// =========================================================
+// MODAL DE TAMANHOS DINÂMICO (PUXANDO DO FIREBASE)
+// =========================================================
+
+let produtoTempParaOpcoes = null;
+
+// 1. CHAMA O MODAL SE O PREÇO FOR ZERO
+window.adicionarAoPedidoPOS = async (id) => {
+    const p = allProducts.find(x => x.id === id);
+    if (!p) return;
+
+    let finalPrice = parseFloat(p.price || 0);
+    
+    // Se o preço base for R$ 0,00, ele tem complementos obrigatórios (tamanhos)
+    if (finalPrice === 0) {
+        produtoTempParaOpcoes = p;
+        document.getElementById('modal-opcoes-titulo').innerText = p.name;
+        
+        // Mostra um "Carregando" estiloso enquanto vai no banco de dados
+        document.getElementById('lista-opcoes-container').innerHTML = `
+            <div class="text-center py-8 text-cyan-600 flex flex-col items-center">
+                <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                <p class="text-sm font-bold text-gray-500">Buscando tamanhos...</p>
+            </div>
+        `;
+        document.getElementById('modal-opcoes-produto').classList.remove('hidden');
+        
+        // Dispara a busca no banco de dados
+        await window.renderizarOpcoesDoBanco(p);
+        return; 
+    }
+
+    // Se já tiver preço fixo, adiciona direto
+    processarAdicaoItem(p, p.name, finalPrice);
+};
+
+// 2. FECHA O MODAL
+window.fecharModalOpcoes = () => {
+    document.getElementById('modal-opcoes-produto').classList.add('hidden');
+    produtoTempParaOpcoes = null;
+};
+
+// 3. BUSCA OS TAMANHOS REAIS LÁ DO BANCO DE DADOS
+window.renderizarOpcoesDoBanco = async (produto) => {
+    const container = document.getElementById('lista-opcoes-container');
+    
+    // Verifica se o produto tem complementos vinculados a ele
+    if (!produto.complementIds || produto.complementIds.length === 0) {
+        container.innerHTML = '<p class="text-red-500 text-center py-4 font-bold">Nenhum tamanho vinculado a este produto no Cardápio.</p>';
+        return;
+    }
+
+    try {
+        let grupoTamanhos = null;
+
+        // O dashboard.js já tem a variável "db" e a função "getDoc" importadas no topo.
+        // Vamos varrer os grupos de complemento desse açaí específico
+        for (const groupId of produto.complementIds) {
+            // Importação dinâmica nativa caso não esteja no escopo
+            const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+            
+            const docRef = doc(db, "complementos", groupId);
+            const docSnap = await getDoc(docRef);
+            
+            if (docSnap.exists()) {
+                const groupData = docSnap.data();
+                
+                // Pega o grupo que dita o preço (geralmente marcado como 'embalagem' ou que seja Obrigatório)
+                if (groupData.internalCategory === 'embalagem' || groupData.title.toLowerCase().includes('tamanho') || groupData.title.toLowerCase().includes('copo')) {
+                    grupoTamanhos = groupData;
+                    break; // Achou o grupo certo, para de procurar!
+                }
+                // Backup: se não tiver o nome acima, pega o primeiro que for obrigatório
+                if (!grupoTamanhos && groupData.required) {
+                    grupoTamanhos = groupData;
+                }
+            }
+        }
+
+        // Se não achou opções válidas
+        if (!grupoTamanhos || !grupoTamanhos.options || grupoTamanhos.options.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">As opções deste produto estão vazias no banco.</p>';
+            return;
+        }
+
+        // 4. DESENHA OS BOTÕES COM OS DADOS REAIS
+        const opcoesHtml = grupoTamanhos.options.map((opt) => {
+            // Se a opção foi desativada no painel admin, ela não aparece aqui
+            if (opt.available === false) return '';
+            
+            return `
+                <button onclick="window.selecionarOpcaoProduto('${opt.name}', ${opt.price})" 
+                        class="w-full flex justify-between items-center p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl hover:border-cyan-500 hover:bg-cyan-50 transition group active:scale-95 mb-2">
+                    <span class="font-bold text-gray-700 group-hover:text-cyan-800 text-lg">${opt.name}</span>
+                    <span class="font-black text-cyan-600 text-xl">R$ ${parseFloat(opt.price).toFixed(2).replace('.', ',')}</span>
+                </button>
+            `;
+        }).join('');
+
+        container.innerHTML = opcoesHtml || '<p class="text-gray-500 text-center py-4">Nenhum tamanho ativo disponível.</p>';
+
+    } catch (erro) {
+        console.error("Erro ao buscar complementos da mesa:", erro);
+        container.innerHTML = '<p class="text-red-500 text-center py-4 font-bold">Erro de conexão ao buscar tamanhos.</p>';
+    }
+};
+
+// 5. CLIQUE NO BOTÃO DE TAMANHO
+window.selecionarOpcaoProduto = (nomeOpcao, precoOpcao) => {
+    if (!produtoTempParaOpcoes) return;
+    
+    // Junta o nome original com o tamanho real vindo do banco. Ex: "Montar Copo (300ml)"
+    const nomeFinal = `${produtoTempParaOpcoes.name} (${nomeOpcao})`;
+    
+    processarAdicaoItem(produtoTempParaOpcoes, nomeFinal, precoOpcao);
+    window.fecharModalOpcoes();
+};
+
+// 6. JOGA PRA COMANDA E SALVA AUTOMÁTICO
+function processarAdicaoItem(produtoBase, nomeFinal, precoFinal) {
+    const existe = currentTableOrder.find(item => item.name === nomeFinal && item.price === precoFinal); 
+    
+    if (existe) {
+        existe.quantity++;
+    } else {
+        currentTableOrder.push({
+            id: produtoBase.id, 
+            name: nomeFinal,    
+            price: precoFinal,
+            quantity: 1,
+            details: ''
         });
-    };
+    }
+    window.atualizarComandaPDV(); // Salva no banco automaticamente e recalcula totais
+}
+
+// =========================================================
+// LÓGICA DE LIMPAR COMANDA (MODAL BONITÃO)
+// =========================================================
+
+// 1. Clica no botão "Limpar Comanda" da interface
+window.limparComandaMesa = () => {
+    // Se a comanda já tá vazia, só avisa e não faz nada
+    if (currentTableOrder.length === 0) {
+        return showToast("Atenção", "A comanda já está vazia.", true);
+    }
+    
+    // Abre o modal de confirmação
+    document.getElementById('modal-confirmar-limpeza').classList.remove('hidden');
+};
+
+// 2. Clica no botão "Cancelar" do modal
+window.fecharModalLimpeza = () => {
+    document.getElementById('modal-confirmar-limpeza').classList.add('hidden');
+};
+
+// 3. Clica no botão Vermelho "Sim, Limpar"
+window.confirmarLimpezaComanda = () => {
+    currentTableOrder = []; // Zera a lista no código
+    
+    window.atualizarComandaPDV(); // Recalcula a tela (que aciona nosso auto-save que apaga do banco)
+    
+    showToast("Limpa", "A comanda foi esvaziada e a mesa liberada!");
+    window.fecharModalLimpeza(); // Esconde o modal
+};
+
+// 4. FUNÇÃO DO BOTÃO "FINALIZAR E PAGAR"
+window.prepararPagamentoMesa = () => {
+    if (currentTableOrder.length === 0) {
+        return showToast("Atenção", "A comanda está vazia. Adicione itens antes de pagar.", true);
+    }
+
+    // Acha o ID do pedido no banco de dados para abrir o Modal de pagamento
+    const existingOrder = allOrders.find(o => 
+        o.method === 'mesa' && 
+        parseInt(o.tableNumber) === parseInt(currentTablePOS) && 
+        !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
+    );
+
+    if (existingOrder) {
+        window.abrirModalPagamento(existingOrder.id);
+    } else {
+        showToast("Processando", "Aguarde o pedido ser salvo...");
+    }
+};
+
+// =========================================================
+// LÓGICA DE PAGAMENTO DA MESA
+// =========================================================
+let pedidoPagamentoAtual = null;
+
+window.abrirModalPagamento = (pedidoId) => {
+    // Busca o pedido na lista global
+    const pedido = allOrders.find(o => o.id === pedidoId);
+    if (!pedido) return showToast("Erro", "Pedido não encontrado.", true);
+
+    pedidoPagamentoAtual = pedido;
+
+    // Preenche os dados na tela
+    document.getElementById('pagamento-numero-mesa').innerText = pedido.tableNumber;
+    document.getElementById('pagamento-valor-total').innerText = `R$ ${pedido.total.toFixed(2).replace('.', ',')}`;
+
+    // Mostra o modal
+    document.getElementById('modal-pagamento-mesa').classList.remove('hidden');
+};
+
+window.fecharModalPagamento = () => {
+    document.getElementById('modal-pagamento-mesa').classList.add('hidden');
+    pedidoPagamentoAtual = null;
+};
+
+window.confirmarPagamentoMesa = async () => {
+    if (!pedidoPagamentoAtual) return;
+
+    // Descobre qual método o caixa escolheu
+    const metodoEscolhido = document.querySelector('input[name="metodo-pagamento"]:checked').value;
+    
+    // Importa as funções do banco de dados (caso não estejam globais)
+    const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+
+    try {
+        // Atualiza o pedido no Firebase para "Finalizado" e "Pago"
+        await updateDoc(doc(db, "pedidos", pedidoPagamentoAtual.id), {
+            status: 'Finalizado',
+            paymentStatus: 'paid',
+            paymentMethod: metodoEscolhido
+        });
+
+        showToast("Sucesso", "Venda finalizada com sucesso!");
+        window.fecharModalPagamento();
+        
+        // Volta para a tela de listar as mesas e limpa o PDV aberto
+        window.voltarParaListaDeMesas();
+        currentTableOrder = [];
+
+    } catch (e) {
+        console.error("Erro ao finalizar:", e);
+        showToast("Erro", "Falha ao processar pagamento.", true);
+    }
+};
