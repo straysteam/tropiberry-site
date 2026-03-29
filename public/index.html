@@ -306,11 +306,30 @@
                     <p id="summary-address-display" class="text-sm text-gray-700 font-medium italic"></p>
                 </div>
                 <div id="summary-items" class="bg-white p-4 rounded-xl border border-gray-100 space-y-2 text-sm max-h-40 overflow-y-auto"></div>
-                <div class="bg-cyan-900 text-white p-5 rounded-2xl shadow-inner space-y-2">
-                    <div class="flex justify-between text-cyan-200 text-xs"><span>Subtotal</span><span id="summary-subtotal">R$ 0,00</span></div>
-                    <div class="flex justify-between text-cyan-200 text-xs"><span>Taxa de Entrega</span><span id="summary-delivery">R$ 0,00</span></div>
-                    <div class="flex justify-between font-bold text-lg pt-2 border-t border-cyan-800 mt-1"><span>Total Final</span><span id="summary-total" class="text-yellow-400">R$ 0,00</span></div>
+                <div class="mt-4 mb-6 bg-white p-4 rounded-2xl border-2 border-dashed border-cyan-300 flex items-center justify-between cursor-pointer hover:bg-cyan-50 transition-colors shadow-sm group" onclick="window.abrirModalCupons()">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                        <i class="fas fa-ticket-alt"></i>
+                    </div>
+                    <div>
+                        <p class="font-black text-gray-800 text-sm uppercase">Cupom de Desconto</p>
+                        <p id="coupon-selected-text" class="text-xs font-bold text-gray-500 mt-0.5">Clique para adicionar</p>
+                    </div>
                 </div>
+                <div class="w-8 h-8 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center group-hover:bg-cyan-600 group-hover:text-white transition-colors">
+                    <i class="fas fa-chevron-right text-sm"></i>
+                </div>
+            </div>
+                <div class="bg-cyan-900 text-white p-5 rounded-2xl shadow-inner space-y-2">
+                <div class="flex justify-between text-cyan-200 text-xs"><span>Subtotal</span><span id="summary-subtotal">R$ 0,00</span></div>
+                <div class="flex justify-between text-cyan-200 text-xs"><span>Taxa de Entrega</span><span id="summary-delivery">R$ 0,00</span></div>
+                
+                <div id="summary-discount-row" class="flex justify-between text-green-400 text-xs hidden">
+                    <span>Desconto</span><span id="summary-discount">- R$ 0,00</span>
+                </div>
+
+                <div class="flex justify-between font-bold text-lg pt-2 border-t border-cyan-800 mt-1"><span>Total Final</span><span id="summary-total" class="text-yellow-400">R$ 0,00</span></div>
+            </div>
 
                 <button onclick="goToPaymentMethod()" class="w-full bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-600 transition flex justify-center items-center gap-3 text-lg">
                     Tudo Certo, Escolher Pagamento <i class="fas fa-check"></i>
@@ -638,15 +657,6 @@
         <div id="cart-items" class="flex-grow p-4 overflow-y-auto space-y-4 bg-gray-50 custom-scrollbar">
             </div>
 
-        <div class="p-4 bg-white border-t border-gray-100">
-            <button onclick="abrirModalCupons()" class="w-full flex items-center justify-between p-3 border rounded-xl hover:bg-gray-50 transition border-dashed border-cyan-600 group">
-                <div class="flex items-center gap-3">
-                    <i class="fas fa-ticket-alt text-cyan-600 group-hover:rotate-12 transition"></i>
-                    <span id="coupon-selected-text" class="text-sm font-bold text-gray-700">Cupom de desconto</span>
-                </div>
-                <span class="text-xs text-cyan-600 font-bold uppercase">Selecionar</span>
-            </button>
-        </div>
 
        <div class="p-6 pb-24 md:pb-6 bg-white border-t space-y-3 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] shrink-0">
     <div class="flex justify-between text-sm text-gray-500">

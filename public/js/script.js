@@ -243,8 +243,13 @@ function calcularDescontoCupom(subtotal, frete, cupom) {
     } else if (cupom.tipo === 'frete') {
         if (frete !== null) {
             const limite = parseFloat(cupom.valor) || 4.99;
-            // O desconto é o frete, limitado ao teto do cupom (Padrão iFood)
-            desconto = Math.min(frete, limite);
+            // Se o frete for menor ou igual ao limite, dá o desconto total do frete
+            if (frete <= limite) {
+                desconto = frete;
+            } else {
+                // Se for maior que a distância permitida, não dá desconto nenhum!
+                desconto = 0;
+            }
         }
     }
     return Math.max(0, desconto);
@@ -839,21 +844,33 @@ function monitorarStatusLojaNoBanco() {
                 
                 updateStoreStatusUI(); 
 
+                // === O TOQUE MÁGICO AO VIVO (CORREÇÃO) ===
+                const checkoutModal = document.getElementById('checkout-modal');
+                if (checkoutModal && !checkoutModal.classList.contains('hidden')) {
+                    // Se a loja fechar e NÃO aceitar agendamento, fecha o modal na cara do cliente e avisa
+                    if (!isStoreOpen && !configPedidos.allowScheduled) {
+                        closeCheckout();
+                        showToast("A loja acabou de fechar!", true);
+                    } 
+                    // Se aceitar agendamento, atualiza a tela na hora pra bloquear a opção "Agora"
+                    else if (currentOrder.method) {
+                        selectService(currentOrder.method);
+                    }
+                }
+                // ==========================================
+
                 // === LÓGICA DO MODAL DE AVISO (Aparece 1x se fechado) ===
                 if (!isStoreOpen) {
-                    // Verifica se já mostrou nessa sessão
                     const jaMostrou = sessionStorage.getItem('aviso_loja_fechada_mostrado');
                     
                     if (!jaMostrou) {
                         const modalFechado = document.getElementById('closed-store-modal');
                         if (modalFechado) {
                             modalFechado.classList.remove('hidden');
-                            // Marca que já mostrou para não abrir de novo se atualizar a página
                             sessionStorage.setItem('aviso_loja_fechada_mostrado', 'true');
                         }
                     }
                 } else {
-                    // Se a loja abrir, reseta o aviso para o futuro
                     sessionStorage.removeItem('aviso_loja_fechada_mostrado');
                 }
                 // ========================================================
@@ -1016,6 +1033,7 @@ function updateCartUI() {
     if (cupomAtivo) {
         if (subtotal < cupomAtivo.min) {
             cupomAtivo = null;
+            localStorage.removeItem('tropyberry_cupom');
             const couponText = document.getElementById('coupon-selected-text');
             if(couponText) {
                 couponText.innerText = "Cupom de desconto";
@@ -1085,7 +1103,11 @@ function startCheckout() {
     pedirPermissaoNotificacao(); 
 
     if (cart.length === 0) return showToast("Carrinho vazio!");
-    if (!isStoreOpen) return showToast("Loja Fechada!");
+    
+    // CORREÇÃO: Só bloqueia de vez se a loja estiver fechada E não aceitar agendamento!
+    if (!isStoreOpen && !configPedidos.allowScheduled) {
+        return showToast("Loja Fechada!");
+    }
 
     const checkoutModal = document.getElementById('checkout-modal');
     
@@ -1094,7 +1116,6 @@ function startCheckout() {
         return;
     }
     if (loggedUserEmail && !distanciaConfirmada && cart.length > 0) {
-        // Se temos um email mas o frete ainda está nulo, tenta disparar o cálculo automático
         window.calcularDistanciaGoogle();
     }
 
@@ -1732,6 +1753,13 @@ window.abrirUltimoPedido = () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     const savedCart = localStorage.getItem('tropyberry_cart');
+    const savedCupom = localStorage.getItem('tropyberry_cupom'); // <-- Busca o cupom na memória
+    
+    // Se tinha cupom antes de recarregar a tela, ativa ele de novo!
+    if (savedCupom) {
+        cupomAtivo = JSON.parse(savedCupom); 
+    }
+
     if (savedCart) {
         cart = JSON.parse(savedCart);
         
@@ -1856,8 +1884,12 @@ function renderReceipt() {
                 valorDesconto = subtotal * fator;
             } else if (cupomAtivo.tipo === 'frete') {
                 if (frete !== null) {
-                    // O desconto é o menor valor entre o frete real e o que o cupom cobre
-                    valorDesconto = Math.min(valorFreteNum, limiteCupom);
+                    // A correção do Math.min que estava tirando os 4,99
+                    if (valorFreteNum <= limiteCupom) {
+                        valorDesconto = valorFreteNum;
+                    } else {
+                        valorDesconto = 0;
+                    }
                 }
             }
         }
@@ -2246,6 +2278,8 @@ window.calcularDistanciaGoogle = () => {
 
             freteGoogleCalculado = valorFrete;
             distanciaConfirmada = true; 
+            if (typeof updateCartUI === 'function') updateCartUI();
+    if (typeof renderReceipt === 'function') renderReceipt();
             
             console.log(`✅ Frete calculado: R$ ${valorFrete}`);
             
@@ -2833,99 +2867,132 @@ window.copiarCupomSite = (codigo) => {
         }
     });
 };
-// --- SISTEMA DE CUPONS INTEGRADO ---
+// =========================================================
+// SISTEMA DE CUPONS INTEGRADO (COM FIREBASE)
+// =========================================================
 let cupomAtivo = null;
+let listaCupons = [];
 
-// Lista de cupons (Isso pode vir do seu Firebase futuramente)
-// No script.js, defina o cupom diretamente na lista
-let listaCupons = [
+// 1. O site "escuta" o Firebase e salva os cupons ativos
+window.monitorarCuponsDoBanco = () => {
+    if (!db) return;
+    onSnapshot(collection(db, "marketing_cupons"), (snapshot) => {
+        listaCupons = snapshot.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(c => c.ativo === true);
+    });
+};
 
-];
-// Função auxiliar para calcular o valor bruto do carrinho
+// 2. Auxiliar para ver quanto deu o carrinho
 function obterSubtotalCart() {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 }
 
-function abrirModalCupons() {
+// 3. Abre o modal que o cliente vê
+window.abrirModalCupons = () => {
     const modal = document.getElementById('coupon-modal');
     if (modal) {
         modal.classList.remove('hidden');
-        renderizarListaCupons();
+        window.renderizarListaCupons();
     }
-}
+};
 
-function fecharModalCupons() {
-    document.getElementById('coupon-modal').classList.add('hidden');
-}
+window.fecharModalCupons = () => {
+    const modal = document.getElementById('coupon-modal');
+    if (modal) modal.classList.add('hidden');
+};
 
-function renderizarListaCupons() {
+// 4. Desenha a lista de cupons e já bloqueia o que não pode usar
+window.renderizarListaCupons = () => {
     const container = document.getElementById('coupons-list');
     if (!container) return;
     
     const subtotal = obterSubtotalCart();
-    // Pega o frete atual (se não estiver confirmado, tratamos como 0 para não bloquear tudo antes do Google responder)
     const freteAtual = distanciaConfirmada ? freteGoogleCalculado : 0;
     
+    if(listaCupons.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 py-4 font-bold">Nenhum cupom disponível no momento.</p>';
+        return;
+    }
+
     container.innerHTML = listaCupons.map(cupom => {
-        // REGRA 1: Bloqueio por valor mínimo do carrinho
-        const subtotalInvalido = subtotal < cupom.min;
-        
-        // REGRA 2: Bloqueio por distância (Frete acima de 4.99)
-        // Se o cupom for tipo frete e o valor do frete for maior que o que o cupom cobre
-        const freteInvalido = cupom.tipo === 'frete' && freteAtual > cupom.valor;
-        
+        // Regras para bloquear o clique no cupom
+        const subtotalInvalido = subtotal < (cupom.min || 0);
+        const freteInvalido = cupom.tipo === 'frete' && freteAtual > (cupom.valor || 0);
         const bloqueado = subtotalInvalido || freteInvalido;
         const isAtivo = cupomAtivo?.id === cupom.id;
 
-        // Mensagem de erro específica para o card
+        // Texto do erro
         let msgErro = "";
-        if (subtotalInvalido) msgErro = `Mínimo R$ ${cupom.min.toFixed(2)}`;
-        else if (freteInvalido) msgErro = `Apenas para clientes próximos`;
+        if (subtotalInvalido) msgErro = `Mínimo R$ ${(cupom.min || 0).toFixed(2).replace('.', ',')}`;
+        else if (freteInvalido) msgErro = `Exclusivo para raio de entrega próximo`;
         
         return `
-            <div class="coupon-card ${isAtivo ? 'active' : ''} ${bloqueado ? 'opacity-50 grayscale cursor-not-allowed' : ''}" 
-                 onclick="${!bloqueado ? `aplicarCupom('${cupom.id}')` : `showToast('${msgErro}', true)`}">
+            <div class="bg-white p-4 rounded-xl border-2 ${isAtivo ? 'border-cyan-500 bg-cyan-50' : 'border-gray-100'} ${bloqueado ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:border-cyan-300 transition'}" 
+                 onclick="${!bloqueado ? `window.aplicarCupom('${cupom.id}')` : `showToast('${msgErro}', true)`}">
                 <div class="flex justify-between items-center">
                     <div>
-                        <h4 class="font-black text-cyan-900">${cupom.titulo}</h4>
-                        <p class="text-[10px] text-gray-500">${cupom.descricao}</p>
-                        <p class="text-[9px] font-bold text-orange-500 mt-1 uppercase">
+                        <h4 class="font-black text-cyan-900 text-lg">${cupom.titulo || cupom.code}</h4>
+                        <p class="text-xs text-gray-500">${cupom.descricao || 'Desconto'}</p>
+                        <p class="text-[10px] font-bold text-orange-500 mt-1 uppercase">
                             ${msgErro ? msgErro : 'Disponível para você'}
                         </p>
                     </div>
-                    ${isAtivo ? '<i class="fas fa-check-circle text-cyan-600"></i>' : ''}
-                    ${bloqueado ? '<i class="fas fa-lock text-gray-400 text-xs"></i>' : ''}
+                    ${isAtivo ? '<i class="fas fa-check-circle text-cyan-600 text-3xl"></i>' : (bloqueado ? '<i class="fas fa-lock text-gray-400 text-xl"></i>' : '<i class="fas fa-ticket-alt text-cyan-600 text-xl"></i>')}
                 </div>
             </div>
         `;
     }).join('');
-}
+};
 
-function aplicarCupom(cupomId) {
+// 5. Clicou no cupom ou digitou o código = Aplica e salva!
+window.aplicarCupom = (cupomId) => {
+    // NOVO: Se clicar no mesmo cupom que já está ativo, ele remove!
+    if (cupomAtivo && cupomAtivo.id === cupomId) {
+        cupomAtivo = null;
+        localStorage.removeItem('tropyberry_cupom');
+        const textoBotao = document.getElementById('coupon-selected-text');
+        if (textoBotao) {
+            textoBotao.innerText = "Cupom de desconto";
+            textoBotao.classList.remove('text-cyan-600', 'font-bold');
+        }
+        window.fecharModalCupons();
+        if (typeof updateCartUI === 'function') updateCartUI();
+        if (typeof renderReceipt === 'function') renderReceipt();
+        showToast("Cupom removido com sucesso!");
+        return;
+    }
+
     const cupom = listaCupons.find(c => c.id === cupomId);
     if (!cupom) return;
 
-    // TRAVA DE SEGURANÇA: Verifica distância novamente antes de aplicar
     const freteAtual = distanciaConfirmada ? freteGoogleCalculado : 0;
-    if (cupom.tipo === 'frete' && freteAtual > cupom.valor) {
-        return showToast("Este cupom é válido apenas para fretes de R$ 4,99", true);
+    if (cupom.tipo === 'frete' && freteAtual > (cupom.valor || 0)) {
+        return showToast("Este cupom é válido apenas para fretes menores", true);
     }
 
     cupomAtivo = cupom;
     
+    // A MÁGICA AQUI: Salva no HD do navegador pro reload não esquecer!
+    localStorage.setItem('tropyberry_cupom', JSON.stringify(cupom)); 
+    
     const textoBotao = document.getElementById('coupon-selected-text');
     if (textoBotao) {
-        textoBotao.innerText = `Cupom: ${cupom.id}`;
+        textoBotao.innerText = `Cupom: ${cupom.code}`;
         textoBotao.classList.add('text-cyan-600', 'font-bold');
     }
     
-    fecharModalCupons();
-    updateCartUI(); // Recalcula tudo (incluindo o desconto que agora deve bater)
-    showToast(`Cupom ${cupom.id} aplicado!`);
-}
+    window.fecharModalCupons();
+    
+    if (typeof updateCartUI === 'function') updateCartUI(); 
+    if (typeof renderReceipt === 'function') renderReceipt();
+    
+    showToast(`Cupom ${cupom.code} aplicado com sucesso!`);
+};
 
-function validarCupomManual() {
-    const codigoInput = document.getElementById('input-coupon-code').value.toUpperCase().trim();
+// 6. Cliente tentou digitar o código na mão
+window.validarCupomManual = () => {
+    const codigoInput = document.getElementById('input-coupon-code')?.value.toUpperCase().trim();
     if (!codigoInput) return showToast("Digite um código", true);
 
     const cupom = listaCupons.find(c => c.code === codigoInput);
@@ -2933,30 +3000,16 @@ function validarCupomManual() {
     const freteAtual = distanciaConfirmada ? freteGoogleCalculado : 0;
 
     if (!cupom) {
-        showToast("Cupom inválido", true);
-    } else if (subtotal < cupom.min) {
-        showToast(`Valor mínimo: R$ ${cupom.min.toFixed(2).replace('.', ',')}`, true);
-    } else if (cupom.tipo === 'frete' && freteAtual > cupom.valor) {
-        // BARRA O CÓDIG    O MANUAL SE O FRETE FOR ALTO
-        showToast("Este cupom é apenas para clientes de João Pessoa (raio próximo)", true);
+        showToast("Cupom inválido ou inativo", true);
+    } else if (subtotal < (cupom.min || 0)) {
+        showToast(`Valor mínimo do pedido: R$ ${(cupom.min || 0).toFixed(2).replace('.', ',')}`, true);
+    } else if (cupom.tipo === 'frete' && freteAtual > (cupom.valor || 0)) {
+        showToast("Este cupom é apenas para clientes com raio próximo", true);
     } else {
-        aplicarCupom(cupom.id); 
+        window.aplicarCupom(cupom.id); 
         document.getElementById('input-coupon-code').value = '';
     }
-}
-function sincronizarCuponsComBanco() {
-    if (!db) return;
-    onSnapshot(collection(db, "marketing_cupons"), (snapshot) => {
-        listaCupons = snapshot.docs
-            .map(d => ({ 
-                id: d.id, 
-                ...d.data() 
-            }))
-            .filter(c => c.ativo === true);
-        
-        console.log("🎟️ Cupons ativos:", listaCupons);
-    });
-}
+};
 // Função auxiliar para evitar que o cálculo dispare mil vezes seguidas
 function debounce(func, timeout = 1000) {
     let timer;
