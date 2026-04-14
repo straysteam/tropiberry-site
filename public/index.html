@@ -106,7 +106,7 @@
    <i class="fab fa-instagram"></i>
 </a>
 
-<a href="https://wa.me/5583996025703" 
+<a href="https://wa.me/5583920024786" 
    target="_blank" 
    class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-green-500 hover:text-white transition">
    <i class="fab fa-whatsapp"></i>
@@ -163,7 +163,7 @@
                         <i class="fas fa-phone-alt text-cyan-900 text-lg mt-1 w-6 text-center"></i>
                         <div>
                             <h4 class="font-bold text-cyan-900 text-sm">Contato</h4>
-                            <p id="info-phone" class="text-gray-600 text-sm">(83) 99999-9999</p>
+                            <p id="info-phone" class="text-gray-600 text-sm">(83) 92002-4786</p>
                         </div>
                     </div>
                 </div>
@@ -251,7 +251,7 @@
                 <div class="space-y-3">
                     <input type="text" id="input-name" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="Nome Completo">
                     <input type="email" id="input-email" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="E-mail (Necessário para o PIX)"> 
-                    <input type="tel" id="input-phone" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="WhatsApp (83) 99999-9999">
+                    <input type="tel" id="input-phone" class="w-full border border-gray-200 bg-white rounded-xl p-4 outline-none focus:border-cyan-500 transition" placeholder="WhatsApp (83) 92002-4786">
                 </div>
 
                 <div id="delivery-fields" class="space-y-3 pt-4">
@@ -498,7 +498,7 @@
         </div>
     </div>
 </div>
-    <div class="space-y-3">
+<div class="space-y-3">
     <a href="#" id="btn-whatsapp-status" target="_blank" 
        class="relative overflow-hidden block w-full bg-[#25D366] hover:bg-[#1ebd5e] text-white text-center font-black py-4 rounded-2xl shadow-xl shadow-green-100 transition-all duration-300 group">
         
@@ -514,7 +514,12 @@
             </div>
         </div>
     </a>
-    <p class="text-[10px] text-center text-gray-400 font-medium">Nosso tempo médio de resposta é de 5 minutos</p>
+    
+    <button onclick="solicitarReembolsoCliente()" class="w-full flex items-center justify-center gap-2 py-3 bg-white border-2 border-red-50 text-red-500 hover:bg-red-50 hover:border-red-100 rounded-xl font-bold text-sm transition-all">
+        <i class="fas fa-undo-alt"></i> Tive um problema / Solicitar Reembolso
+    </button>
+
+    <p class="text-[10px] text-center text-gray-400 font-medium mt-2">Nosso tempo médio de resposta é de 5 minutos</p>
 </div>
     </a>
 </div>
@@ -831,11 +836,33 @@
             <div id="selos-container" class="grid grid-cols-5 gap-3 mb-8">
                 </div>
 
-            <button id="btn-fidelidade-acao" onclick="gerenciarInicioFidelidade()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-xl transition-all">
+<button id="btn-fidelidade-acao" onclick="gerenciarInicioFidelidade()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-xl transition-all">
                 COMEÇAR A PONTUAR
             </button>
         </div>
     </div>
 </div>
+
+<div id="modal-reembolso" class="fixed inset-0 bg-black/60 z-[110] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-pop-up">
+        <div class="p-6 text-center">
+            <div class="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-exclamation-triangle text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-black text-gray-800 uppercase italic mb-2">Solicitar Reembolso?</h3>
+            <p class="text-gray-500 text-sm mb-6">Sua solicitação será enviada para nossa equipe de suporte para análise imediata.</p>
+            
+            <div class="flex flex-col gap-3">
+                <button onclick="confirmarReembolsoFluxo()" class="w-full bg-red-500 hover:bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2">
+                    CONFIRMAR E FALAR NO WHATSAPP
+                </button>
+                <button onclick="document.getElementById('modal-reembolso').classList.add('hidden')" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-3 rounded-2xl transition-all">
+                    VOLTAR
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

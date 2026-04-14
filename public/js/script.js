@@ -1643,7 +1643,7 @@ window.openOrderScreen = (orderId) => {
                              `*Status:* ${order.status}\n` +
                              `*Cliente:* ${order.customer.name}\n` +
                              `*Total:* R$ ${order.total.toFixed(2).replace('.', ',')}`;
-            whatsappBtn.href = `https://wa.me/5583996025703?text=${encodeURIComponent(textoMsg)}`;
+            whatsappBtn.href = `https://wa.me/5583920024786?text=${encodeURIComponent(textoMsg)}`;
         }
 
         const pixArea = document.getElementById('pix-qr-container');
@@ -3085,6 +3085,60 @@ function renderizarSelosVisual(count) {
         if(btn) btn.innerText = "BRINDE LIBERADO!";
     }
 }
+// Abre o modal em vez do confirm()
+window.solicitarReembolsoCliente = function() {
+    document.getElementById('modal-reembolso').classList.remove('hidden');
+};
+
+// Executa a ação real após a confirmação no modal
+window.confirmarReembolsoFluxo = function() {
+    const orderId = document.getElementById('status-order-id')?.innerText || 'DESCONHECIDO';
+    const telefoneLoja = "5583920024786"; 
+    
+    // Esconde o modal
+    document.getElementById('modal-reembolso').classList.add('hidden');
+
+    // Mostra o Toast de Sucesso
+    showToast("Solicitação iniciada! Redirecionando...", "info");
+
+    setTimeout(() => {
+        const mensagem = `Olá, gostaria de solicitar o *REEMBOLSO* do pedido *#${orderId}*.\n\n*Motivo:* `;
+        const link = `https://wa.me/${telefoneLoja}?text=${encodeURIComponent(mensagem)}`;
+        window.open(link, '_blank');
+    }, 1500);
+};
+
+// Sistema de Toast Aprimorado (Clean e Bonito)
+window.showToast = function(message, type = "success") {
+    const toast = document.getElementById('toast-notification');
+    const toastMsg = document.getElementById('toast-message');
+    const toastIcon = toast.querySelector('.fas');
+    const toastBorder = toast;
+
+    // Ajusta cores e ícones conforme o tipo
+    if (type === "success") {
+        toastBorder.style.borderLeftColor = "#22c55e";
+        toastIcon.className = "fas fa-check-circle text-xl text-green-500";
+    } else if (type === "info") {
+        toastBorder.style.borderLeftColor = "#0891b2";
+        toastIcon.className = "fas fa-info-circle text-xl text-cyan-600";
+    } else {
+        toastBorder.style.borderLeftColor = "#ef4444";
+        toastIcon.className = "fas fa-times-circle text-xl text-red-500";
+    }
+
+    toastMsg.innerText = message;
+    
+    // Animação de entrada
+    toast.classList.remove('translate-x-full', 'opacity-0', 'pointer-events-none');
+    toast.classList.add('translate-x-0', 'opacity-100');
+
+    // Auto-hide após 4 segundos
+    setTimeout(() => {
+        toast.classList.add('translate-x-full', 'opacity-0', 'pointer-events-none');
+        toast.classList.remove('translate-x-0', 'opacity-100');
+    }, 4000);
+};
 
 // Expõe para o HTML (Necessário por causa do type="module")
 window.abrirModalCupons = abrirModalCupons;
