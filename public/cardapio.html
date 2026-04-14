@@ -32,7 +32,40 @@
 
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="flex flex-col min-h-screen bg-blue-50">
+<body class="flex flex-col min-h-screen relative bg-blue-50 overflow-hidden">
+
+    <div id="preloader">
+        <svg width="280" height="380" viewBox="0 0 300 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g class="spoon">
+                <path d="M210 50 C 230 30, 260 60, 240 80 L 180 160" stroke="#94a3b8" stroke-width="12" stroke-linecap="round"/>
+                <path d="M215 55 C 225 45, 245 65, 235 75" fill="#cbd5e1"/>
+            </g>
+            <path class="cup-outline" d="M70 100 L 230 100 L 210 350 C 208 365, 195 375, 180 375 L 120 375 C 105 375, 92 365, 90 350 L 70 100 Z" stroke="black" stroke-width="8" stroke-linejoin="round" fill="none"/>
+            <defs>
+                <clipPath id="cupClip">
+                    <path d="M70 100 L 230 100 L 210 350 C 208 365, 195 375, 180 375 L 120 375 C 105 375, 92 365, 90 350 L 70 100 Z" />
+                </clipPath>
+            </defs>
+            <g clip-path="url(#cupClip)">
+                <rect class="layer-bottom" x="0" y="250" width="300" height="150" fill="#4a044e" />
+                <path class="layer-middle" d="M50 220 Q 100 180, 150 220 T 250 220 V 270 H 50 Z" fill="white" />
+                <rect class="layer-top-fill" x="0" y="100" width="300" height="130" fill="#4a044e" />
+            </g>
+            <g class="swirl">
+                <path d="M80 110 C 80 60, 220 60, 220 110" fill="#4a044e" stroke="black" stroke-width="4"/>
+                <path d="M100 85 C 100 45, 200 45, 200 85" fill="#4a044e" stroke="black" stroke-width="4"/>
+                <path d="M120 65 C 120 35, 180 35, 180 65" fill="#4a044e" stroke="black" stroke-width="4"/>
+                <circle class="sprinkle" cx="110" cy="80" r="4" fill="#ef4444" style="animation-delay: 3s;" />
+                <circle class="sprinkle" cx="140" cy="65" r="4" fill="#3b82f6" style="animation-delay: 3.2s;" />
+                <circle class="sprinkle" cx="170" cy="85" r="4" fill="#fbbf24" style="animation-delay: 3.4s;" />
+                <circle class="sprinkle" cx="130" cy="95" r="4" fill="#10b981" style="animation-delay: 3.6s;" />
+                <circle class="sprinkle" cx="180" cy="60" r="4" fill="#f472b6" style="animation-delay: 3.8s;" />
+            </g>
+            <path d="M65 100 H 235" stroke="black" stroke-width="12" stroke-linecap="round"/>
+            <path d="M70 115 H 230" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+        </svg>
+        <div class="loading-text">CARREGANDO<span class="dots"></span></div>
+    </div>
 
     <div id="global-header-placeholder"></div>
 
@@ -53,51 +86,41 @@
         </div>
     </section>
 
-    <div id="cart-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex justify-end backdrop-blur-sm">
-        <div class="bg-white w-full md:w-[450px] h-full shadow-2xl flex flex-col transform transition-transform duration-300 translate-x-full" id="cart-panel">
+<div id="cart-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex justify-end backdrop-blur-sm">
+        <div class="bg-white w-full md:w-[450px] h-full shadow-2xl flex flex-col animate-slide-right" id="cart-panel">
             <div class="p-4 border-b flex justify-between items-center bg-white shrink-0">
-                <h3 class="text-lg font-bold text-gray-800 italic uppercase">Meu Pedido</h3>
+                <h3 class="text-lg font-bold text-gray-800">Seu Carrinho</h3>
                 <button onclick="toggleCart()" class="text-gray-400 hover:text-red-500 transition text-2xl">&times;</button>
             </div>
 
             <div id="cart-items" class="flex-grow p-4 overflow-y-auto space-y-4 bg-gray-50 custom-scrollbar">
                 </div>
 
-            <div class="p-4 bg-white border-t border-gray-100">
-                <button onclick="abrirModalCupons()" class="w-full flex items-center justify-between p-3 border rounded-xl hover:bg-gray-50 transition border-dashed border-cyan-600 group">
-                    <div class="flex items-center gap-3">
-                        <i class="fas fa-ticket-alt text-cyan-600 group-hover:rotate-12 transition"></i>
-                        <span id="coupon-selected-text" class="text-sm font-bold text-gray-700 leading-none">Cupom de desconto</span>
-                    </div>
-                    <span class="text-xs text-cyan-600 font-bold uppercase">Selecionar</span>
+            <div class="p-6 pb-24 md:pb-6 bg-white border-t space-y-3 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] shrink-0">
+                <div class="flex justify-between text-sm text-gray-500">
+                    <span>Subtotal</span>
+                    <span id="cart-subtotal">R$ 0,00</span>
+                </div>
+
+                <div id="row-cart-delivery" class="flex justify-between text-sm text-gray-500 hidden">
+                    <span>Frete</span>
+                    <span id="cart-delivery-val">R$ 0,00</span>
+                </div>
+                
+                <div id="row-discount" class="flex justify-between text-sm text-green-600 hidden">
+                    <span>Desconto</span>
+                    <span id="cart-discount">- R$ 0,00</span>
+                </div>
+
+                <div class="flex justify-between text-xl font-black text-gray-900 pt-2 border-t">
+                    <span>Total</span>
+                    <span id="cart-total">R$ 0,00</span>
+                </div>
+
+                <button onclick="window.location.href='index.html?action=checkout'" class="w-full bg-cyan-600 text-white font-black py-4 rounded-xl hover:bg-cyan-700 transition shadow-lg shadow-cyan-100">
+                    Escolher forma de pagamento
                 </button>
             </div>
-
-           <div class="p-6 pb-24 md:pb-6 bg-white border-t space-y-3 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] shrink-0">
-    <div class="flex justify-between text-sm text-gray-500">
-        <span>Subtotal</span>
-        <span id="cart-subtotal">R$ 0,00</span>
-    </div>
-
-    <div id="row-cart-delivery" class="flex justify-between text-sm text-gray-500 hidden">
-        <span>Frete</span>
-        <span id="cart-delivery-val">R$ 0,00</span>
-    </div>
-    
-    <div id="row-discount" class="flex justify-between text-sm text-green-600 hidden">
-        <span>Desconto</span>
-        <span id="cart-discount">- R$ 0,00</span>
-    </div>
-
-    <div class="flex justify-between text-xl font-black text-gray-900 pt-2 border-t">
-        <span>Total</span>
-        <span id="cart-total">R$ 0,00</span>
-    </div>
-
-    <button onclick="window.location.href='index.html?action=checkout'" class="w-full bg-cyan-600 text-white font-black py-4 rounded-xl hover:bg-cyan-700 transition shadow-lg shadow-cyan-100">
-        Escolher forma de pagamento
-    </button>
-</div>
         </div>
     </div>
 
@@ -171,7 +194,7 @@
     </div>
 </div>
 
-    <div id="toast-notification" class="fixed top-24 right-4 z-[100] bg-white border-l-4 border-green-500 text-gray-700 px-6 py-4 rounded shadow-2xl flex items-center gap-3 translate-x-full opacity-0 pointer-events-none transition-all duration-300">
+<div id="toast-notification" class="fixed top-24 right-4 z-[100] bg-white border-l-4 border-green-500 text-gray-700 px-6 py-4 rounded shadow-2xl flex items-center gap-3 translate-x-full opacity-0 pointer-events-none transition-all duration-300">
         <div class="text-green-500 bg-green-100 rounded-full p-1"><i class="fas fa-check-circle text-xl"></i></div>
         <div>
             <p class="font-bold text-sm">Sucesso!</p>
@@ -183,5 +206,26 @@
         <i class="fas fa-utensils text-xl group-hover:rotate-12 transition"></i>
     </button>
 <script type="module" src="/js/script.js"></script>
+
+<script>
+    window.addEventListener('load', () => {
+        // Tempo sincronizado com o fim da animação da colher (aprox. 4300ms)
+        setTimeout(() => {
+            const preloader = document.getElementById('preloader');
+            if (preloader) {
+                // Adiciona a classe que faz o fade out no CSS
+                preloader.classList.add('fade-out-preloader');
+                
+                // Remove o travamento de rolagem do body para o usuário navegar na loja
+                document.body.classList.remove('overflow-hidden');
+                
+                // Remove o elemento do DOM depois que a transição terminar para não pesar a memória
+                setTimeout(() => {
+                    preloader.remove();
+                }, 500); 
+            }
+        }, 4300); 
+    });
+</script>
 </body>
 </html>

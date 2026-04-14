@@ -564,3 +564,119 @@ body {
     transition: all 0.2s ease;
     user-select: none;
 }
+/* =========================================
+   PRELOADER ANIMADO (AÇAÍ)
+   ========================================= */
+:root {
+    --cor-brand: #0891b2; /* Ajustado para o cyan-600 da sua marca */
+    --cor-fundo: #e0f2f7; 
+}
+
+#preloader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--cor-fundo);
+    z-index: 9999; /* Garante que fique por cima de tudo */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Animações dos elementos do SVG */
+.cup-outline {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    animation: drawOutline 2s ease-out forwards;
+}
+
+@keyframes drawOutline {
+    to { stroke-dashoffset: 0; }
+}
+
+.layer-bottom {
+    transform: translateY(100px);
+    opacity: 0;
+    animation: slideUp 0.8s ease-out 1.5s forwards;
+}
+
+.layer-middle {
+    transform: translateY(100px);
+    opacity: 0;
+    animation: slideUp 0.8s ease-out 1.8s forwards;
+}
+
+.layer-top-fill {
+    transform: translateY(100px);
+    opacity: 0;
+    animation: slideUp 0.8s ease-out 2.1s forwards;
+}
+
+.swirl {
+    transform: scale(0);
+    transform-origin: center;
+    animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 2.5s forwards;
+}
+
+.sprinkle {
+    opacity: 0;
+    transform: translateY(-20px);
+    animation: dropIn 0.4s ease-out forwards;
+}
+
+.spoon {
+    transform: translate(30px, -30px);
+    opacity: 0;
+    animation: spoonEntry 0.8s ease-out 3.5s forwards;
+}
+
+@keyframes slideUp {
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes popIn {
+    to { transform: scale(1); }
+}
+
+@keyframes dropIn {
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spoonEntry {
+    to { opacity: 1; transform: translate(0, 0); }
+}
+
+/* Texto de carregamento */
+.loading-text {
+    margin-top: 2rem;
+    color: var(--cor-brand);
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
+
+.dots::after {
+    content: '';
+    animation: dots 1.5s infinite;
+}
+
+@keyframes dots {
+    0% { content: ''; }
+    33% { content: '.'; }
+    66% { content: '..'; }
+    100% { content: '...'; }
+}
+
+.fade-out-preloader {
+    animation: fadeOutPreloader 0.5s forwards;
+    pointer-events: none;
+}
+
+@keyframes fadeOutPreloader {
+    to { opacity: 0; visibility: hidden; }
+}
