@@ -681,48 +681,55 @@
             if(order.status === 'Finalizado') borderClass = 'border-l-4 border-l-green-500';
             if(order.status === 'Cancelado' || order.status === 'Rejeitado') borderClass = 'border-l-4 border-l-red-500';
 
-            div.className = `bg-white border border-gray-200 rounded-lg shadow-sm grid grid-cols-12 mb-2 items-center hover:shadow-md transition ${borderClass}`;
+           // Layout Híbrido: Stack (Mobile) e Grid (Desktop)
+            div.className = `bg-white border border-gray-200 rounded-2xl shadow-sm flex flex-col md:grid md:grid-cols-12 mb-3 items-center hover:shadow-md transition overflow-hidden ${borderClass}`;
             
             const time = order.createdAt ? order.createdAt.toDate().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--:--';
             let originBadge = order.origin === 'app' ? 
-                `<span class="bg-purple-100 text-purple-600 px-2 py-0.5 rounded text-[10px] border border-purple-200">APP</span>` :
-                `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] border border-gray-200">WEB</span>`;
+                `<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] border border-purple-200 font-black tracking-tighter uppercase">APP</span>` :
+                `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] border border-gray-200 font-black tracking-tighter uppercase">WEB</span>`;
             
             let payStatus = order.paymentStatus === 'paid' ? 
-                `<span class="bg-green-100 text-green-600 text-[10px] px-2 py-0.5 rounded font-bold">PAGO</span>` : 
-                `<span class="bg-orange-100 text-orange-600 text-[10px] px-2 py-0.5 rounded font-bold cursor-pointer" onclick="abrirModalPagamento('${order.id}')">NÃO PAGO</span>`;
+                `<span class="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded font-black border border-green-200">PAGO</span>` : 
+                `<span class="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded font-black border border-orange-200 cursor-pointer" onclick="abrirModalPagamento('${order.id}')">NÃO PAGO</span>`;
 
-            // Lógica de Botões de Ação
             let actions = '';
             if (order.status === 'Finalizado' || order.status === 'Cancelado' || order.status === 'Rejeitado') {
-                actions = `<span class="text-[10px] font-bold text-gray-400 uppercase">Pedido Encerrado</span>`;
+                actions = `<span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Encerrado</span>`;
             } else if(order.status === 'Aguardando') {
                 actions = `
-                    <div class="flex gap-2 justify-end">
-                        <button onclick="atualizarStatus('${order.id}', 'Rejeitado')" class="border border-red-500 text-red-500 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-50">Rejeitar</button>
-                        <button onclick="atualizarStatus('${order.id}', 'Em Preparo')" class="bg-green-500 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-600 shadow-sm">Aceitar</button>
+                    <div class="flex gap-2 w-full md:w-auto justify-between md:justify-end">
+                        <button onclick="atualizarStatus('${order.id}', 'Rejeitado')" class="flex-1 md:flex-none border-2 border-red-500 text-red-500 px-4 py-2 rounded-xl text-xs font-black hover:bg-red-50 transition active:scale-95">REJEITAR</button>
+                        <button onclick="atualizarStatus('${order.id}', 'Em Preparo')" class="flex-1 md:flex-none bg-green-500 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-green-600 shadow-lg shadow-green-100 transition active:scale-95">ACEITAR</button>
                     </div>`;
             } else {
-                actions = `<div class="flex gap-2 justify-end"><button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="bg-cyan-900 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-cyan-800">Concluir</button></div>`;
+                actions = `<div class="w-full md:w-auto"><button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="w-full md:w-auto bg-cyan-900 text-white px-6 py-2 rounded-xl text-xs font-black hover:bg-cyan-800 shadow-lg transition active:scale-95">CONCLUIR PEDIDO</button></div>`;
             }
 
             div.innerHTML = `
-                <div class="col-span-2 p-3 text-xs border-r">
-                    <div class="font-bold text-gray-700 flex items-center gap-1">#${order.id.slice(-4).toUpperCase()} ${originBadge}</div>
-                    <div class="text-gray-400 mt-1"><i class="far fa-clock"></i> ${time}</div>
+                <div class="w-full md:col-span-2 p-4 md:p-3 text-xs border-b md:border-b-0 md:border-r flex justify-between md:flex-col items-center md:items-start">
+                    <div class="font-black text-gray-800 text-sm md:text-xs flex items-center gap-2">#${order.id.slice(-4).toUpperCase()} ${originBadge}</div>
+                    <div class="text-gray-400 font-bold"><i class="far fa-clock"></i> ${time}</div>
                 </div>
-                <div class="col-span-2 p-3 text-xs font-bold border-r">
-                    <span class="${['Cancelado', 'Rejeitado'].includes(order.status) ? 'text-red-600' : 'text-blue-600'} block mb-1">${order.status}</span>
+                
+                <div class="w-full md:col-span-2 p-4 md:p-3 text-xs font-black border-b md:border-b-0 md:border-r flex justify-between md:flex-col items-center md:items-start">
+                    <span class="${['Cancelado', 'Rejeitado'].includes(order.status) ? 'text-red-600' : 'text-cyan-600'} uppercase tracking-tight">${order.status}</span>
                     ${payStatus}
                 </div>
-                <div class="col-span-2 p-3 font-bold text-gray-700 border-r">R$ ${order.total.toFixed(2)}</div>
-                <div class="col-span-4 p-3 text-xs border-r truncate">
-                    <div class="font-bold text-gray-800">${order.customer?.name || 'Cliente'}</div>
-                    <div class="text-gray-500 text-[10px]">${order.items?.length || 0} itens</div>
+                
+                <div class="w-full md:col-span-2 p-4 md:p-3 font-black text-gray-700 text-lg md:text-base border-b md:border-b-0 md:border-r flex justify-between md:block">
+                    <span class="md:hidden text-xs text-gray-400 font-bold uppercase">Total do Pedido</span>
+                    R$ ${order.total.toFixed(2).replace('.', ',')}
                 </div>
-                <div class="col-span-2 p-3 text-right flex items-center justify-end gap-2">
-                    <button onclick="window.imprimirPedidoDash('${order.id}')" class="text-gray-400 hover:text-cyan-600 p-2 transition" title="Imprimir Cupom">
-                        <i class="fas fa-print"></i>
+                
+                <div class="w-full md:col-span-4 p-4 md:p-3 text-xs border-b md:border-b-0 md:border-r truncate">
+                    <div class="font-black text-gray-800 text-sm md:text-xs uppercase">${order.customer?.name || 'Cliente Final'}</div>
+                    <div class="text-gray-500 font-bold mt-0.5">${order.items?.length || 0} itens • ${order.method?.toUpperCase() || 'BALCÃO'}</div>
+                </div>
+                
+                <div class="w-full md:col-span-2 p-4 md:p-3 flex items-center justify-between md:justify-end gap-3 bg-gray-50/50 md:bg-transparent">
+                    <button onclick="window.imprimirPedidoDash('${order.id}')" class="bg-white border border-gray-200 text-gray-500 hover:text-cyan-600 p-3 md:p-2 rounded-xl transition shadow-sm active:scale-90" title="Imprimir Cupom">
+                        <i class="fas fa-print text-lg md:text-base"></i>
                     </button>
                     ${actions}
                 </div>
@@ -2521,7 +2528,15 @@ async function processarFidelidadeAoFinalizar(pedido) {
         if (!iframe) {
             iframe = document.createElement('iframe');
             iframe.id = 'print-frame';
-            iframe.style.display = 'none';
+            // CORREÇÃO ANDROID/IOS: display:none bloqueia a execução do print().
+            // Usamos visibilidade escondida e posição fora da tela.
+            iframe.style.position = 'fixed';
+            iframe.style.bottom = '0';
+            iframe.style.right = '0';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = 'none';
+            iframe.style.visibility = 'hidden';
             document.body.appendChild(iframe);
         }
 
@@ -3768,3 +3783,34 @@ const desbloquearAudioSilencioso = function() {
 document.addEventListener('click', desbloquearAudioSilencioso);
 document.addEventListener('touchstart', desbloquearAudioSilencioso);
 document.addEventListener('keydown', desbloquearAudioSilencioso);
+
+// --- LÓGICA DE INTERFACE RESPONSIVA (ABRIR/FECHAR MENU) ---
+window.toggleMobileSidebar = () => {
+    const sidebar = document.getElementById('main-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    if (sidebar.classList.contains('-translate-x-full')) {
+        // ABRIR
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        overlay.classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; // Trava o scroll da página ao abrir
+    } else {
+        // FECHAR
+        sidebar.classList.add('-translate-x-full');
+        sidebar.classList.remove('translate-x-0');
+        overlay.classList.add('hidden');
+        document.body.style.overflow = ''; // Libera o scroll
+    }
+};
+
+// Ajuste na função navegarPara para fechar o menu automaticamente após clicar em uma opção
+const originalNavegarPara = window.navegarPara;
+window.navegarPara = (telaId) => {
+    // Se estiver no celular e o menu estiver aberto, fecha ele
+    const sidebar = document.getElementById('main-sidebar');
+    if (window.innerWidth < 768 && sidebar && sidebar.classList.contains('translate-x-0')) {
+        window.toggleMobileSidebar();
+    }
+    originalNavegarPara(telaId);
+};

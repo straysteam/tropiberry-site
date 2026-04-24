@@ -244,7 +244,7 @@
 
 <body class="flex h-screen overflow-hidden text-gray-800 bg-[#f3f4f6]">
 
-    <aside class="w-64 bg-cyan-900 flex flex-col z-20 shadow-xl hidden md:flex transition-all border-r border-cyan-800">
+   <aside id="main-sidebar" class="w-64 bg-cyan-900 flex flex-col fixed inset-y-0 left-0 z-[60] shadow-xl transform -translate-x-full md:relative md:translate-x-0 md:flex transition-transform duration-300 border-r border-cyan-800">
         <div class="h-[60px] flex items-center px-6 border-b border-cyan-800 bg-cyan-950">
             <h1 class="text-white font-bold text-xl tracking-tight flex items-center gap-2">
                 <img src="img/logosf.png" class="h-10 w-auto inline-block align-middle" alt="Logo"></i> TropiBerry
@@ -351,12 +351,13 @@
             </button>
         </div>
     </aside>
+    <div id="sidebar-overlay" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/50 z-[55] hidden md:hidden transition-opacity"></div>
 
     <div class="flex-1 flex flex-col min-w-0 h-full">
 
         <header class="h-[60px] bg-cyan-900 text-white flex items-center justify-between px-6 shadow-md z-50">
             <div class="flex items-center gap-4">
-                <button class="md:hidden text-white"><i class="fas fa-bars"></i></button>
+                <button onclick="toggleMobileSidebar()" class="md:hidden text-white p-2 hover:bg-cyan-800 rounded-lg transition-colors"><i class="fas fa-bars text-xl"></i></button>
             </div>
             <div class="flex items-center gap-6">
                 <div class="relative cursor-pointer group" onclick="toggleNotificacoes()">
