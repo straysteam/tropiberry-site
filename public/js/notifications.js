@@ -71,19 +71,24 @@ function iniciarNotificacoes() {
                 }
                 
                 // 2. DISPARA A NOTIFICAÇÃO NATIVA PRO CELULAR/COMPUTADOR (Só quando chega um pedido novo)
+              // 2. DISPARA A NOTIFICAÇÃO NATIVA PRO CELULAR/COMPUTADOR (Versão Android Nativa)
                 if (newCount > lastNotifCount) {
-                    if ("Notification" in window && Notification.permission === "granted") {
-                        const push = new Notification("🚨 NOVO PEDIDO - TropiBerry!", {
-                            body: `Atenção: Você tem ${newCount} pedido(s) aguardando aceite na tela!`,
-                            icon: "img/logosf.png", // Sua logo
-                            vibrate: [500, 250, 500, 250, 500], // Faz o celular vibrar
-                            requireInteraction: true // Obriga a notificação a ficar na tela até clicar
+                    if ('serviceWorker' in navigator && Notification.permission === "granted") {
+                        // Usa o Service Worker para mostrar a notificação (obrigatório no Android)
+                        navigator.serviceWorker.ready.then(registration => {
+                            registration.showNotification("🚨 NOVO PEDIDO - TropiBerry!", {
+                                body: `Você tem ${newCount} pedido(s) aguardando aceite!`,
+                                icon: "img/logosf.png",
+                                badge: "img/logosf.png",
+                                vibrate: [500, 100, 500, 100, 500],
+                                tag: 'novo-pedido-admin',
+                                renotify: true,
+                                data: { url: './dashboard.html' }
+                            });
                         });
-                        
-                        push.onclick = function() {
-                            window.focus(); // Traz o site pra frente se você estiver em outra aba
-                            push.close();
-                        };
+                    } else if ("Notification" in window && Notification.permission === "granted") {
+                        // Fallback para PC
+                        new Notification("🚨 NOVO PEDIDO!", { body: `Você tem ${newCount} pedidos!` });
                     }
                 }
             } else {
@@ -194,8 +199,11 @@ window.togglePerfil = () => {
 }
 
 // Inicializa o Admin se houver os elementos na tela
-document.addEventListener('DOMContentLoaded', () => {
+// Inicializa o Admin, pede permissão e registra o Service Worker
+document.addEventListener('DOMContentLoaded', async () => {
     if (document.getElementById('notif-list')) {
+        // Força o pedido de permissão e registro do sw.js assim que abre o painel
+        await pedirPermissaoNotificacao();
         iniciarNotificacoes();
     }
 });
@@ -210,6 +218,13 @@ export async function pedirPermissaoNotificacao() {
         const permission = await Notification.requestPermission();
         if (permission === "granted") {
             if (window.showToast) window.showToast("Notificações ativadas!");
+            
+            // REGISTRO CRÍTICO PARA ANDROID
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log("Service Worker do TropiBerry ativo!", reg);
+                });
+            }
         }
     }
 }
@@ -251,7 +266,8 @@ export function dispararAlarmePedido() {
         }
         // Vibração agressiva para o App/Celular focar atenção
         if ("vibrate" in navigator) {
-            navigator.vibrate([500, 200, 500, 200, 500, 200, 1000]);
+            // Vibração SOS (mais longa e repetitiva para não ignorar)
+            navigator.vibrate([100,30,100,30,100,30,200,30,200,30,200,30,100,30,100,30,100]);
         }
     }
 }

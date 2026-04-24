@@ -230,6 +230,9 @@
         const q = query(collection(db, "pedidos"), orderBy("createdAt", "desc"));
         
         // MONITOR DE PEDIDOS (Lógica original mantida 100%)
+// No topo do dashboard.js, logo abaixo das constantes de estado global, adicione:
+        const somAlerta = new Audio('assets/notificacao.mp3'); // Certifique-se que o caminho está correto
+
         onSnapshot(q, (snapshot) => {
             allOrders = [];
             let counts = { retirada: 0, delivery: 0, mesa: 0, pendente: 0, curso: 0 };
@@ -237,8 +240,26 @@
 
             snapshot.docChanges().forEach(change => {
                 if (change.type === "added") {
-                    if (!snapshot.metadata.fromCache && notificationSound) {
-                        notificationSound.play().catch(e => console.log("Erro som:", e));
+                    // Se não veio do cache (ou seja, é um pedido REAL que acabou de entrar no banco)
+                    if (!snapshot.metadata.fromCache) {
+                        
+                        // 1. Toca o som usando o objeto direto (mais forte no Android)
+                        somAlerta.play().catch(e => console.log("Android bloqueou som automático."));
+
+                        // 2. Vibração (Essencial para Android no bolso)
+                        if ("vibrate" in navigator) {
+                            navigator.vibrate([500, 200, 500]); // Vibra, para, vibra
+                        }
+
+                        // 3. Notificação de Sistema (Se o app estiver minimizado)
+                        if (Notification.permission === "granted") {
+                            new Notification("🍦 TropiBerry: NOVO PEDIDO!", {
+                                body: "Um novo pedido de açaí acabou de chegar!",
+                                icon: "img/logosf.png",
+                                tag: "novo-pedido" // Evita empilhar 50 notificações
+                            });
+                        }
+
                         if (typeof window.showToast === "function") {
                             window.showToast("Novo Pedido", "Um novo pedido acabou de chegar!", false);
                         }
