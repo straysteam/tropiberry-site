@@ -3704,3 +3704,46 @@ window.confirmarPagamentoMesa = async () => {
         showToast("Erro", "Falha ao processar pagamento.", true);
     }
 };
+// DESBLOQUEIO INVISÍVEL DE ÁUDIO (AUTOPLAY POLICY)
+// ==========================================
+// ==========================================
+// DESBLOQUEIO INVISÍVEL DE ÁUDIO (AUTOPLAY POLICY)
+// ==========================================
+const desbloquearAudioSilencioso = function() {
+    const audioAlarm = document.getElementById('alarm-sound');
+    const audioNotif = document.getElementById('notif-sound');
+    
+    // Pede permissão para Push Notifications no celular silenciosamente
+    if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+    }
+
+    if (audioAlarm) {
+        audioAlarm.play().then(() => {
+            // SÓ PAUSA O ÁUDIO SE NÃO TIVER NENHUM PEDIDO AGUARDANDO
+            // Se tiver pedido, ele engata o áudio e deixa tocando após o primeiro clique!
+            if (!window.temPedidoAguardando) {
+                audioAlarm.pause();
+                audioAlarm.currentTime = 0;
+            }
+        }).catch(() => {});
+    }
+    
+    if (audioNotif) {
+        audioNotif.play().then(() => {
+            audioNotif.pause();
+            audioNotif.currentTime = 0;
+        }).catch(() => {});
+    }
+
+    // Remove os ouvintes logo após o primeiro clique para não pesar a memória do site
+    document.removeEventListener('click', desbloquearAudioSilencioso);
+    document.removeEventListener('touchstart', desbloquearAudioSilencioso);
+    document.removeEventListener('keydown', desbloquearAudioSilencioso);
+    console.log("Áudio desbloqueado com sucesso via interação invisível.");
+};
+
+// Aguarda o usuário dar o primeiro clique, toque ou apertar tecla em qualquer lugar do site
+document.addEventListener('click', desbloquearAudioSilencioso);
+document.addEventListener('touchstart', desbloquearAudioSilencioso);
+document.addEventListener('keydown', desbloquearAudioSilencioso);

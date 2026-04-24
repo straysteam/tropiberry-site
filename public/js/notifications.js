@@ -29,6 +29,7 @@ let lastNotifCount = 0;
 let statusAnteriorPedidos = {};
 
 // === 1. SISTEMA DE NOTIFICAÇÕES PARA A LOJA (ADMIN) ===
+// === 1. SISTEMA DE NOTIFICAÇÕES PARA A LOJA (ADMIN) ===
 function iniciarNotificacoes() {
     const q = query(collection(db, "pedidos"), orderBy("createdAt", "desc"), limit(20));
     
@@ -58,22 +59,48 @@ function iniciarNotificacoes() {
         const badge = document.getElementById('notif-badge');
         if (badge) {
             if (newCount > 0) {
+                window.temPedidoAguardando = true; // AVISA O SISTEMA QUE TEM PEDIDO
+                
                 badge.innerText = newCount;
                 badge.classList.remove('hidden');
                 if (notifList) notifList.innerHTML = html;
                 
+                // 1. MANTÉM O ALARME TOCANDO CONTINUAMENTE
+                if (typeof dispararAlarmePedido === 'function') {
+                    dispararAlarmePedido();
+                }
+                
+                // 2. DISPARA A NOTIFICAÇÃO NATIVA PRO CELULAR/COMPUTADOR (Só quando chega um pedido novo)
                 if (newCount > lastNotifCount) {
-                    try { notificationSound.play(); } catch(e) {}
+                    if ("Notification" in window && Notification.permission === "granted") {
+                        const push = new Notification("🚨 NOVO PEDIDO - TropiBerry!", {
+                            body: `Atenção: Você tem ${newCount} pedido(s) aguardando aceite na tela!`,
+                            icon: "img/logosf.png", // Sua logo
+                            vibrate: [500, 250, 500, 250, 500], // Faz o celular vibrar
+                            requireInteraction: true // Obriga a notificação a ficar na tela até clicar
+                        });
+                        
+                        push.onclick = function() {
+                            window.focus(); // Traz o site pra frente se você estiver em outra aba
+                            push.close();
+                        };
+                    }
                 }
             } else {
+                // 3. SE NÃO TEM PEDIDO AGUARDANDO (Aceitou ou Recusou), PARA O ALARME!
+                window.temPedidoAguardando = false; // AVISA O SISTEMA QUE ZEROU
+                
                 badge.classList.add('hidden');
                 if (notifList) notifList.innerHTML = '<div class="p-4 text-center text-gray-400 text-xs">Nenhuma notificação nova</div>';
+
+                if (typeof window.pararAlarmeManual === 'function') {
+                    window.pararAlarmeManual();
+                }
             }
         }
         lastNotifCount = newCount;
     });
 }
-
 // === 2. SISTEMA DE NOTIFICAÇÕES PARA O CLIENTE ===
 // Esta função "escuta" apenas os pedidos do cliente logado
 export function iniciarMonitoramentoPedidosCliente(emailCliente) {
@@ -211,3 +238,30 @@ export function iniciarMonitoramentoFidelidade(emailCliente) {
         }
     });
 }
+// Variável global para controle
+let alarmeAtivo = false;
+
+export function dispararAlarmePedido() {
+    const som = document.getElementById('alarm-sound');
+    
+    if (!alarmeAtivo) {
+        alarmeAtivo = true;
+        if (som) {
+            som.play().catch(err => console.log("Aguardando interação para tocar som"));
+        }
+        // Vibração agressiva para o App/Celular focar atenção
+        if ("vibrate" in navigator) {
+            navigator.vibrate([500, 200, 500, 200, 500, 200, 1000]);
+        }
+    }
+}
+
+window.pararAlarmeManual = function() {
+    const som = document.getElementById('alarm-sound');
+    
+    alarmeAtivo = false;
+    if (som) {
+        som.pause();
+        som.currentTime = 0;
+    }
+};
