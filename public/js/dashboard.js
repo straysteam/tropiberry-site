@@ -272,7 +272,8 @@
                 const order = { id: docSnap.id, ...data };
                 allOrders.push(order);
 
-                if (data.status !== 'Finalizado' && data.status !== 'Rejeitado' && data.status !== 'Cancelado') {
+                // Adicionamos a trava "&& data.status !== 'Aguardando Pagamento'" para o contador ignorar carrinhos não pagos
+                if (data.status !== 'Finalizado' && data.status !== 'Rejeitado' && data.status !== 'Cancelado' && data.status !== 'Aguardando Pagamento') {
                     if (data.method === 'retirada') counts.retirada++;
                     if (data.method === 'delivery') counts.delivery++;
                     if (data.method === 'mesa') counts.mesa++;
@@ -646,14 +647,20 @@
         container.innerHTML = '';
         
         // 1. Filtra primeiro pelo método (Balcão ou Delivery)
-        let filtered = allOrders.filter(o => o.method === currentServiceTab); 
+// 1. Filtra primeiro pelo método (Balcão ou Delivery)
+let filtered = allOrders.filter(o => o.method === currentServiceTab); 
 
-        // 2. Aplica o filtro de Status
-        filtered = filtered.filter(o => {
-            if (currentStatusFilter === 'todos') {
-                // Mostra tudo que está "em andamento" (Aguardando, Preparo, Saiu entrega, Pronto)
-                return o.status !== 'Finalizado' && o.status !== 'Rejeitado' && o.status !== 'Cancelado';
-            }
+// --- NOVA TRAVA DE SEGURANÇA ---
+// Remove pedidos que ainda não foram pagos (Pix/Cartão pendentes) 
+// e que não são pagamentos na entrega.
+filtered = filtered.filter(o => o.status !== 'Aguardando Pagamento');
+
+// 2. Aplica o filtro de Status
+filtered = filtered.filter(o => {
+    if (currentStatusFilter === 'todos') {
+        // Mostra tudo que está "em andamento", mas agora já filtrado pelo status de pagamento acima
+        return o.status !== 'Finalizado' && o.status !== 'Rejeitado' && o.status !== 'Cancelado';
+    }
             if (currentStatusFilter === 'pendente') {
                 // Mostra APENAS o que acabou de chegar
                 return o.status === 'Aguardando';
@@ -3170,49 +3177,72 @@ async function processarFidelidadeAoFinalizar(pedido) {
         window.renderizarProdutosPOS(busca);
     };
     // Função que prepara os dados do pedido para a impressora real
-    window.imprimirPedidoDash = (orderId) => {
-        const order = allOrders.find(o => o.id === orderId);
-        if (!order) return window.showToast("Erro", "Pedido não encontrado", true);
+  let htmlCupomTemporario = "";
 
-        const subtotal = order.items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
-        const taxaEntrega = order.total - subtotal;
+    window.imprimirPedidoDash = (orderId) => {
+        // Busca o pedido na lista global
+        const order = allOrders.find(o => o.id === orderId);
+        
+        // Se não achar pelo ID direto, tenta buscar pelo ID curto (últimos 4 caracteres)
+        const orderFallback = order || allOrders.find(o => o.id.slice(-4).toUpperCase() === orderId.toUpperCase());
+
+        if (!orderFallback) {
+            console.error("ID Buscado:", orderId, "Pedidos em memória:", allOrders);
+            return window.showToast("Erro", "Pedido não encontrado", true);
+        }
+
+        const subtotal = orderFallback.items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+        const taxaEntrega = (orderFallback.total || 0) - subtotal;
 
         // Gera as linhas dos itens
-        const itensHtml = order.items.map(item => `
-            <div class="item-row">
+        const itensHtml = orderFallback.items.map(item => `
+            <div class="item-row" style="display: flex; justify-content: space-between; margin-bottom: 2px;">
                 <span style="flex: 1;">${item.quantity}x ${item.name}</span>
                 <span style="margin-left: 10px;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
             </div>
-            ${item.details ? `<div style="font-size: 0.85em; color: #444; margin-bottom: 5px;">(${item.details})</div>` : ''}
+            ${item.details ? `<div style="font-size: 0.85em; color: #444; margin-bottom: 5px; border-bottom: 0.5px solid #eee;">(${item.details})</div>` : ''}
         `).join('');
 
         // Monta o esqueleto do cupom
-        const cupomFull = `
-            <div class="text-center font-bold" style="font-size: 1.2em; margin-bottom: 5px;">TROPIBERRY</div>
-            <div class="text-center" style="margin-bottom: 10px;">CUPOM NÃO FISCAL</div>
-            <div class="divider"></div>
-            <div class="item-row"><b>PEDIDO:</b> <span>#${orderId.slice(-4).toUpperCase()}</span></div>
-            <div class="item-row"><b>DATA:</b> <span>${order.createdAt ? order.createdAt.toDate().toLocaleString('pt-BR') : '--'}</span></div>
-            <div class="divider"></div>
-            <div style="margin-bottom: 5px;"><b>CLIENTE:</b> ${order.customer?.name || 'N/I'}</div>
-            <div style="margin-bottom: 5px;"><b>TEL:</b> ${order.customer?.phone || '--'}</div>
-            <div style="margin-bottom: 5px;"><b>END:</b> ${order.customer?.address || 'Retirada'}</div>
-            <div class="divider"></div>
-            <div class="font-bold" style="margin-bottom: 8px;">ITENS:</div>
+        htmlCupomTemporario = `
+            <div style="text-align: center; font-weight: bold; font-size: 1.4em; margin-bottom: 5px;">TROPIBERRY</div>
+            <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 10px;">CUPOM NÃO FISCAL</div>
+            <div style="display: flex; justify-content: space-between;"><b>PEDIDO:</b> <span>#${orderFallback.id.slice(-4).toUpperCase()}</span></div>
+            <div style="display: flex; justify-content: space-between;"><b>DATA:</b> <span>${orderFallback.createdAt ? orderFallback.createdAt.toDate().toLocaleString('pt-BR') : '--'}</span></div>
+            <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+            <div style="margin-bottom: 5px;"><b>CLIENTE:</b> ${orderFallback.customer?.name || 'N/I'}</div>
+            <div style="margin-bottom: 5px;"><b>END:</b> ${orderFallback.customer?.address || 'Retirada'}</div>
+            <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+            <div style="font-weight: bold; margin-bottom: 8px;">ITENS:</div>
             ${itensHtml}
-            <div class="divider" style="border-top-style: solid;"></div>
-            <div class="item-row"><span>SUBTOTAL</span> <span>R$ ${subtotal.toFixed(2)}</span></div>
-            <div class="item-row"><span>TAXA ENTREGA</span> <span>${taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2)}` : 'GRÁTIS'}</span></div>
-            <div class="item-row font-bold" style="font-size: 1.1em; margin-top: 5px;">
-                <span>TOTAL</span> <span>R$ ${order.total.toFixed(2)}</span>
+            <div style="border-bottom: 1px solid #000; margin: 8px 0;"></div>
+            <div style="display: flex; justify-content: space-between;"><span>SUBTOTAL</span> <span>R$ ${subtotal.toFixed(2)}</span></div>
+            <div style="display: flex; justify-content: space-between;"><span>TAXA</span> <span>${taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2)}` : 'GRÁTIS'}</span></div>
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.2em; margin-top: 5px;">
+                <span>TOTAL</span> <span>R$ ${orderFallback.total.toFixed(2)}</span>
             </div>
-            <div class="divider"></div>
-            <div class="text-center"><b>PAGAMENTO:</b> ${order.paymentMethod?.toUpperCase() || 'NÃO DEFINIDO'}</div>
-            <div class="text-center" style="margin-top: 10px; font-size: 0.9em;">${printConfig.footerMsg || 'Obrigado pela preferência!'}</div>
+            <div style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
+            <div style="text-align: center;"><b>PGTO:</b> ${orderFallback.paymentMethod?.toUpperCase() || 'A DEFINIR'}</div>
         `;
 
-        // Chama a função de impressão real que já existe no seu dashboard.js
-        window.imprimirPedidoReal(cupomFull);
+        // Se estiver no celular, abre a TELA AZUL
+        if (window.innerWidth < 768) {
+            document.getElementById('conteudo-recibo-mobile').innerHTML = htmlCupomTemporario;
+            document.getElementById('modal-cupom-mobile').classList.remove('hidden');
+        } else {
+            // Se estiver no PC, imprime direto
+            window.imprimirPedidoReal(htmlCupomTemporario);
+        }
+    };
+
+    // Função para fechar a tela azul
+    window.fecharCupomMobile = () => {
+        document.getElementById('modal-cupom-mobile').classList.add('hidden');
+    };
+
+    // Função que o BOTÃO AMARELO chama
+    window.executarImpressaoFinal = () => {
+        window.imprimirPedidoReal(htmlCupomTemporario);
     };
     // =========================================================
     // MÓDULO DE MARKETING ÚNICO E LIMPO

@@ -20,6 +20,11 @@ export function renderizarHeaderGlobal() {
                 <div id="desktop-auth-area" class="hidden md:flex items-center gap-3">
                 </div>
 
+                <button onclick="abrirMeusPedidos()" class="hidden md:flex bg-white/20 text-white px-4 py-2 rounded-full font-bold hover:bg-white/30 transition shadow-sm items-center gap-2">
+                    <i class="fas fa-receipt"></i>
+                    <span>Pedidos</span>
+                </button>
+
                 <button onclick="toggleCart()" class="hidden md:flex bg-yellow-400 text-cyan-900 px-4 py-2 rounded-full font-bold hover:bg-yellow-300 transition shadow-md items-center gap-2 relative">
                     <i class="fas fa-shopping-cart"></i>
                     <span>Carrinho</span>
@@ -48,6 +53,9 @@ export function renderizarHeaderGlobal() {
                         <div id="menu-guest-options" class="hidden space-y-2 p-2">
                             <a href="login.html" class="block w-full bg-cyan-600 text-white text-center py-3 rounded-lg font-bold">Entrar</a>
                             <a href="cadastro.html" class="block w-full border border-cyan-600 text-cyan-600 text-center py-3 rounded-lg font-bold">Criar Conta</a>
+                            <button onclick="abrirMeusPedidos()" class="w-full flex items-center justify-center gap-2 bg-gray-50 border border-gray-200 text-gray-600 py-3 rounded-lg font-bold mt-2 hover:bg-gray-100 transition">
+                                <i class="fas fa-receipt"></i> Acompanhar Pedidos
+                            </button>
                         </div>
 
                         <div id="menu-logged-options" class="hidden">

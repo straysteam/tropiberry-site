@@ -11,6 +11,7 @@ import {
     query, 
     orderBy, 
     getDocs,
+    deleteDoc,
     where
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
@@ -1361,7 +1362,7 @@ async function processPayment() {
     // =================================================================
     if (payMethod === 'card') {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+        btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i> Processando...';
 
         try {
             // 1. LIMPEZA ABSOLUTA DOS DADOS (Mantendo seus passos originais)
@@ -1434,19 +1435,19 @@ async function processPayment() {
             // 3. SUCESSO OU ERRO
             if (data.init_point || data.sandbox_init_point) {
                 // Salva no Banco com detalhes de Cupom e Frete
-                const docRef = await addDoc(collection(db, "pedidos"), {
-                    customer: currentOrder.customer,
-                    items: cart,
-                    frete: frete,
-                    desconto: valorDesconto,
-                    cupom: cupomAtivo ? cupomAtivo.code : null,
-                    total: totalFinal,
-                    paymentMethod: 'card',
-                    method: currentOrder.method,
-                    status: 'Aguardando Pagamento',
-                    paymentStatus: 'pending',
-                    createdAt: serverTimestamp()
-                });
+const docRef = await addDoc(collection(db, "pedidos"), {
+    customer: currentOrder.customer,
+    items: cart,
+    frete: frete,
+    desconto: valorDesconto,
+    cupom: cupomAtivo ? cupomAtivo.code : null,
+    total: totalFinal,
+    paymentMethod: 'card',
+    method: currentOrder.method,
+    status: 'Aguardando Pagamento', // Este status agora é ignorado pelo dashboard até o webhook mudar para 'Aguardando' ou 'Pago'
+    paymentStatus: 'pending',
+    createdAt: serverTimestamp()
+});
 
                 if (typeof saveLastOrder === 'function') saveLastOrder(docRef.id);
                 localStorage.setItem('temp_cart_backup', JSON.stringify(cart));
@@ -1466,11 +1467,11 @@ async function processPayment() {
         }
     }
 
-    // =================================================================
+// =================================================================
     // PIX
     // =================================================================
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PIX...';
+    btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i> Gerando PIX...';
 
     try {
         let pixData = { qr_code: null, qr_code_base64: null };
@@ -1517,8 +1518,8 @@ async function processPayment() {
             }
         }
 
-        const docRef = await addDoc(collection(db, "pedidos"), {
-            customer: currentOrder.customer,
+const docRef = await addDoc(collection(db, "pedidos"), {
+    customer: currentOrder.customer,
             items: cart,
             frete: frete,
             desconto: valorDesconto,
@@ -1526,9 +1527,9 @@ async function processPayment() {
             total: totalFinal,
             paymentMethod: payMethod,
             method: currentOrder.method,
-            status: 'Aguardando',
-            paymentStatus: 'pending',
-            pixCode: pixData.qr_code,
+status: 'Aguardando Pagamento', // Alterado de 'Aguardando' para 'Aguardando Pagamento'
+    paymentStatus: 'pending',
+    pixCode: pixData.qr_code,
             pixQR: pixData.qr_code_base64,
             createdAt: serverTimestamp()
         });
@@ -1589,10 +1590,10 @@ window.openOrderScreen = (orderId) => {
         // Seus preenchimentos originais
         document.getElementById('status-order-id').innerText = orderId.slice(-5).toUpperCase();
         
-        // Verifica se os elementos existem antes de preencher (segurança extra)
-        if(document.getElementById('status-client-name')) document.getElementById('status-client-name').innerText = order.customer.name || 'Cliente';
-        if(document.getElementById('status-client-phone')) document.getElementById('status-client-phone').innerText = order.customer.phone || '';
-        if(document.getElementById('status-client-address')) document.getElementById('status-client-address').innerText = order.customer.address || '';
+       // Verifica se os elementos existem antes de preencher (segurança extra)
+        if(document.getElementById('status-client-name')) document.getElementById('status-client-name').innerText = order.customer?.name || 'Cliente';
+        if(document.getElementById('status-client-phone')) document.getElementById('status-client-phone').innerText = order.customer?.phone || '';
+        if(document.getElementById('status-client-address')) document.getElementById('status-client-address').innerText = order.customer?.address || '';
 
         // --- LÓGICA DE RASTREIO DE 5 PASSOS (Mantida Original) ---
         const steps = document.querySelectorAll('#order-screen .relative.z-10.flex.flex-col.items-center');
@@ -1636,21 +1637,21 @@ window.openOrderScreen = (orderId) => {
             }
         }
 
-        const whatsappBtn = document.getElementById('btn-whatsapp-status');
+const whatsappBtn = document.getElementById('btn-whatsapp-status');
         if (whatsappBtn) {
             const orderIdShort = orderId.slice(-5).toUpperCase();
             const textoMsg = `Olá! Gostaria de suporte para o meu pedido *#${orderIdShort}*.\n\n` +
                              `*Status:* ${order.status}\n` +
-                             `*Cliente:* ${order.customer.name}\n` +
-                             `*Total:* R$ ${order.total.toFixed(2).replace('.', ',')}`;
+                             `*Cliente:* ${order.customer?.name || 'Cliente'}\n` +
+                             `*Total:* R$ ${(order.total || 0).toFixed(2).replace('.', ',')}`;
             whatsappBtn.href = `https://wa.me/5583920024786?text=${encodeURIComponent(textoMsg)}`;
         }
 
-        const pixArea = document.getElementById('pix-qr-container');
+const pixArea = document.getElementById('pix-qr-container');
         const pixSlot = document.getElementById('pix-qr-image-slot');
         
         if (pixArea && pixSlot) {
-            if (order.paymentMethod === 'pix' && order.status === 'Aguardando' && order.paymentStatus !== 'paid') {
+            if (order.paymentMethod === 'pix' && (order.status === 'Aguardando Pagamento' || order.status === 'Aguardando') && order.paymentStatus !== 'paid') {
                 if (order.createdAt) {
                     pixArea.classList.remove('hidden');
                     if (order.pixQR) {
@@ -1704,16 +1705,13 @@ function iniciarContagemRegressiva(orderId, createdAt) {
     const timerDisplay = document.getElementById('pix-countdown-timer');
     if (!timerDisplay) return;
 
-    const tempoCriacao = createdAt.seconds * 1000;
-    const tempoExpiracao = tempoCriacao + (5 * 60 * 1000);
+    // Extrai os milissegundos de forma segura dependendo do formato do Timestamp do Firebase
+    const tempoCriacao = typeof createdAt.toMillis === 'function' ? createdAt.toMillis() : (createdAt.seconds * 1000);
+    const tempoExpiracao = tempoCriacao + (5 * 60 * 1000); // 5 Minutos
 
     const atualizarTela = async () => {
         const agora = Date.now();
-        let restante = tempoExpiracao - agora;
-
-        if (restante > (5 * 60 * 1000)) {
-            restante = (5 * 60 * 1000);
-        }
+        const restante = tempoExpiracao - agora;
 
         if (restante <= 0) {
             clearInterval(countdownInterval);
@@ -1723,15 +1721,20 @@ function iniciarContagemRegressiva(orderId, createdAt) {
             try {
                 await updateDoc(doc(db, "pedidos", orderId), { 
                     status: 'Cancelado', 
-                    motivo: 'Tempo de pagamento expirado' 
+                    motivo: 'Tempo de pagamento expirado',
+                    updatedAt: serverTimestamp()
                 });
                 showToast("Pedido expirado!", true);
             } catch (e) { console.error(e); }
             return;
         }
 
-        const minutos = Math.floor(restante / 60000);
-        const segundos = Math.floor((restante % 60000) / 1000);
+        // A Mágica: Criamos um limite APENAS para exibição na tela. 
+        // O cálculo do backend continua rolando solto por trás, evitando o congelamento.
+        const visualRestante = Math.min(restante, 5 * 60 * 1000);
+        
+        const minutos = Math.floor(visualRestante / 60000);
+        const segundos = Math.floor((visualRestante % 60000) / 1000);
         timerDisplay.innerText = `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
     };
 
@@ -2034,13 +2037,10 @@ window.renderReceiptFromOrder = (items, total, orderData, orderId) => {
         printItemsList.innerHTML = html;
         document.getElementById('print-order-id').innerText = orderId.slice(-5).toUpperCase();
         document.getElementById('print-order-date').innerText = new Date().toLocaleString('pt-BR');
-        document.getElementById('print-customer-name').innerText = orderData.customer.name;
-        document.getElementById('print-customer-phone').innerText = orderData.customer.phone;
-        document.getElementById('print-customer-address').innerText = orderData.customer.address;
+        document.getElementById('print-customer-name').innerText = orderData.customer?.name || 'Cliente';
+        document.getElementById('print-customer-phone').innerText = orderData.customer?.phone || '';
+        document.getElementById('print-customer-address').innerText = orderData.customer?.address || '';
         document.getElementById('print-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
-        document.getElementById('print-delivery').innerText = total > subtotal ? `R$ ${(total - subtotal).toFixed(2).replace('.', ',')}` : 'Grátis';
-        document.getElementById('print-total').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
-        document.getElementById('print-pay-method').innerText = orderData.paymentMethod === 'pix' ? 'PIX' : 'CARTÃO';
     }
 
     // Atualiza a listagem que aparece na tela (Resumo da Conta)
@@ -2332,24 +2332,43 @@ window.abrirMeusPedidos = async () => {
     if(!list) return;
 
     // 3. Verifica se o usuário está logado
-    if (!loggedUserEmail) {
-        list.innerHTML = `
-            <div class="flex flex-col items-center justify-center py-20 text-gray-400">
-                <i class="fas fa-user-lock text-5xl mb-4"></i>
-                <p class="font-bold text-gray-600">Acesse sua conta</p>
-                <p class="text-sm">Faça login para ver seus pedidos e acompanhar a entrega.</p>
-                <button onclick="window.location.href='login.html'" class="mt-6 bg-cyan-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-cyan-700 transition">Fazer Login</button>
-            </div>`;
-        return;
-    }
+// 3. Define o e-mail de busca (Usuário Logado OU Salvo no LocalStorage do Visitante)
+        let emailDeBusca = loggedUserEmail;
+        
+        if (!emailDeBusca) {
+            const visitanteSalvo = localStorage.getItem('tropyberry_user');
+            if (visitanteSalvo) {
+                try {
+                    const dadosVisitante = JSON.parse(visitanteSalvo);
+                    if (dadosVisitante.email) {
+                        emailDeBusca = dadosVisitante.email; // Puxa o e-mail que o visitante digitou no checkout
+                    }
+                } catch (e) { console.error("Erro ao ler dados do visitante"); }
+            }
+        }
 
-    try {
-        // 4. Busca no Firebase: Pedidos Atuais + Histórico (ordenado pelos mais novos)
-        const q = query(
-            collection(db, "pedidos"), 
-            where("customer.email", "==", loggedUserEmail),
-            orderBy("createdAt", "desc") 
-        );
+        // Se realmente não tiver e-mail em lugar nenhum, mostra o bloqueio
+        if (!emailDeBusca) {
+            list.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-20 text-gray-400 text-center">
+                    <i class="fas fa-user-secret text-5xl mb-4"></i>
+                    <p class="font-bold text-gray-600">Nenhum pedido encontrado</p>
+                    <p class="text-sm px-4 mt-2">Não encontramos um histórico recente neste dispositivo. Faça login para recuperar.</p>
+                    <div class="flex flex-col gap-3 mt-6">
+                        <button onclick="window.location.href='login.html'" class="bg-cyan-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-cyan-700 transition">Fazer Login</button>
+                        <button onclick="window.location.href='cardapio.html'" class="text-cyan-600 font-bold hover:underline">Ver Cardápio</button>
+                    </div>
+                </div>`;
+            return;
+        }
+
+        try {
+            // 4. Busca no Firebase: Pedidos Atuais + Histórico (ordenado pelos mais novos)
+            const q = query(
+                collection(db, "pedidos"), 
+                where("customer.email", "==", emailDeBusca), // Usa a nova variável de e-mail dinâmica
+                orderBy("createdAt", "desc") 
+            );
 
         const querySnapshot = await getDocs(q);
         
