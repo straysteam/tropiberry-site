@@ -207,7 +207,190 @@
     <button id="btn-open-menu-editor" class="fixed bottom-24 right-4 bg-cyan-900 hover:bg-cyan-800 text-yellow-400 p-4 rounded-full shadow-2xl z-30 hidden transition-transform hover:scale-110 group">
         <i class="fas fa-utensils text-xl group-hover:rotate-12 transition"></i>
     </button>
+    <div id="my-orders-modal" class="fixed inset-0 bg-gray-900 bg-opacity-90 hidden z-[80] flex items-center justify-center p-2 md:p-4 backdrop-blur-sm font-sans">
+   <div class="bg-white w-full h-[80vh] md:h-auto md:max-h-[85vh] md:max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden relative animate-pop-up mx-2">
+        <div class="bg-cyan-600 p-5 border-b flex justify-between items-center text-white shrink-0">
+            <h3 class="font-bold text-lg flex items-center gap-2">
+                <i class="fas fa-history"></i> Meus Pedidos
+            </h3>
+            <button onclick="fecharMeusPedidos()" class="hover:text-yellow-300 transition text-xl">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div id="my-orders-list" class="flex-grow overflow-y-auto p-4 bg-gray-50 relative pb-10">
+            <div class="text-center py-10">
+                <i class="fas fa-spinner fa-spin text-cyan-600 text-3xl"></i>
+                <p class="text-gray-500 mt-2">Carregando seus pedidos...</p>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="order-screen" class="fixed inset-0 z-[60] hidden font-sans">
+        
+        <div id="final-map" class="absolute inset-0 z-0 w-full h-full bg-gray-200"></div>
+
+        <div class="absolute top-4 right-4 z-20 flex gap-2">
+            <button onclick="prepararImpressao()" class="bg-white text-gray-700 px-4 py-2 rounded shadow font-bold text-xs hover:bg-gray-100 flex items-center gap-2">
+    <i class="fas fa-print"></i> Imprimir Nota
+</button>
+            <button onclick="closeOrderScreen()" class="bg-red-500 text-white px-4 py-2 rounded shadow font-bold text-xs hover:bg-red-600">
+                <i class="fas fa-times"></i> Sair
+            </button>
+        </div>
+
+        <div class="absolute inset-0 z-10 flex items-center justify-center p-4 pointer-events-none">
+            <div class="bg-white w-full max-w-lg rounded-t-3xl md:rounded-xl shadow-2xl pointer-events-auto overflow-y-auto thin-scroll animate-pop-up flex flex-col max-h-[90vh] mt-20 md:mt-0">
+                
+                <div class="bg-white p-6 text-center border-b border-gray-100 relative">
+                    <div class="w-14 h-14 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-3 text-white shadow-lg z-20 relative -mt-10 border-4 border-white">
+                        <i class="fas fa-check text-xl"></i>
+                    </div>
+                    
+                    <h2 class="text-3xl font-bold text-gray-800 tracking-tight">#<span id="status-order-id">--</span></h2>
+                    <h3 class="text-lg font-bold text-gray-800 mt-1">Recebemos seu pedido</h3>
+                    <p class="text-gray-400 text-xs mt-1 flex items-center justify-center gap-1">
+                        <i class="far fa-calendar-alt"></i> Pedido agendado para: <span id="status-order-time" class="text-orange-500 font-bold">Hoje</span>
+                    </p>
+                </div>
+
+                <div class="px-8 py-6 bg-white">
+    <div class="flex justify-between items-center relative">
+        <div class="absolute top-1/2 left-0 w-full h-0.5 border-t-2 border-dotted border-gray-300 -z-0 transform -translate-y-1/2"></div>
+        
+        <div class="relative z-10 flex flex-col items-center gap-1 group">
+            <span class="text-[9px] font-bold text-gray-400 absolute -top-6 whitespace-nowrap">RECEBIDO</span>
+            <div id="step-icon-1" class="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md ring-4 ring-white">
+                <i class="fas fa-check text-xs"></i>
+            </div>
+        </div>
+
+        <div class="relative z-10 flex flex-col items-center gap-1 group">
+            <span class="text-[9px] font-bold text-gray-400 absolute -top-6 whitespace-nowrap">PREPARANDO</span>
+            <div id="step-icon-2" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center shadow-md ring-4 ring-white transition-all">
+                <i class="fas fa-blender text-xs"></i>
+            </div>
+        </div>
+
+        <div class="relative z-10 flex flex-col items-center gap-1 group">
+            <span class="text-[9px] font-bold text-gray-400 absolute -top-6 whitespace-nowrap">PRONTO</span>
+            <div id="step-icon-3" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center shadow-md ring-4 ring-white transition-all">
+                <i class="fas fa-utensils text-xs"></i>
+            </div>
+        </div>
+
+        <div class="relative z-10 flex flex-col items-center gap-1 group">
+            <span class="text-[9px] font-bold text-gray-400 absolute -top-6 whitespace-nowrap">A CAMINHO</span>
+            <div id="step-icon-4" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center shadow-md ring-4 ring-white transition-all">
+                <i class="fas fa-motorcycle text-xs"></i>
+            </div>
+        </div>
+
+        <div class="relative z-10 flex flex-col items-center gap-1 group">
+            <span class="text-[9px] font-bold text-gray-400 absolute -top-6 whitespace-nowrap">ENTREGUE</span>
+            <div id="step-icon-5" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center shadow-md ring-4 ring-white transition-all">
+                <i class="fas fa-home text-xs"></i>
+            </div>
+        </div>
+    </div>
+   <button onclick="window.location.reload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl mt-8 shadow-lg transition-all flex items-center justify-center gap-3 text-sm">
+        <i class="fas fa-sync-alt animate-spin"></i> 
+        <span class="tracking-wide">AGUARDANDO ATUALIZAÇÕES</span>
+    </button>
+</div>
+
+                <div class="bg-white px-6 pb-4 text-sm text-gray-600 border-t border-gray-100 pt-4">
+                    <p class="font-bold text-gray-800 text-xs uppercase mb-1">Cliente</p>
+                    <p id="status-client-name" class="font-bold text-gray-900">...</p>
+                    <p id="status-client-phone" class="text-xs">...</p>
+                    <p id="status-client-address" class="text-xs mt-1 text-gray-500 truncate">...</p>
+                </div>
+
+                <div class="border-t border-gray-100">
+                    <button onclick="toggleReceipt()" class="w-full px-6 py-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                        <span class="font-bold text-gray-700 text-sm">Resumo da conta</span>
+                        <i id="arrow-receipt" class="fas fa-chevron-down text-gray-400 transition-transform"></i>
+                    </button>
+                    
+                    <div id="receipt-details" class="hidden bg-gray-50 px-6 pb-6 text-sm animate-fade-in">
+                        <div id="receipt-items-list" class="space-y-2 mb-4 border-b border-dashed border-gray-300 pb-4">
+                            <div id="receipt-service-row" class="flex justify-between text-gray-500 text-xs mb-1 hidden">
+    <span>Taxa de Serviço</span>
+    <span id="receipt-service-fee">R$ 0,00</span>
+</div>
+                        </div>
+
+                        <div class="flex justify-between text-gray-500 text-xs mb-1">
+                            <span>Subtotal</span>
+                            <span id="receipt-subtotal">R$ 0,00</span>
+                        </div>
+                        <div class="flex justify-between text-gray-500 text-xs mb-1">
+    <span>Taxa de Entrega</span>
+    <span id="receipt-delivery" class="text-green-600">Calculando...</span>
+</div>
+                        <div class="flex justify-between text-gray-900 font-bold text-base mt-2 pt-2 border-t border-gray-200">
+                            <span>TOTAL</span>
+                            <span id="receipt-total">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 border-t border-gray-200">
+    <div class="flex items-center gap-2 mb-4">
+        <span class="text-xs font-bold text-gray-500">Status do pagamento:</span>
+        <span id="status-payment-badge" class="bg-orange-100 text-orange-600 text-xs px-3 py-1 rounded-full font-bold border border-orange-200">Pendente</span>
+    </div>
+
+    <div id="pix-qr-container" class="hidden py-4 text-center border-b border-dashed mb-4">
+    <p class="text-xs font-bold text-gray-400 uppercase mb-2">Escaneie o QR Code PIX</p>
+    <div id="pix-qr-image-slot" class="flex justify-center mb-4"></div> 
+    
+    <div class="relative group cursor-pointer" onclick="copyPixScreen()">
+        <input type="text" id="pix-copy-paste-screen" readonly 
+               class="w-full text-[10px] bg-gray-100 p-4 rounded-xl border-2 border-dashed border-cyan-200 text-center cursor-pointer font-mono" 
+               placeholder="Código PIX">
+        <div id="copy-animation-overlay" class="absolute inset-0 bg-cyan-600/90 opacity-0 flex items-center justify-center transition-opacity rounded-xl pointer-events-none">
+            <span class="text-white font-bold text-xs uppercase tracking-widest"><i class="fas fa-check mr-2"></i> Pix Copiado!</span>
+        </div>
+    </div>
+
+    <div id="pix-timer-area" class="mt-4 flex flex-col items-center">
+        <div class="flex items-center gap-2 text-orange-500 font-bold">
+            <i class="fas fa-clock animate-pulse"></i>
+            <span id="pix-countdown-timer" class="text-lg font-mono">05:00</span>
+        </div>
+    </div>
+</div>
+<div class="space-y-3">
+    <a href="#" id="btn-whatsapp-status" target="_blank" 
+       class="relative overflow-hidden block w-full bg-[#25D366] hover:bg-[#1ebd5e] text-white text-center font-black py-4 rounded-2xl shadow-xl shadow-green-100 transition-all duration-300 group">
+        
+        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer"></div>
+        
+        <div class="flex items-center justify-center gap-3 relative z-10">
+            <div class="bg-white/20 p-1.5 rounded-lg">
+                <i class="fab fa-whatsapp text-2xl"></i>
+            </div>
+            <div class="text-left">
+                <span class="block text-[10px] uppercase opacity-80 font-bold tracking-widest leading-none mb-1">Suporte em tempo real</span>
+                <span class="text-base">Falar com Atendente</span>
+            </div>
+        </div>
+    </a>
+    
+    <button onclick="solicitarReembolsoCliente()" class="w-full flex items-center justify-center gap-2 py-3 bg-white border-2 border-red-50 text-red-500 hover:bg-red-50 hover:border-red-100 rounded-xl font-bold text-sm transition-all">
+        <i class="fas fa-undo-alt"></i> Tive um problema / Solicitar Reembolso
+    </button>
+
+    <p class="text-[10px] text-center text-gray-400 font-medium mt-2">Nosso tempo médio de resposta é de 5 minutos</p>
+</div>
+    </a>
+</div>
+            </div>
+        </div>
+    </div>
 <script type="module" src="js/script.js?v=1.0.1"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbW_ZTCs-k6OW034Ee93IYf4IZpHKFzno&libraries=geometry,places"></script>
 
 <script>
     window.addEventListener('load', () => {
