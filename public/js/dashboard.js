@@ -238,30 +238,32 @@
             let counts = { retirada: 0, delivery: 0, mesa: 0, pendente: 0, curso: 0 };
             let total = 0;
 
-            snapshot.docChanges().forEach(change => {
-                if (change.type === "added") {
-                    // Se não veio do cache (ou seja, é um pedido REAL que acabou de entrar no banco)
+           snapshot.docChanges().forEach(change => {
+                const data = change.doc.data();
+                
+                // Toca se for um pedido adicionado direto já pago, ou se foi modificado agora para 'Aguardando' (Pagamento confirmado)
+                const isNovoPedido = (change.type === "added" && data.status !== 'Aguardando Pagamento');
+                const isPagamentoConfirmado = (change.type === "modified" && data.status === 'Aguardando');
+
+                if (isNovoPedido || isPagamentoConfirmado) {
                     if (!snapshot.metadata.fromCache) {
                         
-                        // 1. Toca o som usando o objeto direto (mais forte no Android)
                         somAlerta.play().catch(e => console.log("Android bloqueou som automático."));
 
-                        // 2. Vibração (Essencial para Android no bolso)
                         if ("vibrate" in navigator) {
-                            navigator.vibrate([500, 200, 500]); // Vibra, para, vibra
+                            navigator.vibrate([500, 200, 500]);
                         }
 
-                        // 3. Notificação de Sistema (Se o app estiver minimizado)
                         if (Notification.permission === "granted") {
                             new Notification("🍦 TropiBerry: NOVO PEDIDO!", {
-                                body: "Um novo pedido de açaí acabou de chegar!",
+                                body: "Um pedido acabou de chegar e está pronto para aceite!",
                                 icon: "img/logosf.png",
-                                tag: "novo-pedido" // Evita empilhar 50 notificações
+                                tag: "novo-pedido" 
                             });
                         }
 
                         if (typeof window.showToast === "function") {
-                            window.showToast("Novo Pedido", "Um novo pedido acabou de chegar!", false);
+                            window.showToast("Novo Pedido", "Pedido recebido e confirmado!", false);
                         }
                     }
                 }
@@ -708,6 +710,12 @@ filtered = filtered.filter(o => {
                     <div class="flex gap-2 w-full md:w-auto justify-between md:justify-end">
                         <button onclick="atualizarStatus('${order.id}', 'Rejeitado')" class="flex-1 md:flex-none border-2 border-red-500 text-red-500 px-4 py-2 rounded-xl text-xs font-black hover:bg-red-50 transition active:scale-95">REJEITAR</button>
                         <button onclick="atualizarStatus('${order.id}', 'Em Preparo')" class="flex-1 md:flex-none bg-green-500 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-green-600 shadow-lg shadow-green-100 transition active:scale-95">ACEITAR</button>
+                    </div>`;
+            } else if (order.status === 'Pronto' && order.method === 'delivery') {
+                actions = `
+                    <div class="flex gap-2 w-full md:w-auto justify-between md:justify-end">
+                        <button onclick="atualizarStatus('${order.id}', 'Saiu para Entrega')" class="w-full md:w-auto bg-purple-600 text-white px-6 py-2 rounded-xl text-xs font-black hover:bg-purple-700 shadow-lg transition active:scale-95">SAIU P/ ENTREGA</button>
+                        <button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="w-full md:w-auto bg-cyan-900 text-white px-6 py-2 rounded-xl text-xs font-black hover:bg-cyan-800 shadow-lg transition active:scale-95">CONCLUIR</button>
                     </div>`;
             } else {
                 actions = `<div class="w-full md:w-auto"><button onclick="atualizarStatus('${order.id}', 'Finalizado')" class="w-full md:w-auto bg-cyan-900 text-white px-6 py-2 rounded-xl text-xs font-black hover:bg-cyan-800 shadow-lg transition active:scale-95">CONCLUIR PEDIDO</button></div>`;

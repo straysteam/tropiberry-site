@@ -128,6 +128,44 @@
         <div><p class="font-bold text-sm">Sucesso!</p><p class="text-xs text-gray-500" id="toast-message">Adicionado ao carrinho.</p></div>
     </div>
 
+    <div id="cart-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex justify-end backdrop-blur-sm">
+        <div class="bg-white w-full md:w-[450px] h-full shadow-2xl flex flex-col animate-slide-right" id="cart-panel">
+            <div class="p-4 border-b flex justify-between items-center bg-white shrink-0">
+                <h3 class="text-lg font-bold text-gray-800">Seu Carrinho</h3>
+                <button onclick="toggleCart()" class="text-gray-400 hover:text-red-500 transition text-2xl">&times;</button>
+            </div>
+
+            <div id="cart-items" class="flex-grow p-4 overflow-y-auto space-y-4 bg-gray-50 custom-scrollbar">
+            </div>
+
+            <div class="p-6 pb-24 md:pb-6 bg-white border-t space-y-3 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] shrink-0">
+                <div class="flex justify-between text-sm text-gray-500">
+                    <span>Subtotal</span>
+                    <span id="cart-subtotal">R$ 0,00</span>
+                </div>
+
+                <div id="row-cart-delivery" class="flex justify-between text-sm text-gray-500 hidden">
+                    <span>Frete</span>
+                    <span id="cart-delivery-val">R$ 0,00</span>
+                </div>
+                
+                <div id="row-discount" class="flex justify-between text-sm text-green-600 hidden">
+                    <span>Desconto</span>
+                    <span id="cart-discount">- R$ 0,00</span>
+                </div>
+
+                <div class="flex justify-between text-xl font-black text-gray-900 pt-2 border-t">
+                    <span>Total</span>
+                    <span id="cart-total">R$ 0,00</span>
+                </div>
+
+               <button onclick="window.location.href='./?action=checkout'" class="w-full bg-cyan-600 text-white font-black py-4 rounded-xl hover:bg-cyan-700 transition shadow-lg shadow-cyan-100">
+                    Escolher forma de pagamento
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="js/script.js?v=1.0.1"></script>
 
 </body>
