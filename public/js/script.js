@@ -22,7 +22,7 @@
 
     // 1. Defina o Token do Mapbox e a Origem
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoib2Zmd2V4bGV5IiwiYSI6ImNtcDZma3YwNDFtZ2IydXB2dTd4ejdrYXAifQ.UXcdVBrrvAq1n7IqgVVo1g';
-const ORIGEM_COORD = [34.870621816331834, -7.200324786180237]; // [Longitude, Latitude] da TropiBerry
+const ORIGEM_COORD = [-34.870621816331834, -7.200324786180237]; // [Longitude, Latitude] da TropiBerry
 
     let currentUserIsAdmin = false;
     // Usa o banco já inicializado no auth.js
