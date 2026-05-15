@@ -426,10 +426,10 @@
                             <i class="fas fa-sync-alt"></i>
                         </button>
 
-                        <button onclick="abrirModalEscolhaPedido()"
-                            class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded text-sm font-bold shadow-sm transition flex items-center gap-2">
-                            <i class="fas fa-plus"></i> <span class="hidden sm:inline">Novo pedido</span>
-                        </button>
+                        <button onclick="document.getElementById('modal-escolher-tipo-pdv').classList.remove('hidden')"
+    class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded text-sm font-bold shadow-sm transition flex items-center gap-2">
+    <i class="fas fa-plus"></i> <span class="hidden sm:inline">Novo pedido</span>
+</button>
                     </div>
                 </div>
                 <div id="view-lista" class="flex-1 overflow-hidden flex flex-col">
@@ -536,9 +536,9 @@
                                     <button onclick="window.limparComandaMesa()"
                                         class="py-3 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 transition font-medium">Limpar
                                         Comanda</button>
-                                    <button
-                                        class="py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition font-medium">Transferir
-                                        Mesa</button>
+                                    <button id="pos-btn-transferir"
+    class="py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition font-medium">Transferir
+    Mesa</button>
                                 </div>
                             </div>
                         </div>
@@ -555,9 +555,55 @@
                     </div>
 
                 </main>
+            </div> <div id="view-pdv-manual" class="hidden w-full h-full flex-col bg-gray-100 overflow-hidden">
+        <header class="p-4 border-b bg-white flex justify-between items-center shadow-sm">
+            <h2 class="text-2xl font-black text-cyan-900 flex items-center gap-2 italic uppercase">
+                <i id="manual-pos-icon" class="fas fa-shopping-bag"></i> <span id="manual-pos-title">Venda Manual</span>
+            </h2>
+            <button onclick="window.navegarPara('view-pdv-wrapper')" class="px-4 py-2 bg-gray-700 text-white rounded-xl font-bold hover:bg-gray-800 transition">
+                &larr; Voltar
+            </button>
+        </header>
+
+        <main class="flex-1 flex overflow-hidden">
+            <div class="w-full md:w-[450px] h-full bg-white border-r flex flex-col shadow-xl z-10">
+                <div class="p-4 border-b bg-gray-50 space-y-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="manual-cust-name" placeholder="Nome do Cliente" class="p-2 border rounded-lg text-sm outline-none focus:border-cyan-500">
+                        <input type="text" id="manual-cust-phone" placeholder="WhatsApp" class="p-2 border rounded-lg text-sm outline-none focus:border-cyan-500">
+                    </div>
+                    <div id="manual-delivery-fields" class="hidden">
+                        <input type="text" id="manual-cust-address" placeholder="Endereço Completo" class="w-full p-2 border rounded-lg text-sm outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+
+                <div id="manual-order-items" class="flex-1 overflow-y-auto p-4 space-y-2 thin-scroll">
+                    </div>
+
+                <div class="p-5 border-t bg-white space-y-3">
+                    <div class="space-y-1 text-sm font-bold text-gray-500">
+                        <div class="flex justify-between"><span>Subtotal:</span><span id="manual-subtotal">R$ 0,00</span></div>
+                        <div class="flex justify-between items-center text-orange-600">
+                            <span>Taxa de Entrega / Frete:</span>
+                            <input type="number" id="manual-frete-val" oninput="window.atualizarTotaisManual()" value="0" class="w-20 p-1 border rounded text-right">
+                        </div>
+                        <div class="flex justify-between text-gray-900 text-xl font-black pt-2 border-t">
+                            <span>TOTAL:</span><span id="manual-total" class="text-cyan-700">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <button onclick="window.prepararPagamentoManual()" class="w-full py-4 bg-green-600 text-white font-black text-lg rounded-2xl hover:bg-green-700 transition shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                        <i class="fas fa-check-circle"></i> FINALIZAR VENDA
+                    </button>
+                </div>
             </div>
-            
-            <div id="modal-pagamento-mesa" class="hidden fixed inset-0 z-[100] bg-black/60 flex items-center justify-center backdrop-blur-sm">
+
+            <div class="flex-1 h-full flex flex-col bg-gray-100">
+                <div id="manual-categories" class="p-3 bg-white border-b flex gap-2 overflow-x-auto no-scrollbar"></div>
+                <div id="manual-products-grid" class="flex-1 p-4 grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 overflow-y-auto content-start"></div>
+            </div>
+        </main>
+    </div>
+    <div id="modal-pagamento-mesa" class="hidden fixed inset-0 z-[100] bg-black/60 flex items-center justify-center backdrop-blur-sm">
     <div class="bg-gray-50 rounded-[2rem] shadow-2xl w-full max-w-md h-[85vh] max-h-[800px] flex flex-col overflow-hidden relative">
         
         <div class="bg-white p-5 border-b flex justify-between items-center shrink-0">
@@ -565,11 +611,10 @@
                 <h3 class="text-xl font-black text-gray-800">Pagamento</h3>
                 <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Mesa <span id="pagamento-numero-mesa">...</span></p>
             </div>
-            <button onclick="window.fecharModalPagamento()" class="w-10 h-10 bg-gray-100 text-gray-500 rounded-full hover:bg-red-100 hover:text-red-500 transition flex items-center justify-center">
+            <button onclick="window.fecharModalPagamentoMesa()" class="w-10 h-10 bg-gray-100 text-gray-500 rounded-full hover:bg-red-100 hover:text-red-500 transition flex items-center justify-center">
                 <i class="fas fa-times text-lg"></i>
             </button>
         </div>
-
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
             
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 text-center">
@@ -3195,6 +3240,69 @@
             <i class="fas fa-print text-3xl"></i>
         </button>
     </div>
+    <div id="modal-escolher-tipo-pdv" class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-pop-up">
+        <div class="bg-cyan-600 p-6 text-white flex justify-between items-center">
+            <h3 class="font-black text-xl italic uppercase tracking-tighter">Iniciar Novo Pedido</h3>
+            <button onclick="document.getElementById('modal-escolher-tipo-pdv').classList.add('hidden')" class="text-white/80 hover:text-white transition text-2xl">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <button onclick="iniciarVendaPDV('delivery')" class="flex flex-col items-center gap-4 p-6 rounded-2xl border-2 border-gray-100 hover:border-cyan-500 hover:bg-cyan-50 transition-all group">
+                <div class="w-16 h-16 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center text-2xl group-hover:scale-110 transition">
+                    <i class="fas fa-motorcycle"></i>
+                </div>
+                <span class="font-black text-gray-700 text-xs uppercase tracking-widest">Delivery</span>
+            </button>
+
+            <button onclick="iniciarVendaPDV('balcao')" class="flex flex-col items-center gap-4 p-6 rounded-2xl border-2 border-gray-100 hover:border-orange-500 hover:bg-orange-50 transition-all group">
+                <div class="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-2xl group-hover:scale-110 transition">
+                    <i class="fas fa-shopping-bag"></i>
+                </div>
+                <span class="font-black text-gray-700 text-xs uppercase tracking-widest">Balcão</span>
+            </button>
+
+            <button onclick="iniciarVendaPDV('mesa')" class="flex flex-col items-center gap-4 p-6 rounded-2xl border-2 border-gray-100 hover:border-green-500 hover:bg-green-50 transition-all group">
+                <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-2xl group-hover:scale-110 transition">
+                    <i class="fas fa-utensils"></i>
+                </div>
+                <span class="font-black text-gray-700 text-xs uppercase tracking-widest">Mesa</span>
+            </button>
+        </div>
+    </div>
+</div>
+<div id="modal-detalhe-pdv" class="fixed inset-0 bg-black/60 z-[150] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="relative h-48 shrink-0">
+            <img id="pdv-modal-img" src="" class="w-full h-full object-cover">
+            <button onclick="window.fecharModalPDV()" class="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-white/40 transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="p-6 overflow-y-auto flex-1 thin-scroll">
+            <h3 id="pdv-modal-name" class="text-2xl font-black text-gray-800 italic uppercase">---</h3>
+            <p id="pdv-modal-desc" class="text-gray-500 text-sm mb-6">---</p>
+            
+            <div id="pdv-modal-groups" class="space-y-8">
+                </div>
+        </div>
+
+        <div class="p-6 border-t bg-gray-50 flex items-center gap-4">
+            <div class="flex items-center border-2 border-gray-200 rounded-xl bg-white p-1">
+                <button onclick="window.mudarQtdPDV(-1)" class="w-10 h-10 text-cyan-600 font-bold hover:bg-gray-50 rounded-lg">-</button>
+                <span id="pdv-modal-qtd" class="w-10 text-center font-black">1</span>
+                <button onclick="window.mudarQtdPDV(1)" class="w-10 h-10 text-cyan-600 font-bold hover:bg-gray-50 rounded-lg">+</button>
+            </div>
+            <button onclick="window.confirmarAdicaoPDV()" class="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 rounded-xl shadow-lg flex justify-between px-6 transition-all active:scale-95">
+                <span>ADICIONAR</span>
+                <span id="pdv-modal-total-btn">R$ 0,00</span>
+            </button>
+        </div>
+    </div>
+</div>
 </body>
 
 </html>

@@ -23,6 +23,17 @@
     let currentPayMethod = 'dinheiro';
     let salesChartInstance = null;
     let categoriaAtivaPOS = 'todos';
+    let allComplements = {}; // "Cérebro" para calcular preços e montar o açaí
+
+    // MONITOR DE COMPLEMENTOS (Puxa os tamanhos e preços do banco)
+    onSnapshot(collection(db, "complementos"), (snapshot) => {
+        snapshot.forEach(doc => {
+            allComplements[doc.id] = { id: doc.id, ...doc.data() };
+        });
+        // Recarrega os preços nos grids se as telas estiverem abertas
+        if(!document.getElementById('view-pdv-manual').classList.contains('hidden')) renderizarProdutosManual();
+        if(!document.getElementById('view-pos').classList.contains('hidden')) renderizarProdutosPOS();
+    });
 
     const AVAILABLE_TAGS = [
         "Vegano", "Vegetariano", "Orgânico", "Sem açúcar", "Sem lactose", "Sem glúten",
@@ -169,18 +180,19 @@
         }
     }
 
-    window.navegarPara = (telaId) => {
+window.navegarPara = (telaId) => {
         // 1. Salva a tela atual para o F5
         localStorage.setItem('painel_ultima_tela', telaId);
 
-        // 2. Lista COMPLETA de todas as telas (não falta nenhuma aqui)
+        // 2. Lista COMPLETA de todas as telas (incluindo o PDV Manual)
         const telas = [
             'view-pdv-wrapper', 'view-pos', 'view-historico', 'view-relatorios', 
             'view-financeiro', 'view-caixa', 'view-nfce', 
             'view-produtos', 'view-boasvindas', 'view-config-pedidos',
             'view-kitchen', 'view-inventory', 'view-chatbot', 
             'view-config-business', 'view-config-team', 
-            'view-config-printers', 'view-config-interactions','view-marketing-cupons'
+            'view-config-printers', 'view-config-interactions','view-marketing-cupons',
+            'view-pdv-manual'
         ];
         
         // 3. Esconde todas e trata classes específicas
@@ -886,31 +898,36 @@ async function processarFidelidadeAoFinalizar(pedido) {
         el.className = troco < 0 ? "text-xl font-bold text-red-400" : "text-xl font-bold text-green-500";
     }
 
-    window.confirmarPagamento = async (aceitarPedidoJunto) => {
-        if (!currentPayOrder) return;
-        try {
-            const updateData = {
-                paymentStatus: 'paid',
-                paymentMethod: currentPayMethod,
-                amountPaid: parseFloat(document.getElementById('pay-input-value').value) || currentPayOrder.total,
-                updatedAt: serverTimestamp()
-            };
-            if (aceitarPedidoJunto) updateData.status = 'Em Preparo';
-            await updateDoc(doc(db, "pedidos", currentPayOrder.id), updateData);
-            alert("Pagamento registrado!");
-            
-            // Registra entrada no financeiro se for pago
-            addDoc(collection(db, "movimentacoes"), {
-                descricao: `Venda #${currentPayOrder.id.slice(0,4)}`,
-                tipo: "entrada",
-                valor: updateData.amountPaid,
-                data: serverTimestamp()
-            });
-            atualizarSaldoCaixa("entrada", updateData.amountPaid);
+window.confirmarPagamento = async () => {
+    if (!currentPayOrder) return;
+    
+    try {
+        const payload = {
+            ...currentPayOrder,
+            status: 'Finalizado',
+            paymentStatus: 'paid',
+            paymentMethod: currentPayMethod,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        };
 
-            fecharModalPagamento();
-        } catch(e) { console.error(e); alert("Erro ao registrar pagamento."); }
+        // Salva no Firebase
+        const docRef = await addDoc(collection(db, "pedidos"), payload);
+        
+        showToast("Sucesso", "Venda realizada e gravada!");
+        
+        // Dispara Impressão
+        window.imprimirPedidoDash(docRef.id);
+
+        // Limpa tudo e volta
+        fecharModalPagamento();
+        window.navegarPara('view-pdv-wrapper');
+        
+    } catch(e) {
+        console.error(e);
+        showToast("Erro", "Falha ao gravar pedido.", true);
     }
+}
 
     // === RENDERIZAÇÃO MESAS E PDV (MANTIDO DO ANTERIOR) ===
     window.renderizarAmbientes = () => {
@@ -3488,9 +3505,13 @@ window.salvarComandaNoBanco = (subtotal, taxaServico, total) => {
     timeoutSalvar = setTimeout(async () => {
         if (!currentTablePOS) return; 
 
+        // Descobre se é uma mesa real ou um pedido manual (Balcão/Delivery)
+        const isMesaReal = !isNaN(currentTablePOS);
+        const metodoVenda = isMesaReal ? 'mesa' : (currentTablePOS.includes('DELIVERY') ? 'delivery' : 'retirada');
+
         const existingOrder = allOrders.find(o => 
-            o.method === 'mesa' && 
-            parseInt(o.tableNumber) === parseInt(currentTablePOS) && 
+            o.method === metodoVenda && 
+            o.tableNumber == currentTablePOS && 
             !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
         );
 
@@ -3706,30 +3727,30 @@ window.confirmarLimpezaComanda = () => {
 
 // 4. FUNÇÃO DO BOTÃO "FINALIZAR E PAGAR"
 window.prepararPagamentoMesa = () => {
-    if (currentTableOrder.length === 0) {
-        return showToast("Atenção", "A comanda está vazia. Adicione itens antes de pagar.", true);
-    }
+        if (currentTableOrder.length === 0) {
+            return showToast("Atenção", "A comanda está vazia. Adicione itens antes de pagar.", true);
+        }
 
-    // Acha o ID do pedido no banco de dados para abrir o Modal de pagamento
-    const existingOrder = allOrders.find(o => 
-        o.method === 'mesa' && 
-        parseInt(o.tableNumber) === parseInt(currentTablePOS) && 
-        !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
-    );
+        // Acha o ID do pedido no banco de dados para abrir o Modal de pagamento
+        const existingOrder = allOrders.find(o => 
+            o.method === 'mesa' && 
+            parseInt(o.tableNumber) === parseInt(currentTablePOS) && 
+            !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
+        );
 
-    if (existingOrder) {
-        window.abrirModalPagamento(existingOrder.id);
-    } else {
-        showToast("Processando", "Aguarde o pedido ser salvo...");
-    }
-};
+        if (existingOrder) {
+            window.abrirModalPagamentoMesa(existingOrder.id);
+        } else {
+            showToast("Processando", "Aguarde o pedido ser salvo...");
+        }
+    };
 
 // =========================================================
-// LÓGICA DE PAGAMENTO DA MESA
+// LÓGICA DE PAGAMENTO DA MESA (Nomes isolados para evitar conflito global)
 // =========================================================
 let pedidoPagamentoAtual = null;
 
-window.abrirModalPagamento = (pedidoId) => {
+window.abrirModalPagamentoMesa = (pedidoId) => {
     // Busca o pedido na lista global
     const pedido = allOrders.find(o => o.id === pedidoId);
     if (!pedido) return showToast("Erro", "Pedido não encontrado.", true);
@@ -3744,7 +3765,7 @@ window.abrirModalPagamento = (pedidoId) => {
     document.getElementById('modal-pagamento-mesa').classList.remove('hidden');
 };
 
-window.fecharModalPagamento = () => {
+window.fecharModalPagamentoMesa = () => {
     document.getElementById('modal-pagamento-mesa').classList.add('hidden');
     pedidoPagamentoAtual = null;
 };
@@ -3851,4 +3872,218 @@ window.navegarPara = (telaId) => {
         window.toggleMobileSidebar();
     }
     originalNavegarPara(telaId);
+};
+// =========================================================
+// PDV MANUAL (BALCÃO / DELIVERY) - LOGICA INTEGRADA
+// =========================================================
+let manualCart = [];
+let manualType = 'balcao';
+let currentPDVItem = null;
+let selectedPDVOptions = {};
+let currentPDVQtd = 1;
+let currentPDVContext = 'manual'; 
+
+window.iniciarVendaPDV = (tipo) => {
+    document.getElementById('modal-escolher-tipo-pdv').classList.add('hidden');
+    
+    if(tipo === 'mesa') {
+        window.navegarPara('view-pdv-wrapper');
+        window.mudarAbaServico('mesa');
+        return;
+    }
+
+    manualType = tipo;
+    manualCart = [];
+    document.getElementById('manual-cust-name').value = '';
+    document.getElementById('manual-cust-phone').value = '';
+    document.getElementById('manual-cust-address').value = '';
+    document.getElementById('manual-frete-val').value = (tipo === 'delivery' ? '5.00' : '0.00');
+
+    document.getElementById('manual-pos-title').innerText = tipo === 'delivery' ? 'Novo Delivery' : 'Venda Balcão';
+    document.getElementById('manual-pos-icon').className = tipo === 'delivery' ? 'fas fa-motorcycle' : 'fas fa-shopping-bag';
+    document.getElementById('manual-delivery-fields').classList.toggle('hidden', tipo !== 'delivery');
+
+    window.navegarPara('view-pdv-manual');
+    window.renderizarCategoriasManual();
+    window.renderizarProdutosManual();
+    window.atualizarTotaisManual();
+};
+
+window.renderizarCategoriasManual = () => {
+    const container = document.getElementById('manual-categories-nav');
+    if(!container) return;
+    const categorias = ['todos', ...new Set(allProducts.map(p => p.category).filter(c => c))];
+    container.innerHTML = categorias.map(cat => `
+        <button onclick="window.renderizarProdutosManual('${cat}')" class="px-4 py-2 rounded-full text-xs font-bold border bg-white text-gray-600 hover:bg-cyan-50 transition">${cat.toUpperCase()}</button>
+    `).join('');
+};
+
+window.renderizarProdutosManual = (cat = 'todos') => {
+    const container = document.getElementById('manual-products-grid');
+    if(!container) return;
+    let filtrados = cat === 'todos' ? allProducts : allProducts.filter(p => p.category === cat);
+    
+    container.innerHTML = filtrados.map(p => {
+        let basePrice = parseFloat(p.price || 0);
+        let displayPrice = basePrice;
+        let prefix = "R$ ";
+
+        if (basePrice === 0 && p.complementIds) {
+            let min = Infinity;
+            p.complementIds.forEach(id => {
+                const grp = allComplements[id];
+                if (grp && grp.internalCategory === 'embalagem') {
+                    grp.options.forEach(o => { if(o.price < min) min = o.price; });
+                }
+            });
+            if (min !== Infinity) { displayPrice = min; prefix = "A partir de R$ "; }
+        }
+
+        return `
+            <div onclick="window.abrirModalProdutoPDV('${p.id}', 'manual')" class="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer flex flex-col items-center text-center active:scale-95 transition">
+                <img src="${p.image || 'img/placeholder.png'}" class="w-16 h-16 object-cover rounded-xl mb-2">
+                <p class="text-[11px] font-bold text-gray-800 line-clamp-2 h-8 leading-tight">${p.name}</p>
+                <p class="text-xs font-black text-cyan-700 mt-1">${prefix}${displayPrice.toFixed(2).replace('.', ',')}</p>
+            </div>`;
+    }).join('');
+};
+
+window.abrirModalProdutoPDV = async (id, context) => {
+    const p = allProducts.find(x => x.id === id);
+    if (!p) return;
+    currentPDVItem = p;
+    currentPDVContext = context;
+    selectedPDVOptions = {};
+    currentPDVQtd = 1;
+    document.getElementById('pdv-modal-img').src = p.image || 'img/placeholder.png';
+    document.getElementById('pdv-modal-name').innerText = p.name;
+    document.getElementById('pdv-modal-desc').innerText = p.description || '';
+    document.getElementById('pdv-modal-qtd').innerText = '1';
+    const groupsContainer = document.getElementById('pdv-modal-groups');
+    groupsContainer.innerHTML = '';
+    if (p.complementIds) {
+        p.complementIds.forEach(gid => {
+            const group = allComplements[gid];
+            if (group) {
+                const type = group.max > 1 ? 'checkbox' : 'radio';
+                groupsContainer.innerHTML += `
+                    <div class="space-y-3">
+                        <p class="font-black text-gray-800 uppercase text-[10px] tracking-widest">${group.title} ${group.required ? '<span class="text-red-500">*</span>' : ''}</p>
+                        <div class="grid grid-cols-1 gap-2">
+                            ${group.options.map((opt, i) => `
+                                <label class="flex justify-between items-center p-3 border-2 border-gray-100 rounded-xl cursor-pointer hover:bg-cyan-50 transition">
+                                    <div class="flex items-center gap-3">
+                                        <input type="${type}" name="group-${group.id}" onchange="window.togglePDVOption('${group.id}', ${i}, '${type}')" class="w-5 h-5 accent-cyan-600">
+                                        <span class="text-sm font-bold text-gray-700">${opt.name}</span>
+                                    </div>
+                                    <span class="text-xs font-black text-cyan-600">+ R$ ${parseFloat(opt.price).toFixed(2)}</span>
+                                </label>`).join('')}
+                        </div>
+                    </div>`;
+            }
+        });
+    }
+    document.getElementById('modal-detalhe-pdv').classList.remove('hidden');
+    atualizarTotalModalPDV();
+};
+
+window.togglePDVOption = (groupId, optIdx, type) => {
+    const group = allComplements[groupId];
+    const opt = group.options[optIdx];
+    if (!selectedPDVOptions[groupId]) selectedPDVOptions[groupId] = [];
+    if (type === 'radio') { selectedPDVOptions[groupId] = [opt]; }
+    else {
+        const index = selectedPDVOptions[groupId].findIndex(o => o.name === opt.name);
+        if (index > -1) selectedPDVOptions[groupId].splice(index, 1);
+        else if (selectedPDVOptions[groupId].length < group.max) selectedPDVOptions[groupId].push(opt);
+    }
+    atualizarTotalModalPDV();
+};
+
+window.mudarQtdPDV = (delta) => {
+    currentPDVQtd = Math.max(1, currentPDVQtd + delta);
+    document.getElementById('pdv-modal-qtd').innerText = currentPDVQtd;
+    atualizarTotalModalPDV();
+};
+
+function atualizarTotalModalPDV() {
+    let extra = 0;
+    Object.values(selectedPDVOptions).forEach(list => list.forEach(o => extra += (o.price || 0)));
+    const total = ((parseFloat(currentPDVItem.price) || 0) + extra) * currentPDVQtd;
+    document.getElementById('pdv-modal-total-btn').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+}
+
+window.confirmarAdicaoPDV = () => {
+    let nomesExtras = [];
+    let precoExtra = 0;
+    Object.values(selectedPDVOptions).forEach(list => list.forEach(o => { nomesExtras.push(o.name); precoExtra += (o.price || 0); }));
+    const itemFinal = {
+        id: `${currentPDVItem.id}-${Date.now()}`,
+        name: currentPDVItem.name + (nomesExtras.length ? ` (${nomesExtras.join(', ')})` : ''),
+        price: (parseFloat(currentPDVItem.price) || 0) + precoExtra,
+        quantity: currentPDVQtd
+    };
+    if (currentPDVContext === 'manual') { manualCart.push(itemFinal); window.atualizarTotaisManual(); }
+    else { currentTableOrder.push(itemFinal); window.atualizarComandaPDV(); }
+    window.fecharModalPDV();
+};
+
+window.fecharModalPDV = () => document.getElementById('modal-detalhe-pdv').classList.add('hidden');
+
+window.atualizarTotaisManual = () => {
+    const container = document.getElementById('manual-order-items');
+    if(!container) return;
+    container.innerHTML = manualCart.map((item, idx) => `
+        <div class="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-100 mb-2">
+            <div class="flex-1"><p class="text-xs font-bold text-gray-800">${item.name}</p></div>
+            <div class="flex items-center gap-2">
+                <button onclick="manualCart[${idx}].quantity--; if(manualCart[${idx}].quantity<=0) manualCart.splice(${idx},1); window.atualizarTotaisManual();" class="w-6 h-6 bg-white border rounded text-red-500">-</button>
+                <span class="text-xs font-bold w-4 text-center">${item.quantity}</span>
+                <button onclick="manualCart[${idx}].quantity++; window.atualizarTotaisManual();" class="w-6 h-6 bg-white border rounded text-green-500">+</button>
+            </div>
+        </div>`).join('');
+    const subtotal = manualCart.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    const frete = parseFloat(document.getElementById('manual-frete-val').value) || 0;
+    const total = subtotal + frete;
+    document.getElementById('manual-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.',',')}`;
+    document.getElementById('manual-total').innerText = `R$ ${total.toFixed(2).replace('.',',')}`;
+};
+
+window.prepararPagamentoManual = () => {
+    if(manualCart.length === 0) return showToast("Atenção", "O carrinho está vazio!", true);
+    const subtotal = manualCart.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    const frete = parseFloat(document.getElementById('manual-frete-val').value) || 0;
+    currentPayOrder = {
+        id: `MANUAL-${Date.now()}`,
+        total: subtotal + frete,
+        items: manualCart,
+        method: manualType,
+        customer: {
+            name: document.getElementById('manual-cust-name').value || 'Cliente Manual',
+            phone: document.getElementById('manual-cust-phone').value || '',
+            address: document.getElementById('manual-cust-address').value || ''
+        }
+    };
+    document.getElementById('pay-total-display').innerText = `R$ ${currentPayOrder.total.toFixed(2).replace('.', ',')}`;
+    document.getElementById('payment-modal').classList.remove('hidden');
+};
+
+window.fecharModalPagamentoManual = () => {
+    document.getElementById('payment-modal').classList.add('hidden');
+    currentPayOrder = null;
+};
+
+window.confirmarPagamentoManual = async () => {
+    if (!currentPayOrder) return;
+    const valorRecebido = parseFloat(document.getElementById('pay-input-value').value) || currentPayOrder.total;
+    try {
+        const payload = { ...currentPayOrder, status: 'Finalizado', paymentStatus: 'paid', amountPaid: valorRecebido, paymentMethod: 'dinheiro', createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+        const docRef = await addDoc(collection(db, "pedidos"), payload);
+        await addDoc(collection(db, "movimentacoes"), { descricao: `Venda PDV #${docRef.id.slice(-4).toUpperCase()}`, valor: valorRecebido, tipo: "entrada", data: serverTimestamp() });
+        window.atualizarSaldoCaixa("entrada", valorRecebido);
+        showToast("Sucesso", "Venda finalizada!");
+        window.fecharModalPagamentoManual();
+        window.navegarPara('view-pdv-wrapper');
+        window.imprimirPedidoDash(docRef.id);
+    } catch(e) { console.error(e); showToast("Erro", "Falha ao gravar.", true); }
 };

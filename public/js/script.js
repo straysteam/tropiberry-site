@@ -2302,7 +2302,8 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
 
     } catch (error) {
         console.error("Erro Mapbox:", error);
-        freteGoogleCalculado = 7.00;
+        // Se der erro, assume a taxa mínima da loja (R$ 4.99) em vez de 7.00
+        freteGoogleCalculado = 4.99; 
         distanciaConfirmada = true;
         if (typeof updateCartUI === 'function') updateCartUI();
         if (typeof renderReceipt === 'function') renderReceipt();
