@@ -20,6 +20,10 @@
     import { iniciarMonitoramentoPedidosCliente } from './notifications.js';
     import { pedirPermissaoNotificacao } from './notifications.js';
 
+    // 1. Defina o Token do Mapbox e a Origem
+const MAPBOX_TOKEN = 'pk.eyJ1Ijoib2Zmd2V4bGV5IiwiYSI6ImNtcDZma3YwNDFtZ2IydXB2dTd4ejdrYXAifQ.UXcdVBrrvAq1n7IqgVVo1g';
+const ORIGEM_COORD = [34.870621816331834, -7.200324786180237]; // [Longitude, Latitude] da TropiBerry
+
     let currentUserIsAdmin = false;
     // Usa o banco já inicializado no auth.js
     let db = authDb; 
@@ -2209,93 +2213,75 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
     // Variável global para controle de loop (adicione no topo do arquivo)
     let ultimoEnderecoProcessado = "";
 
-    window.calcularDistanciaGoogle = () => {
-        // 1. Tenta pegar dos inputs do checkout
-        let rua = document.getElementById('input-street')?.value || "";
-        let num = document.getElementById('input-number')?.value || "";
-        let bairro = document.getElementById('input-district')?.value || "";
+    window.calcularDistanciaGoogle = async () => {
+    let rua = document.getElementById('input-street')?.value || "";
+    let num = document.getElementById('input-number')?.value || "";
+    let bairro = document.getElementById('input-district')?.value || "";
+    
+    if (!rua || !num || !bairro) {
+        const salvo = localStorage.getItem('tropyberry_user');
+        if (salvo) {
+            const d = JSON.parse(salvo);
+            rua = d.street || ""; num = d.number || ""; bairro = d.district || "";
+        }
+    }
+
+    if(!rua || !num || !bairro) return;
+
+    const enderecoAtual = `${rua}${num}${bairro}`;
+    if (enderecoAtual === ultimoEnderecoProcessado && distanciaConfirmada) return;
+    ultimoEnderecoProcessado = enderecoAtual;
+
+    const labelFrete = document.getElementById('receipt-delivery');
+    if(labelFrete) labelFrete.innerText = "Calculando...";
+
+    try {
+        // PASSO 1: Geocoding (Texto -> Coordenadas)
+        const queryEndereco = encodeURIComponent(`${rua}, ${num} - ${bairro}, João Pessoa, PB`);
+        const geoRes = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${queryEndereco}.json?access_token=${MAPBOX_TOKEN}&limit=1&country=br`);
+        const geoData = await geoRes.json();
+
+        if (!geoData.features || geoData.features.length === 0) throw new Error("Endereço não encontrado");
+
+        const destinoCoord = geoData.features[0].center; 
+
+        // PASSO 2: Directions (Cálculo da Rota Real)
+        const dirRes = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${ORIGEM_COORD[0]},${ORIGEM_COORD[1]};${destinoCoord[0]},${destinoCoord[1]}?access_token=${MAPBOX_TOKEN}`);
+        const dirData = await dirRes.json();
+
+        if (dirData.code !== 'Ok') throw new Error("Erro no cálculo de rota");
+
+        const distanciaKm = dirData.routes[0].distance / 1000;
+        let valorFrete = 0;
+        const km = distanciaKm;
+
+        // Tabela de Preços
+        if (km <= 1.0) valorFrete = 4.99;
+        else if (km <= 2.0) valorFrete = 6.99;
+        else if (km <= 3.0) valorFrete = 7.99;
+        else if (km <= 4.0) valorFrete = 8.99;
+        else if (km <= 5.0) valorFrete = 10.99;
+        else if (km <= 6.0) valorFrete = 12.99;
+        else if (km <= 7.0) valorFrete = 14.99;
+        else if (km <= 10.0) valorFrete = 20.99;
+        else valorFrete = 24.99;
+
+        freteGoogleCalculado = valorFrete;
+        distanciaConfirmada = true; 
         
-        // 2. Se os inputs estiverem vazios (carrinho aberto sem checkout iniciado), busca no localStorage
-        if (!rua || !num || !bairro) {
-            const salvo = localStorage.getItem('tropyberry_user');
-            if (salvo) {
-                const d = JSON.parse(salvo);
-                rua = d.street || "";
-                num = d.number || "";
-                bairro = d.district || "";
-            }
-        }
+        console.log(`✅ Mapbox: ${km.toFixed(2)}km -> R$ ${valorFrete}`);
 
-        // Se mesmo com localStorage não temos endereço, não há como calcular
-        if(!rua || !num || !bairro) {
-            console.log("⚠️ Endereço incompleto para cálculo automático.");
-            return;
-        }
-
-        // Trava para evitar chamadas duplicadas inúteis
-        const enderecoAtual = `${rua}${num}${bairro}`;
-        if (enderecoAtual === ultimoEnderecoProcessado && distanciaConfirmada) return;
-        ultimoEnderecoProcessado = enderecoAtual;
-
-        distanciaConfirmada = false; 
-
-        const origin = "Rua Ricardo Soares de Souza Neto, 456, João Pessoa, PB"; 
-        const destination = `${rua}, ${num} - ${bairro}, João Pessoa, PB`;
-
-        const labelFrete = document.getElementById('receipt-delivery');
-        if(labelFrete) labelFrete.innerText = "Calculando...";
-
-        const service = new google.maps.DistanceMatrixService();
-        service.getDistanceMatrix({
-            origins: [origin],
-            destinations: [destination],
-            travelMode: 'DRIVING',
-            unitSystem: google.maps.UnitSystem.METRIC
-        }, (response, status) => {
-            if (status === 'OK' && response.rows[0].elements[0].status === 'OK') {
-                const distanciaKm = response.rows[0].elements[0].distance.value / 1000;
-                let valorFrete = 0;
-                const km = distanciaKm;
-
-                // Sua tabela iFood mantida integralmente
-                if (km <= 1.0) valorFrete = 4.99;
-                else if (km <= 2.0) valorFrete = 6.99;
-                else if (km <= 3.0) valorFrete = 7.99;
-                else if (km <= 4.0) valorFrete = 8.99;
-                else if (km <= 5.0) valorFrete = 10.99;
-                else if (km <= 6.0) valorFrete = 12.99;
-                else if (km <= 6.5) valorFrete = 13.99;
-                else if (km <= 7.0) valorFrete = 14.99;
-                else if (km <= 7.5) valorFrete = 15.99;
-                else if (km <= 8.0) valorFrete = 16.99;
-                else if (km <= 8.5) valorFrete = 17.99;
-                else if (km <= 9.0) valorFrete = 18.99;
-                else if (km <= 9.5) valorFrete = 19.99;
-                else if (km <= 10.0) valorFrete = 20.99;
-                else if (km <= 11.0) valorFrete = 19.99; 
-                else if (km <= 11.5) valorFrete = 20.99;
-                else if (km <= 12.5) valorFrete = 22.99;
-                else valorFrete = 24.99;
-
-                freteGoogleCalculado = valorFrete;
-                distanciaConfirmada = true; 
-                if (typeof updateCartUI === 'function') updateCartUI();
+        if (typeof updateCartUI === 'function') updateCartUI();
         if (typeof renderReceipt === 'function') renderReceipt();
-                
-                console.log(`✅ Frete calculado: R$ ${valorFrete}`);
-                
-                // Atualiza ambas as UIs (Carrinho lateral e Recibo se estiver aberto)
-                updateCartUI(); 
-                renderReceipt(); 
-            } else {
-                console.error("Erro Google Maps:", status);
-                freteGoogleCalculado = 7.00; // Valor de segurança para não travar a venda
-                distanciaConfirmada = true; 
-                updateCartUI();
-                renderReceipt();
-            }
-        });
-    };
+
+    } catch (error) {
+        console.error("Erro Mapbox:", error);
+        freteGoogleCalculado = 7.00;
+        distanciaConfirmada = true;
+        if (typeof updateCartUI === 'function') updateCartUI();
+        if (typeof renderReceipt === 'function') renderReceipt();
+    }
+};
     window.toggleUserMenu = () => {
         const overlay = document.getElementById('user-menu-overlay');
         const menu = document.getElementById('user-menu-content');
