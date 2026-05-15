@@ -2228,9 +2228,10 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
 
     if(!rua || !num || !bairro) return;
 
+    // Trecho corrigido
     const enderecoAtual = `${rua}${num}${bairro}`;
-    if (enderecoAtual === ultimoEnderecoProcessado && distanciaConfirmada) return;
-    ultimoEnderecoProcessado = enderecoAtual;
+    if (enderecoAtual === ultimoEnderecoCalculado && distanciaConfirmada) return;
+    ultimoEnderecoCalculado = enderecoAtual;
 
     const labelFrete = document.getElementById('receipt-delivery');
     if(labelFrete) labelFrete.innerText = "Calculando...";
