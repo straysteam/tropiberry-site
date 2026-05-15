@@ -755,14 +755,16 @@
         });
 
         let obs = '';
-        const modalObs = document.getElementById('modal-obs');
-        const detailObs = document.getElementById('detail-obs');
-        
-        if(!document.getElementById('quick-view-modal').classList.contains('hidden') && modalObs) {
-            obs = modalObs.value;
-        } else if (detailObs) {
-            obs = detailObs.value;
-        }
+const modalObs = document.getElementById('modal-obs');
+const detailObs = document.getElementById('detail-obs');
+const quickModal = document.getElementById('quick-view-modal'); // Puxa o elemento com segurança
+
+// Verifica se o modal existe na página ANTES de checar o classList
+if(quickModal && !quickModal.classList.contains('hidden') && modalObs) {
+    obs = modalObs.value;
+} else if (detailObs) {
+    obs = detailObs.value;
+}
 
         if (obs) complementsDescription.push(`Obs: ${obs}`);
 
