@@ -1559,6 +1559,31 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
 
     let countdownInterval = null;
 
+    window.buscarCep = async () => {
+    let cep = document.getElementById('input-cep')?.value.replace(/\D/g, '');
+    if (cep.length !== 8) return showToast("CEP inválido!", true);
+
+    showToast("Buscando endereço...", "info");
+    
+    try {
+        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await res.json();
+        
+        if (data.erro) {
+            showToast("CEP não encontrado!", true);
+            return;
+        }
+
+        document.getElementById('input-street').value = data.logradouro;
+        document.getElementById('input-district').value = data.bairro;
+        document.getElementById('input-number').focus();
+        showToast("Endereço preenchido!");
+
+    } catch (e) {
+        showToast("Erro ao buscar CEP.", true);
+    }
+};
+
     window.openOrderScreen = (orderId) => {
         // === FIX: FECHA O MODAL DE LISTA DE PEDIDOS CASO ESTEJA ABERTO ===
         const modalMeusPedidos = document.getElementById('my-orders-modal');
