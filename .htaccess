@@ -1,0 +1,14 @@
+# Impede que as pessoas vejam a lista de arquivos das pastas
+Options -Indexes
+
+# Protege arquivos sensíveis
+<FilesMatch "^\.|\.(json|lock|php.ini|log)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Permite que o pagamento.php seja executado normalmente
+<Files pagamento.php>
+    Order deny,allow
+    Allow from all
+</Files>
