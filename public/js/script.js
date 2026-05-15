@@ -1424,11 +1424,12 @@ if(quickModal && !quickModal.classList.contains('hidden') && modalObs) {
                 console.log("📤 Enviando para API (Cartão):", JSON.stringify(dadosParaEnvio, null, 2));
 
                 // 2. CHAMA API
-                const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(dadosParaEnvio)
-                });
+                // Substitua pela sua URL na Locaweb
+const response = await fetch("https://tropiberry.site/pagamento.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dadosParaEnvio)
+});
 
                 const data = await response.json();
 
@@ -1498,16 +1499,16 @@ if(quickModal && !quickModal.classList.contains('hidden') && modalObs) {
                     cleanItems.push({ id: "cupom", title: "Desconto Cupom", unit_price: -Number(valorDesconto.toFixed(2)), quantity: 1, currency_id: "BRL" });
                 }
 
-                const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        method: payMethod,
-                        total: totalFinal,
-                        playerInfo: currentOrder.customer,
-                        items: cleanItems
-                    })
-                });
+                const response = await fetch("https://tropiberry.site/pagamento.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+        method: payMethod,
+        total: totalFinal,
+        playerInfo: currentOrder.customer,
+        items: cleanItems
+    })
+});
 
                 const data = await response.json();
                 if (data.success || data.qr_code) {
@@ -2800,19 +2801,19 @@ if(quickModal && !quickModal.classList.contains('hidden') && modalObs) {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
 
         try {
-            const response = await fetch("https://us-central1-tropiberry.cloudfunctions.net/criarPagamento", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    method: 'subscription', // Backend deve identificar como assinatura mensal
-                    total: 30.00,
-                    planName: 'Assinatura Mensal Clube TropiBerry',
-                    playerInfo: {
-                        email: loggedUserEmail,
-                        name: "Membro do Clube"
-                    }
-                })
-            });
+            const response = await fetch("https://tropiberry.site/pagamento.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+        method: 'subscription', 
+        total: 30.00,
+        planName: 'Assinatura Mensal Clube TropiBerry',
+        playerInfo: {
+            email: loggedUserEmail,
+            name: "Membro do Clube"
+        }
+    })
+});
 
             const data = await response.json();
 
