@@ -3204,7 +3204,7 @@ window.confirmarPagamento = async () => {
     // Função que prepara os dados do pedido para a impressora real
   let htmlCupomTemporario = "";
 
-    window.imprimirPedidoDash = (orderId) => {
+window.imprimirPedidoDash = (orderId) => {
         // Busca o pedido na lista global
         const order = allOrders.find(o => o.id === orderId);
         
@@ -3219,19 +3219,45 @@ window.confirmarPagamento = async () => {
         const subtotal = orderFallback.items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
         const taxaEntrega = (orderFallback.total || 0) - subtotal;
 
-        // Gera as linhas dos itens
-        const itensHtml = orderFallback.items.map(item => `
-            <div class="item-row" style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-                <span style="flex: 1;">${item.quantity}x ${item.name}</span>
-                <span style="margin-left: 10px;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
-            </div>
-            ${item.details ? `<div style="font-size: 0.85em; color: #444; margin-bottom: 5px; border-bottom: 0.5px solid #eee;">(${item.details})</div>` : ''}
-        `).join('');
+        // Gera as linhas dos itens detalhadas e estruturadas
+        const itensHtml = orderFallback.items.map(item => {
+            let baseName = item.name;
+            let extras = [];
 
-        // Monta o esqueleto do cupom
+            // 1. Se vier com detalhes separados (padrão iFood/App)
+            if (item.details && item.details.trim() !== '') {
+                extras = item.details.split(',').map(e => e.trim());
+            } 
+            // 2. Se os adicionais estiverem embutidos no nome entre parênteses (padrão PDV Manual)
+            else if (item.name.includes('(') && item.name.includes(')')) {
+                const startIdx = item.name.indexOf('(');
+                const endIdx = item.name.lastIndexOf(')');
+                baseName = item.name.substring(0, startIdx).trim();
+                const extrasText = item.name.substring(startIdx + 1, endIdx);
+                extras = extrasText.split(',').map(e => e.trim());
+            }
+
+            return `
+                <div class="item-row" style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 2px;">
+                    <span style="flex: 1;">${item.quantity}x ${baseName}</span>
+                    <span style="margin-left: 10px;">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+                </div>
+                ${extras.length ? `
+                    <div style="margin-left: 12px; font-size: 0.9em; color: #333; margin-bottom: 6px; line-height: 1.4;">
+                        ${extras.map(ex => `
+                            <div style="display: flex; justify-content: space-between; padding-left: 4px;">
+                                <span>↳ ${ex}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            `;
+        }).join('');
+
+        // Monta o esqueleto do cupom com o título alterado para CUPOM FISCAL
         htmlCupomTemporario = `
             <div style="text-align: center; font-weight: bold; font-size: 1.4em; margin-bottom: 5px;">TROPIBERRY</div>
-            <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 10px;">CUPOM NÃO FISCAL</div>
+            <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 10px; font-weight: bold;">CUPOM FISCAL</div>
             <div style="display: flex; justify-content: space-between;"><b>PEDIDO:</b> <span>#${orderFallback.id.slice(-4).toUpperCase()}</span></div>
             <div style="display: flex; justify-content: space-between;"><b>DATA:</b> <span>${orderFallback.createdAt ? orderFallback.createdAt.toDate().toLocaleString('pt-BR') : '--'}</span></div>
             <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
@@ -3241,10 +3267,10 @@ window.confirmarPagamento = async () => {
             <div style="font-weight: bold; margin-bottom: 8px;">ITENS:</div>
             ${itensHtml}
             <div style="border-bottom: 1px solid #000; margin: 8px 0;"></div>
-            <div style="display: flex; justify-content: space-between;"><span>SUBTOTAL</span> <span>R$ ${subtotal.toFixed(2)}</span></div>
-            <div style="display: flex; justify-content: space-between;"><span>TAXA</span> <span>${taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2)}` : 'GRÁTIS'}</span></div>
+            <div style="display: flex; justify-content: space-between;"><span>SUBTOTAL</span> <span>R$ ${subtotal.toFixed(2).replace('.', ',')}</span></div>
+            <div style="display: flex; justify-content: space-between;"><span>TAXA</span> <span>${taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2).replace('.', ',')}` : 'GRÁTIS'}</span></div>
             <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.2em; margin-top: 5px;">
-                <span>TOTAL</span> <span>R$ ${orderFallback.total.toFixed(2)}</span>
+                <span>TOTAL</span> <span>R$ ${orderFallback.total.toFixed(2).replace('.', ',')}</span>
             </div>
             <div style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
             <div style="text-align: center;"><b>PGTO:</b> ${orderFallback.paymentMethod?.toUpperCase() || 'A DEFINIR'}</div>
