@@ -2035,7 +2035,7 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
     }
     setInterval(checkLastOrder, 60000);
 
-    async function verificarBotaoAdmin(productId) { if (currentUserIsAdmin) { const btn = document.getElementById('admin-edit-shortcut'); if(btn) { btn.classList.remove('hidden'); btn.onclick = () => { window.location.href = `admin.html?edit_product=${productId}`; }; } } }
+   async function verificarBotaoAdmin(productId) { if (currentUserIsAdmin) { const btn = document.getElementById('admin-edit-shortcut'); if(btn) { btn.classList.remove('hidden'); btn.onclick = () => { window.location.href = `dashboard.html?edit_product=${productId}`; }; } } }
 
     // 1. Função que renderiza os dados tanto na tela quanto no cupom de impressão
     window.renderReceiptFromOrder = (items, total, orderData, orderId) => {

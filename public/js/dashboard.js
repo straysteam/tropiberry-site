@@ -26,7 +26,9 @@
     let allComplements = {}; // "Cérebro" para calcular preços e montar o açaí
 
     // MONITOR DE COMPLEMENTOS (Puxa os tamanhos e preços do banco)
+    // MONITOR DE COMPLEMENTOS (Puxa os tamanhos e preços do banco)
     onSnapshot(collection(db, "complementos"), (snapshot) => {
+        allComplements = {}; // <--- ADICIONE ESTA LINHA PARA LIMPAR O OBJETO
         snapshot.forEach(doc => {
             allComplements[doc.id] = { id: doc.id, ...doc.data() };
         });
@@ -42,21 +44,49 @@
     ];
     let currentProductAttachedGroups = [];
 
+// ===============================================
+    // INICIALIZAÇÃO INTELIGENTE (Adicione no final do dashboard.js)
+    // ===============================================
+
     document.addEventListener('DOMContentLoaded', () => {
         monitorarEstadoAuth(async (user) => {
             if (!user || !(await verificarAdminNoBanco(user.email))) {
                 window.location.href = 'index.html'; 
                 return;
             }
+            
+            // Carrega infos do usuário no topo
             if(document.getElementById('header-user-name')) document.getElementById('header-user-name').innerText = user.displayName || 'Admin';
             if(document.getElementById('header-user-email')) document.getElementById('header-user-email').innerText = user.email;
 
-            // Gatilhos Iniciais
-            await carregarProdutosECategorias(); 
+            // Inicia monitores globais
             iniciarMonitoramentoPedidos();
             
-            const ultimaTela = localStorage.getItem('painel_ultima_tela') || 'view-pdv-wrapper';
-            window.navegarPara(ultimaTela);
+            // VERIFICA SE O USUÁRIO VEIO DO ATALHO DO SITE (edit_product)
+            const params = new URLSearchParams(window.location.search);
+            const editId = params.get('edit_product');
+
+            if (editId) {
+                // Aguarda os produtos carregarem do banco de dados na memória
+                const checkLoaded = setInterval(() => {
+                    if (allProducts.length > 0) {
+                        clearInterval(checkLoaded);
+                        
+                        // 1. Força a navegação para a aba de produtos
+                        window.navegarPara('view-produtos');
+                        
+                        // 2. Abre o modal com os dados carregados
+                        window.abrirModalEdicao(editId);
+                        
+                        // 3. Limpa a URL silenciosamente para evitar que o modal abra de novo se você der F5
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                }, 500);
+            } else {
+                // SE NÃO TEM ATALHO, RECUPERA A ÚLTIMA TELA ABERTA PADRÃO
+                const ultimaTela = localStorage.getItem('painel_ultima_tela') || 'view-pdv-wrapper';
+                window.navegarPara(ultimaTela);
+            }
         });
     });
 
@@ -2872,43 +2902,64 @@ window.confirmarPagamento = async () => {
         document.getElementById('icon-image').classList.remove('hidden');
         document.getElementById('modal-title').innerText = "Novo Produto";
         currentProductAttachedGroups = [];
+        window.renderizarGruposVinculados();
         renderTagSelector();
         window.mudarAba('sobre');
         document.getElementById('product-modal').classList.remove('hidden');
     }
 
-    window.abrirModalEdicao = (id) => {
+window.abrirModalEdicao = (id) => {
         const p = allProducts.find(x => x.id === id);
-        if (!p) return;
+        if (!p) {
+            window.showToast("Erro", "Produto não encontrado na memória.", true);
+            return;
+        }
+        
+        // Preenche os inputs
         document.getElementById('edit-id').value = p.id;
         document.getElementById('edit-name').value = p.name;
         document.getElementById('edit-price').value = p.price;
+        // Adiciona preenchimento para preço original caso exista no banco
+        if(document.getElementById('edit-original-price')) document.getElementById('edit-original-price').value = p.originalPrice || '';
         document.getElementById('edit-desc').value = p.description || '';
         document.getElementById('edit-image-url').value = p.image || '';
         
+        // Tratamento da Imagem
         if(p.image) {
             document.getElementById('preview-image').src = p.image;
             document.getElementById('preview-image').classList.remove('hidden');
             document.getElementById('icon-image').classList.add('hidden');
+        } else {
+            document.getElementById('preview-image').src = '';
+            document.getElementById('preview-image').classList.add('hidden');
+            document.getElementById('icon-image').classList.remove('hidden');
         }
 
         renderTagSelector();
         setSelectedTags(p.tags || []);
+
+        currentProductAttachedGroups = p.complementIds || []; // <--- ADICIONE ESTA LINHA
+        window.renderizarGruposVinculados(); // <--- E ESTA LINHA
+        
         document.getElementById('modal-title').innerText = "Editar Produto";
+        
+        // CRÍTICO: Garante que o modal abra sempre na primeira aba, evitando travamentos
+        window.mudarAba('sobre'); 
+        
         document.getElementById('product-modal').classList.remove('hidden');
     }
-
-    window.salvarProduto = async function() {
+window.salvarProduto = async function() {
         const id = document.getElementById('edit-id').value;
         const produto = {
             name: document.getElementById('edit-name').value,
-            price: parseFloat(document.getElementById('edit-price').value),
+            price: parseFloat(document.getElementById('edit-price').value) || 0,
+            originalPrice: parseFloat(document.getElementById('edit-original-price')?.value) || 0,
             description: document.getElementById('edit-desc').value,
             image: document.getElementById('edit-image-url').value,
             tags: getSelectedTags(),
+            complementIds: currentProductAttachedGroups, // Sincroniza os complementos com o banco
             updatedAt: serverTimestamp()
         };
-
         try {
             if (id) {
                 await updateDoc(doc(db, "produtos", id), produto);
@@ -2922,6 +2973,51 @@ window.confirmarPagamento = async () => {
             window.showToast("Erro", "Falha ao salvar", true);
         }
     }
+    // --- CONTROLES DO MODAL DE PRODUTO ---
+    
+    window.fecharModalProduto = () => {
+        document.getElementById('product-modal').classList.add('hidden');
+    };
+
+    window.mudarAba = (aba) => {
+        // 1. Esconde as duas áreas de conteúdo
+        document.getElementById('tab-sobre').classList.add('hidden');
+        document.getElementById('tab-complementos').classList.add('hidden');
+        
+        // 2. Reseta o estilo dos dois botões para o padrão inativo
+        document.getElementById('tab-btn-sobre').className = "flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 transition";
+        document.getElementById('tab-btn-complementos').className = "flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 transition";
+
+        // 3. Ativa a aba e o botão correspondente
+        if (aba === 'sobre') {
+            document.getElementById('tab-sobre').classList.remove('hidden');
+            document.getElementById('tab-btn-sobre').className = "flex-1 py-3 text-sm font-bold text-cyan-700 border-b-2 border-cyan-700 bg-cyan-50 transition";
+        } else {
+            document.getElementById('tab-complementos').classList.remove('hidden');
+            document.getElementById('tab-btn-complementos').className = "flex-1 py-3 text-sm font-bold text-cyan-700 border-b-2 border-cyan-700 bg-cyan-50 transition";
+        }
+    };
+
+    window.abrirGerenciadorGrupos = () => {
+        document.getElementById('group-manager-modal').classList.remove('hidden');
+    };
+
+    window.deletarProduto = async () => {
+        const id = document.getElementById('edit-id').value;
+        if(!id) return;
+        
+        if(confirm("Tem certeza que deseja excluir este produto do cardápio? Essa ação não tem volta.")) {
+            try {
+                // A função deleteDoc e doc já estão importadas no topo do seu arquivo
+                await deleteDoc(doc(db, "produtos", id));
+                window.showToast("Sucesso", "Produto excluído com sucesso!");
+                window.fecharModalProduto();
+            } catch (e) {
+                console.error("Erro ao deletar produto:", e);
+                window.showToast("Erro", "Falha ao excluir produto.", true);
+            }
+        }
+    };
     window.editarPedidoManual = (orderId) => {
         const order = allOrders.find(o => o.id === orderId);
         if (!order) return;
@@ -4113,3 +4209,310 @@ window.confirmarPagamentoManual = async () => {
         window.imprimirPedidoDash(docRef.id);
     } catch(e) { console.error(e); showToast("Erro", "Falha ao gravar.", true); }
 };
+// FUNÇÃO PARA APAGAR DADOS DE TESTE (EXECUTAR APENAS UMA VEZ)
+    window.zerarBancoDeTestes = async () => {
+        const senha = prompt("Digite a senha master para ZERAR o banco de dados:");
+        if (senha !== "tropi123") { // Altere para a senha que você quiser
+            return window.showToast("Bloqueado", "Senha incorreta!", true);
+        }
+
+        if(!confirm("🚨 ATENÇÃO MÁXIMA: Isso vai apagar TODOS os pedidos e históricos financeiros para sempre. Seu cardápio e equipe continuarão intactos. Deseja continuar?")) return;
+        
+        try {
+            window.showToast("Processando", "Limpando banco de dados...");
+
+            // 1. Busca e deleta todos os Pedidos
+            const { collection, getDocs, deleteDoc, doc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+            
+            const pedidosSnap = await getDocs(collection(db, "pedidos"));
+            const promisesPedidos = pedidosSnap.docs.map(docSnap => deleteDoc(doc(db, "pedidos", docSnap.id)));
+            await Promise.all(promisesPedidos);
+
+            // 2. Busca e deleta todas as Movimentações Financeiras
+            const movSnap = await getDocs(collection(db, "movimentacoes"));
+            const promisesMov = movSnap.docs.map(docSnap => deleteDoc(doc(db, "movimentacoes", docSnap.id)));
+            await Promise.all(promisesMov);
+
+            window.showToast("Sucesso", "Banco de dados limpo com sucesso!");
+            
+            // Recarrega a página após 1.5 segundos para atualizar todos os relatórios na tela
+            setTimeout(() => window.location.reload(), 1500);
+
+        } catch(e) {
+            console.error(e);
+            window.showToast("Erro", "Falha ao limpar banco de dados.", true);
+        }
+    };
+    // ==========================================
+    // GERENCIAMENTO DE COMPLEMENTOS / GRUPOS
+    // ==========================================
+
+window.editandoGrupoId = null; // Variável global para controlar se estamos criando ou editando um complemento
+
+    window.renderizarGruposVinculados = () => {
+        const container = document.getElementById('attached-groups-list');
+        if(!container) return;
+        
+        if(currentProductAttachedGroups.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">Nenhum complemento vinculado.</p>';
+            return;
+        }
+
+        container.innerHTML = currentProductAttachedGroups.map(gid => {
+            const group = allComplements[gid];
+            if(!group) return ''; 
+            
+            return `
+                <div class="bg-gray-50 p-3 rounded-lg border flex flex-col gap-3">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-bold text-gray-700 text-sm">${group.title}</p>
+                            <p class="text-[10px] text-gray-500 uppercase">${group.internalCategory || 'Adicional'} • ${group.required ? 'Obrigatório' : 'Opcional'} • Máx: ${group.max || 1}</p>
+                        </div>
+                        <div class="flex gap-1">
+                            <button type="button" onclick="window.editarGrupo('${gid}')" class="text-blue-500 hover:text-blue-700 p-2" title="Editar Grupo"><i class="fas fa-edit"></i></button>
+                            <button type="button" onclick="window.desvincularGrupo('${gid}')" class="text-red-500 hover:text-red-700 p-2" title="Desvincular do Produto"><i class="fas fa-unlink"></i></button>
+                        </div>
+                    </div>
+                    <div class="pl-3 border-l-2 border-cyan-300 space-y-1">
+                        ${(group.options || []).map(opt => `
+                            <div class="flex items-center gap-2 text-xs text-gray-600">
+                                ${opt.image ? `<img src="${opt.image}" class="w-6 h-6 rounded object-cover shadow-sm">` : `<div class="w-6 h-6 bg-gray-200 rounded flex items-center justify-center"><i class="fas fa-image text-[8px] text-gray-400"></i></div>`}
+                                <span class="flex-1">${opt.name}</span>
+                                <span class="font-bold text-green-600">+ R$ ${Number(opt.price || 0).toFixed(2).replace('.', ',')}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    };
+
+window.abrirGerenciadorGrupos = () => {
+        const container = document.getElementById('available-groups-list');
+        const available = Object.values(allComplements).filter(g => !currentProductAttachedGroups.includes(g.id));
+        
+        if(available.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-xs text-center py-4 italic">Nenhum grupo disponível para vincular.</p>';
+        } else {
+            container.innerHTML = available.map(g => `
+                <div class="flex justify-between items-center bg-white p-3 rounded border shadow-sm">
+                    <div class="flex flex-col">
+                        <span class="text-sm font-bold text-gray-700">${g.title}</span>
+                        <span class="text-[10px] text-gray-500">${g.options ? g.options.length : 0} opções cadastradas</span>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <button type="button" onclick="window.editarGrupo('${g.id}')" class="text-blue-500 hover:text-blue-700" title="Editar"><i class="fas fa-edit"></i></button>
+                        <button type="button" onclick="window.deletarGrupo('${g.id}')" class="text-red-500 hover:text-red-700" title="Excluir Definitivamente"><i class="fas fa-trash"></i></button>
+                        <button type="button" onclick="window.vincularGrupo('${g.id}')" class="text-xs bg-cyan-100 text-cyan-700 px-3 py-1 rounded font-bold hover:bg-cyan-200 ml-2">Vincular</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Reseta estado para "Criação"
+        window.editandoGrupoId = null;
+        document.getElementById('form-new-group').reset();
+        document.getElementById('new-group-options').innerHTML = '';
+        const btnSalvar = document.querySelector('button[onclick="window.salvarNovoGrupo()"]');
+        if(btnSalvar) btnSalvar.innerHTML = '<i class="fas fa-save mr-1"></i> Criar e Vincular';
+        
+        document.getElementById('group-manager-modal').classList.remove('hidden');
+    };
+
+    window.vincularGrupo = (gid) => {
+        if(!currentProductAttachedGroups.includes(gid)) {
+            currentProductAttachedGroups.push(gid);
+            window.renderizarGruposVinculados();
+            window.abrirGerenciadorGrupos(); // Atualiza a lista removendo o que foi vinculado
+        }
+    };
+
+    window.desvincularGrupo = (gid) => {
+        currentProductAttachedGroups = currentProductAttachedGroups.filter(id => id !== gid);
+        window.renderizarGruposVinculados();
+    };
+
+    // --- CRIAR OPÇÕES DO GRUPO (Botão + Opção) ---
+// --- CRIAR OPÇÕES DO GRUPO (Botão + Opção) ---
+// --- CRIAR OPÇÕES DO GRUPO (Padrão iFood) ---
+    window.addOptionRow = (name = '', price = '', image = '') => {
+        const container = document.getElementById('new-group-options');
+        const div = document.createElement('div');
+        div.className = "flex items-center gap-3 option-row mt-2 bg-white p-2 border-b border-gray-100 hover:bg-gray-50 transition-colors";
+        div.innerHTML = `
+            <label class="w-14 h-14 rounded-lg bg-gray-100 border border-gray-300 flex items-center justify-center cursor-pointer relative overflow-hidden shrink-0 group shadow-sm">
+                <input type="file" accept="image/*" class="hidden" onchange="window.uploadOptionImage(this)">
+                <input type="hidden" class="opt-image" value="${image}">
+                
+                <i class="fas fa-camera text-gray-400 z-10 group-hover:text-gray-600 transition-colors ${image ? 'hidden' : ''}"></i>
+                <img src="${image || ''}" class="absolute inset-0 w-full h-full object-cover z-20 ${image ? '' : 'hidden'}" alt="Preview">
+                
+                <div class="loading-overlay hidden absolute inset-0 bg-black/60 z-30 flex items-center justify-center">
+                    <i class="fas fa-spinner fa-spin text-white"></i>
+                </div>
+            </label>
+
+            <div class="flex-1 flex flex-col justify-center gap-1">
+                <input type="text" placeholder="Ex: Ouro Branco" value="${name}" class="w-full bg-transparent border-b border-transparent focus:border-cyan-600 outline-none p-1 text-sm font-semibold text-gray-700 opt-name transition-colors" required>
+                <div class="flex items-center text-sm text-gray-500">
+                    <span class="mr-1">R$</span>
+                    <input type="number" step="0.01" placeholder="0,00" value="${price}" class="w-20 bg-transparent border-b border-transparent focus:border-cyan-600 outline-none p-1 opt-price transition-colors" required>
+                </div>
+            </div>
+
+            <button type="button" onclick="this.parentElement.remove()" class="text-gray-300 hover:text-red-500 p-2 transition-colors shrink-0" title="Excluir Opção">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        `;
+        container.appendChild(div);
+    };
+
+    // --- UPLOAD DA IMAGEM PARA O FIREBASE STORAGE ---
+    window.uploadOptionImage = async (fileInput) => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        // Captura os elementos do DOM dentro deste card específico
+        const label = fileInput.parentElement;
+        const hiddenInput = label.querySelector('.opt-image');
+        const iconElement = label.querySelector('i.fa-camera');
+        const imgElement = label.querySelector('img');
+        const overlay = label.querySelector('.loading-overlay');
+
+        // Ativa animação de carregamento
+        overlay.classList.remove('hidden');
+
+        try {
+            // Referencia o Storage do Firebase (A variável 'storage' e as funções já estão no topo do seu script)
+            const storageRef = ref(storage, `complementos/${Date.now()}_${file.name.replace(/\\s+/g, '_')}`);
+            
+            // Faz o upload do arquivo
+            const snapshot = await uploadBytes(storageRef, file);
+            
+            // Pega a URL pública
+            const downloadURL = await getDownloadURL(snapshot.ref);
+
+            // Atualiza o Input oculto e exibe a foto
+            hiddenInput.value = downloadURL;
+            imgElement.src = downloadURL;
+            imgElement.classList.remove('hidden');
+            iconElement.classList.add('hidden');
+            
+        } catch (error) {
+            console.error("Erro no upload da foto da opção:", error);
+            window.showToast("Erro", "Não foi possível enviar a foto. Tente novamente.", true);
+        } finally {
+            overlay.classList.add('hidden');
+            fileInput.value = ''; // Reseta o input para permitir selecionar a mesma foto novamente se errar
+        }
+    };
+
+    // --- SALVAR GRUPO NO BANCO (Criação de novos Complementos) ---
+// --- SALVAR GRUPO NO BANCO (Criação e Edição) ---
+    window.salvarNovoGrupo = async () => {
+        const title = document.getElementById('new-group-title').value;
+        const category = document.getElementById('new-group-category').value;
+        const required = document.getElementById('new-group-required').value === 'true';
+        const max = parseInt(document.getElementById('new-group-max').value) || 1;
+        
+        const rows = document.querySelectorAll('.option-row');
+        if(!title || rows.length === 0) {
+            window.showToast("Atenção", "Preencha o título e adicione pelo menos uma opção.", true);
+            return;
+        }
+
+        const options = [];
+        rows.forEach(r => {
+            const name = r.querySelector('.opt-name').value;
+            const price = parseFloat(r.querySelector('.opt-price').value) || 0;
+            const image = r.querySelector('.opt-image').value || '';
+            if(name) options.push({ name, price, image, available: true });
+        });
+
+        // Tenta pegar o botão tanto com window. quanto sem
+        const btn = document.querySelector('button[onclick="window.salvarNovoGrupo()"]') || document.querySelector('button[onclick="salvarNovoGrupo()"]');
+        const originalText = btn ? btn.innerHTML : 'Salvar';
+        if(btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Salvando...'; btn.disabled = true; }
+
+        try {
+            const payload = {
+                title: title,
+                internalCategory: category,
+                required: required,
+                max: max,
+                options: options,
+                updatedAt: serverTimestamp()
+            };
+
+            if (window.editandoGrupoId) {
+                // Modo Edição
+                await updateDoc(doc(db, "complementos", window.editandoGrupoId), payload);
+                window.showToast("Sucesso", "Complemento atualizado!");
+                window.editandoGrupoId = null;
+            } else {
+                // Modo Criação
+                payload.createdAt = serverTimestamp();
+                const docRef = await addDoc(collection(db, "complementos"), payload);
+                window.vincularGrupo(docRef.id);
+                window.showToast("Sucesso", "Novo complemento criado e vinculado!");
+            }
+            
+            // Re-abre/Atualiza a visão do modal
+            window.abrirGerenciadorGrupos(); 
+            window.renderizarGruposVinculados();
+            
+        } catch (e) {
+            console.error(e);
+            window.showToast("Erro", "Falha ao salvar complemento.", true);
+        } finally {
+            if(btn) { btn.innerHTML = originalText; btn.disabled = false; }
+        }
+    };
+    // --- LÓGICA DE EDIÇÃO E EXCLUSÃO DOS COMPLEMENTOS ---
+    window.editarGrupo = (gid) => {
+        const group = allComplements[gid];
+        if(!group) return;
+
+        window.editandoGrupoId = gid;
+        
+        // Abre o modal de gerenciamento se estiver fechado
+        document.getElementById('group-manager-modal').classList.remove('hidden');
+
+        // Preenche o formulário superior
+        document.getElementById('new-group-title').value = group.title || '';
+        document.getElementById('new-group-category').value = group.internalCategory || 'adicional';
+        document.getElementById('new-group-required').value = group.required ? 'true' : 'false';
+        document.getElementById('new-group-max').value = group.max || 1;
+
+        // Limpa as opções atuais e injeta as do banco
+        document.getElementById('new-group-options').innerHTML = '';
+        if(group.options) {
+            group.options.forEach(opt => {
+                window.addOptionRow(opt.name, opt.price, opt.image || '');
+            });
+        } else {
+            window.addOptionRow(); // se tiver vazio por algum erro, põe 1 em branco
+        }
+
+        // Muda visual do botão
+        const btnSalvar = document.querySelector('button[onclick="window.salvarNovoGrupo()"]') || document.querySelector('button[onclick="salvarNovoGrupo()"]');
+        if(btnSalvar) btnSalvar.innerHTML = '<i class="fas fa-save mr-1"></i> Salvar Alterações';
+    };
+
+    window.deletarGrupo = async (gid) => {
+        if(confirm("ATENÇÃO: Deseja apagar este complemento do Banco de Dados? Ele sumirá de TODOS os produtos que o utilizam.")) {
+            try {
+                await deleteDoc(doc(db, "complementos", gid));
+                
+                // Remove da lista do produto atual se estivesse lá
+                window.desvincularGrupo(gid);
+                
+                window.showToast("Sucesso", "Complemento excluído com sucesso!");
+                window.abrirGerenciadorGrupos(); // Atualiza a lista da tela
+            } catch (e) {
+                console.error("Erro ao excluir complemento:", e);
+                window.showToast("Erro", "Falha ao excluir o complemento.", true);
+            }
+        }
+    };
