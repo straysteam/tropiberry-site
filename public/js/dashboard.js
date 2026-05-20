@@ -189,26 +189,43 @@
     }
 
     // Upload de Imagem do Produto
-    window.handleImageUpload = async function(input) {
-        if (input.files && input.files[0]) {
-            const file = input.files[0];
-            document.getElementById('upload-loading').classList.remove('hidden');
-            try {
-                const storageRef = ref(storage, `produtos/${Date.now()}_${file.name}`);
-                await uploadBytes(storageRef, file);
-                const url = await getDownloadURL(storageRef);
-                document.getElementById('preview-image').src = url;
+// Substitua as funções de upload por esta versão unificada:
+window.handleImageUpload = async function(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const loading = document.getElementById('upload-loading');
+        if(loading) loading.classList.remove('hidden');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // Chamada direta para o seu arquivo PHP na raiz da Locaweb
+            const response = await fetch('upload.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.sucesso) {
+                // SUCESSO: O PHP salvou na pasta /uploads/pedidos/ e nos deu a URL
+                document.getElementById('preview-image').src = result.url;
                 document.getElementById('preview-image').classList.remove('hidden');
                 document.getElementById('icon-image').classList.add('hidden');
-                document.getElementById('edit-image-url').value = url;
-            } catch (error) {
-                console.error(error);
-                window.showToast("Erro", "Falha no upload", true);
-            } finally {
-                document.getElementById('upload-loading').classList.add('hidden');
+                document.getElementById('edit-image-url').value = result.url;
+                window.showToast("Sucesso", "Imagem enviada para seu servidor!");
+            } else {
+                throw new Error(result.erro);
             }
+        } catch (error) {
+            console.error("Erro no upload:", error);
+            window.showToast("Erro", "Falha: " + error.message, true);
+        } finally {
+            if(loading) loading.classList.add('hidden');
         }
     }
+}
 
 window.navegarPara = (telaId) => {
         // 1. Salva a tela atual para o F5
@@ -4398,45 +4415,46 @@ window.abrirGerenciadorGrupos = () => {
     };
 
     // --- UPLOAD DA IMAGEM PARA O FIREBASE STORAGE ---
-    window.uploadOptionImage = async (fileInput) => {
+window.uploadOptionImage = async (fileInput) => {
         const file = fileInput.files[0];
         if (!file) return;
 
-        // Captura os elementos do DOM dentro deste card específico
         const label = fileInput.parentElement;
-        const hiddenInput = label.querySelector('.opt-image');
-        const iconElement = label.querySelector('i.fa-camera');
-        const imgElement = label.querySelector('img');
         const overlay = label.querySelector('.loading-overlay');
-
-        // Ativa animação de carregamento
         overlay.classList.remove('hidden');
 
         try {
-            // Referencia o Storage do Firebase (A variável 'storage' e as funções já estão no topo do seu script)
-            const storageRef = ref(storage, `complementos/${Date.now()}_${file.name.replace(/\\s+/g, '_')}`);
-            
-            // Faz o upload do arquivo
-            const snapshot = await uploadBytes(storageRef, file);
-            
-            // Pega a URL pública
-            const downloadURL = await getDownloadURL(snapshot.ref);
+            const formData = new FormData();
+            formData.append('file', file);
 
-            // Atualiza o Input oculto e exibe a foto
-            hiddenInput.value = downloadURL;
-            imgElement.src = downloadURL;
-            imgElement.classList.remove('hidden');
-            iconElement.classList.add('hidden');
-            
+            const response = await fetch('upload.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            // Captura o texto puro para ver se o PHP está dando erro de servidor (500)
+            const textResponse = await response.text(); 
+            console.log("Resposta do servidor:", textResponse); // <--- ABRA O CONSOLE (F12) E VEJA ISSO
+
+            const result = JSON.parse(textResponse);
+
+            if (result.sucesso) {
+                const hiddenInput = label.querySelector('.opt-image');
+                const imgElement = label.querySelector('img');
+                hiddenInput.value = result.url;
+                imgElement.src = result.url;
+                imgElement.classList.remove('hidden');
+            } else {
+                alert("Erro no upload: " + result.erro);
+            }
         } catch (error) {
-            console.error("Erro no upload da foto da opção:", error);
-            window.showToast("Erro", "Não foi possível enviar a foto. Tente novamente.", true);
+            console.error("Erro completo:", error);
+            alert("Erro de conexão com o servidor. Verifique o console do navegador.");
         } finally {
             overlay.classList.add('hidden');
-            fileInput.value = ''; // Reseta o input para permitir selecionar a mesma foto novamente se errar
+            fileInput.value = '';
         }
     };
-
     // --- SALVAR GRUPO NO BANCO (Criação de novos Complementos) ---
 // --- SALVAR GRUPO NO BANCO (Criação e Edição) ---
     window.salvarNovoGrupo = async () => {
@@ -4583,3 +4601,4 @@ window.abrirGerenciadorGrupos = () => {
             window.toggleLoading(false);
         }
     };
+    
