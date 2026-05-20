@@ -854,6 +854,13 @@ window.atualizarStatus = async (id, status) => {
         
         window.showToast("Status Atualizado", `Pedido #${id.slice(0,4)} movido para ${status}`);
 
+        // --- LÓGICA DE IMPRESSÃO AUTOMÁTICA ---
+        // Se o pedido foi aceito (Em Preparo) e a config permitir, imprime automaticamente
+        if (status === 'Em Preparo' && printConfig && printConfig.autoPrint) {
+            console.log("Impressão automática disparada para o pedido:", id);
+            window.imprimirPedidoDash(id);
+        }
+
         // --- LÓGICA DE FIDELIDADE (Acionada ao Finalizar) ---
         if (status === 'Finalizado') {
             await processarFidelidadeAoFinalizar({ id, ...pedidoDados });
@@ -2586,38 +2593,36 @@ window.confirmarPagamento = async () => {
     }
 
     // 3. Salvar Configurações
-    window.salvarConfigImpressao = async () => {
-        const btn = document.querySelector('button[onclick="salvarConfigImpressao()"]');
-        const original = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-        btn.disabled = true;
+window.salvarConfigImpressao = async () => {
+    const btn = document.querySelector('button[onclick="salvarConfigImpressao()"]');
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    btn.disabled = true;
+    
+    try {
+        const width = document.querySelector('input[name="print-width"]:checked')?.value || '80mm';
         
-        try {
-            const width = document.querySelector('input[name="print-width"]:checked')?.value || '80mm';
-            
-            const data = {
-                width: width,
-                fontSize: document.getElementById('print-font-size').value,
-                copies: parseInt(document.getElementById('print-copies').value),
-                autoPrint: document.getElementById('print-auto').checked,
-                logoUrl: printConfig.logoUrl, // Salva a URL da imagem
-                footerMsg: document.getElementById('print-footer-msg').value,
-                updatedAt: serverTimestamp()
-            };
+        const data = {
+            width: width,
+            fontSize: document.getElementById('print-font-size').value,
+            copies: parseInt(document.getElementById('print-copies').value),
+            autoPrint: document.getElementById('print-auto').checked,
+            logoUrl: document.getElementById('print-logo-preview').src, // Pega a URL do preview atual
+            footerMsg: document.getElementById('print-footer-msg').value,
+            updatedAt: serverTimestamp()
+        };
 
-            await setDoc(doc(db, "config", "impressao"), data);
-            printConfig = data; // Sincroniza
-            
-            showToast("Sucesso", "Configurações de impressão salvas!");
-            
-        } catch (e) {
-            console.error(e);
-            showToast("Erro", "Falha ao salvar.", true);
-        } finally {
-            btn.innerHTML = original;
-            btn.disabled = false;
-        }
+        await setDoc(doc(db, "config", "impressao"), data);
+        printConfig = data; // Atualiza a variável na memória instantaneamente
+        
+        showToast("Sucesso", "Configurações salvas!");
+    } catch (e) {
+        showToast("Erro", "Falha ao salvar.", true);
+    } finally {
+        btn.innerHTML = original;
+        btn.disabled = false;
     }
+}
 
     // 4. Ajustar Vias (Contador)
     window.ajustarVias = (delta) => {
@@ -2631,69 +2636,98 @@ window.confirmarPagamento = async () => {
     }
 
     // 5. Função de Impressão Real (Injetando CSS dinâmico)
-    window.imprimirPedidoReal = (htmlCupom) => {
-        let iframe = document.getElementById('print-frame');
-        if (!iframe) {
-            iframe = document.createElement('iframe');
-            iframe.id = 'print-frame';
-            // CORREÇÃO ANDROID/IOS: display:none bloqueia a execução do print().
-            // Usamos visibilidade escondida e posição fora da tela.
-            iframe.style.position = 'fixed';
-            iframe.style.bottom = '0';
-            iframe.style.right = '0';
-            iframe.style.width = '0';
-            iframe.style.height = '0';
-            iframe.style.border = 'none';
-            iframe.style.visibility = 'hidden';
-            document.body.appendChild(iframe);
-        }
-
-        const doc = iframe.contentWindow.document;
-        
-        // Constrói o HTML da Logo se existir
-        const logoHtml = printConfig.logoUrl 
-            ? `<div class="text-center"><img src="${printConfig.logoUrl}" class="logo"></div>` 
-            : '';
-
-        doc.open();
-        doc.write(`
-            <html>
-            <head>
-                <style>
-                    @page { margin: 0; }
-                    body { 
-                        font-family: 'Courier New', monospace; 
-                        width: ${printConfig.width}; 
-                        font-size: ${printConfig.fontSize};
-                        margin: 0; 
-                        padding: 5px;
-                        color: black;
-                    }
-                    .text-center { text-align: center; }
-                    .text-right { text-align: right; }
-                    .font-bold { font-weight: bold; }
-                    .divider { border-top: 1px dashed #000; margin: 5px 0; }
-                    .item-row { display: flex; justify-content: space-between; }
-                    .footer { margin-top: 10px; font-size: 0.9em; text-align: center; }
-                    img.logo { max-width: 60%; height: auto; display: block; margin: 0 auto 5px auto; }
-                </style>
-            </head>
-            <body>
-                ${logoHtml}
-                ${htmlCupom}
-                ${printConfig.footerMsg ? `<div class="divider"></div><div class="footer">${printConfig.footerMsg}</div>` : ''}
-                <div class="text-center" style="margin-top:10px;">.</div>
-            </body>
-            </html>
-        `);
-        doc.close();
-
-        // Aguarda carregamento da imagem antes de imprimir
-        iframe.contentWindow.focus();
-        setTimeout(() => {
-            iframe.contentWindow.print();
-        }, 800);
+window.imprimirPedidoReal = (htmlCupom) => {
+    let iframe = document.getElementById('print-frame');
+    if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'print-frame';
+        iframe.style.position = 'fixed';
+        iframe.style.bottom = '0';
+        iframe.style.right = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        iframe.style.visibility = 'hidden';
+        document.body.appendChild(iframe);
     }
+
+    const doc = iframe.contentWindow.document;
+    
+    // Configuração de Logo
+    const logoHtml = printConfig.logoUrl 
+        ? `<div style="text-align: center; margin-bottom: 5px;"><img src="${printConfig.logoUrl}" style="max-width: 40mm; height: auto;"></div>` 
+        : '';
+
+    doc.open();
+    doc.write(`
+        <html>
+        <head>
+            <style>
+                @page { margin: 0; }
+                body { 
+                    font-family: 'Courier New', monospace; 
+                    width: ${printConfig.width || '80mm'}; 
+                    font-size: ${printConfig.fontSize || '12px'};
+                    margin: 0; padding: 10px; color: black;
+                }
+                .text-center { text-align: center; }
+                .font-bold { font-weight: bold; }
+                .divider { border-top: 1px dashed #000; margin: 8px 0; }
+                .info-loja { text-align: center; font-size: 0.9em; margin-bottom: 8px; line-height: 1.3; }
+                .item-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+                .footer { margin-top: 15px; font-size: 0.85em; text-align: center; }
+            </style>
+        </head>
+        <body>
+            ${logoHtml}
+            <div class="text-center font-bold" style="font-size: 1.3em;">TROPIBERRY</div>
+            <div class="info-loja">
+                Rua Ricardo Soares de Souza Neto, 456 - Gramame<br>
+                Fone: (83) 92002-4786 | João Pessoa - PB<br>
+                CNPJ: 58.335.245/0001-50
+            </div>
+            ${htmlCupom}
+            ${printConfig.footerMsg ? `<div class="divider">--------------------------------</div><div class="footer">${printConfig.footerMsg}</div>` : ''}
+            <div class="text-center">--- FIM DO CUPOM ---</div>
+        </body>
+        </html>
+    `);
+    doc.close();
+
+    iframe.contentWindow.focus();
+    setTimeout(() => {
+        iframe.contentWindow.print();
+    }, 800);
+}
+// 3. Atualize o salvarConfigImpressao para o botão funcionar
+window.salvarConfigImpressao = async () => {
+    const btn = document.querySelector('button[onclick="salvarConfigImpressao()"]');
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    btn.disabled = true;
+    
+    try {
+        const width = document.querySelector('input[name="print-width"]:checked')?.value || '80mm';
+        const data = {
+            width: width,
+            fontSize: document.getElementById('print-font-size').value,
+            copies: parseInt(document.getElementById('print-copies').value),
+            autoPrint: document.getElementById('print-auto').checked,
+            logoUrl: document.getElementById('print-logo-preview').src,
+            footerMsg: document.getElementById('print-footer-msg').value,
+            updatedAt: serverTimestamp()
+        };
+
+        await setDoc(doc(db, "config", "impressao"), data);
+        printConfig = data; // Sincroniza em tempo real
+        showToast("Sucesso", "Configurações salvas!");
+    } catch (e) {
+        showToast("Erro", "Falha ao salvar.", true);
+    } finally {
+        btn.innerHTML = original;
+        btn.disabled = false;
+    }
+}
 
     // 6. Teste de Impressão
     window.testarImpressao = () => {
@@ -4601,4 +4635,3 @@ window.uploadOptionImage = async (fileInput) => {
             window.toggleLoading(false);
         }
     };
-    
