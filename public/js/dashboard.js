@@ -339,14 +339,43 @@ window.navegarPara = (telaId) => {
             if (!document.getElementById('view-mesas').classList.contains('hidden')) renderizarGridMesas();
         });
 
-        // MONITOR DE PRODUTOS (Separado para não bugar a memória e os produtos aparecerem!)
-        onSnapshot(collection(db, "produtos"), (snapshot) => {
-            allProducts = [];
-            snapshot.forEach(d => allProducts.push({id: d.id, ...d.data()}));
-            if(!document.getElementById('view-produtos').classList.contains('hidden')) {
-                renderizarListaProdutos();
-            }
+// MONITOR DE PRODUTOS
+// MONITOR DE PRODUTOS
+    onSnapshot(collection(db, "produtos"), (snapshot) => {
+        allProducts = [];
+        snapshot.forEach(doc => {
+            allProducts.push({ id: doc.id, ...doc.data() });
         });
+        
+        // Renderiza as telas que dependem de produtos se elas estiverem abertas
+        if (!document.getElementById('view-produtos').classList.contains('hidden')) {
+            window.renderizarListaProdutos();
+        }
+        if (!document.getElementById('view-pdv-wrapper').classList.contains('hidden')) {
+             // Se estiver no PDV, renderiza o grid do PDV
+            if (typeof window.renderizarProdutosPOS === 'function') window.renderizarProdutosPOS();
+        }
+        
+        // Fecha o loading caso ele esteja aberto
+        window.toggleLoading(false);
+    });
+
+    // MONITOR DE CATEGORIAS
+    onSnapshot(collection(db, "categorias"), (snapshot) => {
+        allCategories = [];
+        snapshot.forEach(doc => {
+            allCategories.push({ id: doc.id, ...doc.data() });
+        });
+        
+        // CORREÇÃO DO SELECT: Se o modal de produto estiver aberto quando criar a categoria, ele atualiza o select na hora!
+        const modalProduto = document.getElementById('product-modal');
+        if (modalProduto && !modalProduto.classList.contains('hidden')) {
+            const currentCat = document.getElementById('edit-category')?.value;
+            if (typeof window.renderizarSeletorCategoriasModal === 'function') {
+                window.renderizarSeletorCategoriasModal(currentCat);
+            }
+        }
+    });
     }
 
     function updateBadge(id, count) {
@@ -4514,5 +4543,43 @@ window.abrirGerenciadorGrupos = () => {
                 console.error("Erro ao excluir complemento:", e);
                 window.showToast("Erro", "Falha ao excluir o complemento.", true);
             }
+        }
+    };
+    window.abrirModalNovaCategoria = () => {
+        document.getElementById('input-nova-categoria').value = '';
+        document.getElementById('modal-nova-categoria-admin').classList.remove('hidden');
+        setTimeout(() => document.getElementById('input-nova-categoria').focus(), 100);
+    };
+
+    window.salvarNovaCategoria = async () => {
+        const inputCat = document.getElementById('input-nova-categoria');
+        const nomeCategoria = inputCat.value.trim();
+        
+        if (!nomeCategoria) {
+            return window.showToast("Atenção", "Digite um nome para a categoria.", true);
+        }
+
+        window.toggleLoading(true, "Salvando...");
+        
+        try {
+            await addDoc(collection(db, "categorias"), { 
+                nome: nomeCategoria, 
+                createdAt: serverTimestamp() 
+            });
+            
+            window.showToast("Sucesso", "Categoria criada com sucesso!");
+            document.getElementById('modal-nova-categoria-admin').classList.add('hidden');
+            
+            // Força a categoria nova a ficar selecionada no select do produto
+            setTimeout(() => {
+                const selectCat = document.getElementById('edit-category');
+                if (selectCat) selectCat.value = nomeCategoria;
+            }, 600); // Dá tempo do onSnapshot acima atualizar a UI
+            
+        } catch(e) {
+            console.error("Erro ao criar categoria:", e);
+            window.showToast("Erro", "Falha ao criar categoria.", true);
+        } finally {
+            window.toggleLoading(false);
         }
     };

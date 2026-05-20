@@ -239,6 +239,19 @@
                 width: 100%;
             }
         }
+        /* Animação para centralização suave */
+        .animate-pop-up {
+            animation: popUp 0.3s ease-out forwards;
+        }
+        @keyframes popUp {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        /* Correção para o modal de categoria não ficar com tarja */
+        #modal-nova-categoria-admin {
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+        }
     </style>
 </head>
 
@@ -905,9 +918,9 @@
     </div>
 
     <div id="view-produtos" class="hidden flex-col h-full bg-[#f0f2f5]">
-        <div class="px-6 py-4 flex justify-between items-center bg-white border-b shadow-sm">
+<div class="px-6 py-4 flex justify-between items-center bg-white border-b shadow-sm">
             <h2 class="text-2xl font-bold text-gray-800">Meus Produtos</h2>
-            <button onclick="abrirModalNovoProduto()"
+            <button onclick="window.abrirModalNovoProduto()"
                 class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg font-bold shadow flex items-center gap-2"><i
                     class="fas fa-plus"></i> Novo Produto</button>
         </div>
@@ -2451,10 +2464,14 @@
                                         class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none"
                                         required>
                                 </div>
-                                <div>
+<div>
                                     <label class="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
-                                    <select id="edit-category"
-                                        class="w-full border rounded-lg p-2 text-sm bg-white"></select>
+                                    <div class="flex gap-2 items-center">
+                                        <select id="edit-category" class="w-full border rounded-lg p-2 text-sm bg-white"></select>
+                                        <button type="button" onclick="window.abrirModalNovaCategoria()" class="bg-cyan-100 text-cyan-700 w-10 h-9 rounded-lg hover:bg-cyan-200 transition shrink-0 shadow-sm border border-cyan-200 flex items-center justify-center" title="Criar Nova Categoria">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -3303,6 +3320,19 @@
         </div>
     </div>
 </div>
+<div id="modal-nova-categoria-admin" class="fixed inset-0 z-[200] hidden bg-black/70 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-pop-up">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2"><i class="fas fa-tags text-cyan-600"></i> Nova Categoria</h3>
+                <button onclick="document.getElementById('modal-nova-categoria-admin').classList.add('hidden')" class="text-gray-400 hover:text-red-500 text-xl"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">Crie uma nova categoria para organizar o seu cardápio.</p>
+            <input type="text" id="input-nova-categoria" placeholder="Ex: Combos, Bebidas, Açaí..." class="w-full border-2 border-gray-200 rounded-xl p-3 text-sm focus:border-cyan-500 outline-none mb-4 font-bold text-gray-700">
+            <button onclick="window.salvarNovaCategoria()" class="w-full bg-cyan-600 text-white font-bold py-3 rounded-xl hover:bg-cyan-700 transition shadow-lg flex items-center justify-center gap-2">
+                <i class="fas fa-check"></i> Salvar Categoria
+            </button>
+        </div>
+    </div>
 </body>
 
 </html>
