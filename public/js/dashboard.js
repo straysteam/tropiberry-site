@@ -146,7 +146,7 @@
         const arrow = document.getElementById('arrow-vendas');
         arrow.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
     }
-    // Gerenciamento de Tags (Copiado do Admin)
+// Gerenciamento de Tags (Copiado do Admin)
     function renderTagSelector() {
         const container = document.getElementById('tags-container');
         if(!container) return;
@@ -154,15 +154,20 @@
         AVAILABLE_TAGS.forEach(tag => {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'tag-item border rounded-full px-3 py-1 text-xs font-bold transition tag-default cursor-pointer mb-1 mr-1';
+            // Adicionamos as classes visuais base do Tailwind para o estado "desativado"
+            btn.className = 'tag-item border border-gray-300 bg-white text-gray-600 rounded-full px-3 py-1 text-xs font-bold transition cursor-pointer mb-1 mr-1 hover:bg-cyan-50';
             btn.innerText = tag;
+            
+            // Múltipla seleção: O clique inverte o estado visual e a classe marcadora
             btn.onclick = () => {
                 if (btn.classList.contains('tag-selected')) {
-                    btn.classList.remove('tag-selected');
-                    btn.classList.add('tag-default');
+                    // Desativa: remove as cores de ativo e coloca as de inativo
+                    btn.classList.remove('tag-selected', 'bg-cyan-600', 'text-white', 'border-cyan-600');
+                    btn.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
                 } else {
-                    btn.classList.add('tag-selected');
-                    btn.classList.remove('tag-default');
+                    // Ativa: remove as cores inativas e pinta com a cor primária
+                    btn.classList.add('tag-selected', 'bg-cyan-600', 'text-white', 'border-cyan-600');
+                    btn.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
                 }
             };
             container.appendChild(btn);
@@ -171,19 +176,22 @@
 
     function getSelectedTags() {
         const selected = [];
+        // O seletor pega TODAS as tags que têm a classe 'tag-selected' (múltipla seleção nativa)
         document.querySelectorAll('.tag-item.tag-selected').forEach(btn => selected.push(btn.innerText));
         return selected;
     }
 
     function setSelectedTags(tagsArray) {
-        if (!tagsArray) return;
+        if (!tagsArray) tagsArray = []; // Proteção contra arrays vazios/nulos
         document.querySelectorAll('.tag-item').forEach(btn => {
             if (tagsArray.includes(btn.innerText)) {
-                btn.classList.add('tag-selected');
-                btn.classList.remove('tag-default');
+                // Ativa a tag visualmente ao abrir o modal de edição
+                btn.classList.add('tag-selected', 'bg-cyan-600', 'text-white', 'border-cyan-600');
+                btn.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
             } else {
-                btn.classList.remove('tag-selected');
-                btn.classList.add('tag-default');
+                // Desativa a tag visualmente
+                btn.classList.remove('tag-selected', 'bg-cyan-600', 'text-white', 'border-cyan-600');
+                btn.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
             }
         });
     }
@@ -2974,7 +2982,10 @@ window.salvarConfigImpressao = async () => {
         });
     }
 
-    window.abrirModalNovoProduto = () => {
+window.abrirModalNovoProduto = () => {
+        // Preenche o select com as categorias puxadas do Firebase
+        window.renderizarSeletorCategoriasModal(); 
+        
         document.getElementById('form-produto').reset();
         document.getElementById('edit-id').value = '';
         document.getElementById('edit-image-url').value = '';
@@ -2994,6 +3005,9 @@ window.abrirModalEdicao = (id) => {
             window.showToast("Erro", "Produto não encontrado na memória.", true);
             return;
         }
+
+        // Popula as categorias e já deixa selecionada a do produto
+        window.renderizarSeletorCategoriasModal(p.category);
         
         // Preenche os inputs
         document.getElementById('edit-id').value = p.id;
@@ -4289,40 +4303,6 @@ window.confirmarPagamentoManual = async () => {
         window.imprimirPedidoDash(docRef.id);
     } catch(e) { console.error(e); showToast("Erro", "Falha ao gravar.", true); }
 };
-// FUNÇÃO PARA APAGAR DADOS DE TESTE (EXECUTAR APENAS UMA VEZ)
-    window.zerarBancoDeTestes = async () => {
-        const senha = prompt("Digite a senha master para ZERAR o banco de dados:");
-        if (senha !== "tropi123") { // Altere para a senha que você quiser
-            return window.showToast("Bloqueado", "Senha incorreta!", true);
-        }
-
-        if(!confirm("🚨 ATENÇÃO MÁXIMA: Isso vai apagar TODOS os pedidos e históricos financeiros para sempre. Seu cardápio e equipe continuarão intactos. Deseja continuar?")) return;
-        
-        try {
-            window.showToast("Processando", "Limpando banco de dados...");
-
-            // 1. Busca e deleta todos os Pedidos
-            const { collection, getDocs, deleteDoc, doc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
-            
-            const pedidosSnap = await getDocs(collection(db, "pedidos"));
-            const promisesPedidos = pedidosSnap.docs.map(docSnap => deleteDoc(doc(db, "pedidos", docSnap.id)));
-            await Promise.all(promisesPedidos);
-
-            // 2. Busca e deleta todas as Movimentações Financeiras
-            const movSnap = await getDocs(collection(db, "movimentacoes"));
-            const promisesMov = movSnap.docs.map(docSnap => deleteDoc(doc(db, "movimentacoes", docSnap.id)));
-            await Promise.all(promisesMov);
-
-            window.showToast("Sucesso", "Banco de dados limpo com sucesso!");
-            
-            // Recarrega a página após 1.5 segundos para atualizar todos os relatórios na tela
-            setTimeout(() => window.location.reload(), 1500);
-
-        } catch(e) {
-            console.error(e);
-            window.showToast("Erro", "Falha ao limpar banco de dados.", true);
-        }
-    };
     // ==========================================
     // GERENCIAMENTO DE COMPLEMENTOS / GRUPOS
     // ==========================================
@@ -4623,9 +4603,13 @@ window.uploadOptionImage = async (fileInput) => {
             document.getElementById('modal-nova-categoria-admin').classList.add('hidden');
             
             // Força a categoria nova a ficar selecionada no select do produto
+// Força a categoria nova a ficar selecionada no select do produto
             setTimeout(() => {
+                // Atualiza todas as listagens caso o Firebase já tenha pego, mas não forçado
+                window.renderizarSeletorCategoriasModal(nomeCategoria);
                 const selectCat = document.getElementById('edit-category');
-                if (selectCat) selectCat.value = nomeCategoria;
+                // Se der tempo, ele seleciona o recém criado (caso o slug seja igual ao nome)
+                if (selectCat) selectCat.value = nomeCategoria.toLowerCase().replace(/[^a-z0-9]/g, '-'); // Assumindo que você gera slug na criação
             }, 600); // Dá tempo do onSnapshot acima atualizar a UI
             
         } catch(e) {
@@ -4635,3 +4619,26 @@ window.uploadOptionImage = async (fileInput) => {
             window.toggleLoading(false);
         }
     };
+window.renderizarSeletorCategoriasModal = (selectedCat = null) => {
+    const select = document.getElementById('edit-category');
+    if (!select) return;
+
+    select.innerHTML = '<option value="" disabled selected>Selecione uma Categoria...</option>';
+
+    allCategories.forEach(cat => {
+        // Usa o nome ou o slug como valor (prefira slug se tiver, senao vai o nome mesmo)
+        const valorCategoria = cat.slug || cat.nome;
+        const nomeVisivel = cat.nome;
+        
+        const option = document.createElement('option');
+        option.value = valorCategoria;
+        option.innerText = nomeVisivel;
+        
+        // Mantém a categoria que já estava selecionada, se estivermos editando
+        if (selectedCat && valorCategoria === selectedCat) {
+            option.selected = true;
+        }
+
+        select.appendChild(option);
+    });
+};

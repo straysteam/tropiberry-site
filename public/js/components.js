@@ -6,7 +6,7 @@ export function renderizarHeaderGlobal() {
     <header class="bg-cyan-600 text-white relative shadow-lg z-50 sticky top-0 transition-all duration-300">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center relative z-10">
             
-            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='index.html'">
+            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='/inicio'">
                 <img src="img/logosf.png" alt="Logo" class="h-10 md:h-12 w-auto object-contain">
                 <h1 class="block text-lg md:text-2xl font-bold tracking-wide brand-font text-yellow-300 drop-shadow-md uppercase italic">TROPIBERRY</h1>
             </div>
@@ -90,7 +90,7 @@ export function renderizarHeaderGlobal() {
     
     <nav class="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] z-[60] flex justify-between items-center px-2 py-2 pb-safe">
         
-        <a href="index.html" class="flex flex-col items-center justify-center flex-1 text-gray-400 hover:text-cyan-600 transition-all ${window.location.pathname.includes('index') ? 'text-cyan-600' : ''}">
+        <a href="/inicio" class="flex flex-col items-center justify-center flex-1 text-gray-400 hover:text-cyan-600 transition-all ${window.location.pathname.includes('index') ? 'text-cyan-600' : ''}">
             <i class="fas fa-home text-xl mb-1"></i>
             <span class="text-[9px] font-black uppercase">Início</span>
         </a>
