@@ -23,6 +23,19 @@
     let currentPayMethod = 'dinheiro';
     let salesChartInstance = null;
     let categoriaAtivaPOS = 'todos';
+    let allComplements = {}; // "Cérebro" para calcular preços e montar o açaí
+
+    // MONITOR DE COMPLEMENTOS (Puxa os tamanhos e preços do banco)
+    // MONITOR DE COMPLEMENTOS (Puxa os tamanhos e preços do banco)
+    onSnapshot(collection(db, "complementos"), (snapshot) => {
+        allComplements = {}; // <--- ADICIONE ESTA LINHA PARA LIMPAR O OBJETO
+        snapshot.forEach(doc => {
+            allComplements[doc.id] = { id: doc.id, ...doc.data() };
+        });
+        // Recarrega os preços nos grids se as telas estiverem abertas
+        if(!document.getElementById('view-pdv-manual').classList.contains('hidden')) renderizarProdutosManual();
+        if(!document.getElementById('view-pos').classList.contains('hidden')) renderizarProdutosPOS();
+    });
 
     const AVAILABLE_TAGS = [
         "Vegano", "Vegetariano", "Orgânico", "Sem açúcar", "Sem lactose", "Sem glúten",
@@ -31,21 +44,49 @@
     ];
     let currentProductAttachedGroups = [];
 
+// ===============================================
+    // INICIALIZAÇÃO INTELIGENTE (Adicione no final do dashboard.js)
+    // ===============================================
+
     document.addEventListener('DOMContentLoaded', () => {
         monitorarEstadoAuth(async (user) => {
             if (!user || !(await verificarAdminNoBanco(user.email))) {
                 window.location.href = 'index.html'; 
                 return;
             }
+            
+            // Carrega infos do usuário no topo
             if(document.getElementById('header-user-name')) document.getElementById('header-user-name').innerText = user.displayName || 'Admin';
             if(document.getElementById('header-user-email')) document.getElementById('header-user-email').innerText = user.email;
 
-            // Gatilhos Iniciais
-            await carregarProdutosECategorias(); 
+            // Inicia monitores globais
             iniciarMonitoramentoPedidos();
             
-            const ultimaTela = localStorage.getItem('painel_ultima_tela') || 'view-pdv-wrapper';
-            window.navegarPara(ultimaTela);
+            // VERIFICA SE O USUÁRIO VEIO DO ATALHO DO SITE (edit_product)
+            const params = new URLSearchParams(window.location.search);
+            const editId = params.get('edit_product');
+
+            if (editId) {
+                // Aguarda os produtos carregarem do banco de dados na memória
+                const checkLoaded = setInterval(() => {
+                    if (allProducts.length > 0) {
+                        clearInterval(checkLoaded);
+                        
+                        // 1. Força a navegação para a aba de produtos
+                        window.navegarPara('view-produtos');
+                        
+                        // 2. Abre o modal com os dados carregados
+                        window.abrirModalEdicao(editId);
+                        
+                        // 3. Limpa a URL silenciosamente para evitar que o modal abra de novo se você der F5
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                }, 500);
+            } else {
+                // SE NÃO TEM ATALHO, RECUPERA A ÚLTIMA TELA ABERTA PADRÃO
+                const ultimaTela = localStorage.getItem('painel_ultima_tela') || 'view-pdv-wrapper';
+                window.navegarPara(ultimaTela);
+            }
         });
     });
 
@@ -105,7 +146,7 @@
         const arrow = document.getElementById('arrow-vendas');
         arrow.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
     }
-    // Gerenciamento de Tags (Copiado do Admin)
+// Gerenciamento de Tags (Copiado do Admin)
     function renderTagSelector() {
         const container = document.getElementById('tags-container');
         if(!container) return;
@@ -113,15 +154,20 @@
         AVAILABLE_TAGS.forEach(tag => {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'tag-item border rounded-full px-3 py-1 text-xs font-bold transition tag-default cursor-pointer mb-1 mr-1';
+            // Adicionamos as classes visuais base do Tailwind para o estado "desativado"
+            btn.className = 'tag-item border border-gray-300 bg-white text-gray-600 rounded-full px-3 py-1 text-xs font-bold transition cursor-pointer mb-1 mr-1 hover:bg-cyan-50';
             btn.innerText = tag;
+            
+            // Múltipla seleção: O clique inverte o estado visual e a classe marcadora
             btn.onclick = () => {
                 if (btn.classList.contains('tag-selected')) {
-                    btn.classList.remove('tag-selected');
-                    btn.classList.add('tag-default');
+                    // Desativa: remove as cores de ativo e coloca as de inativo
+                    btn.classList.remove('tag-selected', 'bg-cyan-600', 'text-white', 'border-cyan-600');
+                    btn.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
                 } else {
-                    btn.classList.add('tag-selected');
-                    btn.classList.remove('tag-default');
+                    // Ativa: remove as cores inativas e pinta com a cor primária
+                    btn.classList.add('tag-selected', 'bg-cyan-600', 'text-white', 'border-cyan-600');
+                    btn.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
                 }
             };
             container.appendChild(btn);
@@ -130,57 +176,78 @@
 
     function getSelectedTags() {
         const selected = [];
+        // O seletor pega TODAS as tags que têm a classe 'tag-selected' (múltipla seleção nativa)
         document.querySelectorAll('.tag-item.tag-selected').forEach(btn => selected.push(btn.innerText));
         return selected;
     }
 
     function setSelectedTags(tagsArray) {
-        if (!tagsArray) return;
+        if (!tagsArray) tagsArray = []; // Proteção contra arrays vazios/nulos
         document.querySelectorAll('.tag-item').forEach(btn => {
             if (tagsArray.includes(btn.innerText)) {
-                btn.classList.add('tag-selected');
-                btn.classList.remove('tag-default');
+                // Ativa a tag visualmente ao abrir o modal de edição
+                btn.classList.add('tag-selected', 'bg-cyan-600', 'text-white', 'border-cyan-600');
+                btn.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
             } else {
-                btn.classList.remove('tag-selected');
-                btn.classList.add('tag-default');
+                // Desativa a tag visualmente
+                btn.classList.remove('tag-selected', 'bg-cyan-600', 'text-white', 'border-cyan-600');
+                btn.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
             }
         });
     }
 
     // Upload de Imagem do Produto
-    window.handleImageUpload = async function(input) {
-        if (input.files && input.files[0]) {
-            const file = input.files[0];
-            document.getElementById('upload-loading').classList.remove('hidden');
-            try {
-                const storageRef = ref(storage, `produtos/${Date.now()}_${file.name}`);
-                await uploadBytes(storageRef, file);
-                const url = await getDownloadURL(storageRef);
-                document.getElementById('preview-image').src = url;
+// Substitua as funções de upload por esta versão unificada:
+window.handleImageUpload = async function(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const loading = document.getElementById('upload-loading');
+        if(loading) loading.classList.remove('hidden');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // Chamada direta para o seu arquivo PHP na raiz da Locaweb
+            const response = await fetch('upload.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.sucesso) {
+                // SUCESSO: O PHP salvou na pasta /uploads/pedidos/ e nos deu a URL
+                document.getElementById('preview-image').src = result.url;
                 document.getElementById('preview-image').classList.remove('hidden');
                 document.getElementById('icon-image').classList.add('hidden');
-                document.getElementById('edit-image-url').value = url;
-            } catch (error) {
-                console.error(error);
-                window.showToast("Erro", "Falha no upload", true);
-            } finally {
-                document.getElementById('upload-loading').classList.add('hidden');
+                document.getElementById('edit-image-url').value = result.url;
+                window.showToast("Sucesso", "Imagem enviada para seu servidor!");
+            } else {
+                throw new Error(result.erro);
             }
+        } catch (error) {
+            console.error("Erro no upload:", error);
+            window.showToast("Erro", "Falha: " + error.message, true);
+        } finally {
+            if(loading) loading.classList.add('hidden');
         }
     }
+}
 
-    window.navegarPara = (telaId) => {
+window.navegarPara = (telaId) => {
         // 1. Salva a tela atual para o F5
         localStorage.setItem('painel_ultima_tela', telaId);
 
-        // 2. Lista COMPLETA de todas as telas (não falta nenhuma aqui)
+        // 2. Lista COMPLETA de todas as telas (incluindo o PDV Manual)
         const telas = [
             'view-pdv-wrapper', 'view-pos', 'view-historico', 'view-relatorios', 
             'view-financeiro', 'view-caixa', 'view-nfce', 
             'view-produtos', 'view-boasvindas', 'view-config-pedidos',
             'view-kitchen', 'view-inventory', 'view-chatbot', 
             'view-config-business', 'view-config-team', 
-            'view-config-printers', 'view-config-interactions','view-marketing-cupons'
+            'view-config-printers', 'view-config-interactions','view-marketing-cupons',
+            'view-pdv-manual'
         ];
         
         // 3. Esconde todas e trata classes específicas
@@ -297,14 +364,43 @@
             if (!document.getElementById('view-mesas').classList.contains('hidden')) renderizarGridMesas();
         });
 
-        // MONITOR DE PRODUTOS (Separado para não bugar a memória e os produtos aparecerem!)
-        onSnapshot(collection(db, "produtos"), (snapshot) => {
-            allProducts = [];
-            snapshot.forEach(d => allProducts.push({id: d.id, ...d.data()}));
-            if(!document.getElementById('view-produtos').classList.contains('hidden')) {
-                renderizarListaProdutos();
-            }
+// MONITOR DE PRODUTOS
+// MONITOR DE PRODUTOS
+    onSnapshot(collection(db, "produtos"), (snapshot) => {
+        allProducts = [];
+        snapshot.forEach(doc => {
+            allProducts.push({ id: doc.id, ...doc.data() });
         });
+        
+        // Renderiza as telas que dependem de produtos se elas estiverem abertas
+        if (!document.getElementById('view-produtos').classList.contains('hidden')) {
+            window.renderizarListaProdutos();
+        }
+        if (!document.getElementById('view-pdv-wrapper').classList.contains('hidden')) {
+             // Se estiver no PDV, renderiza o grid do PDV
+            if (typeof window.renderizarProdutosPOS === 'function') window.renderizarProdutosPOS();
+        }
+        
+        // Fecha o loading caso ele esteja aberto
+        window.toggleLoading(false);
+    });
+
+    // MONITOR DE CATEGORIAS
+    onSnapshot(collection(db, "categorias"), (snapshot) => {
+        allCategories = [];
+        snapshot.forEach(doc => {
+            allCategories.push({ id: doc.id, ...doc.data() });
+        });
+        
+        // CORREÇÃO DO SELECT: Se o modal de produto estiver aberto quando criar a categoria, ele atualiza o select na hora!
+        const modalProduto = document.getElementById('product-modal');
+        if (modalProduto && !modalProduto.classList.contains('hidden')) {
+            const currentCat = document.getElementById('edit-category')?.value;
+            if (typeof window.renderizarSeletorCategoriasModal === 'function') {
+                window.renderizarSeletorCategoriasModal(currentCat);
+            }
+        }
+    });
     }
 
     function updateBadge(id, count) {
@@ -766,6 +862,13 @@ window.atualizarStatus = async (id, status) => {
         
         window.showToast("Status Atualizado", `Pedido #${id.slice(0,4)} movido para ${status}`);
 
+        // --- LÓGICA DE IMPRESSÃO AUTOMÁTICA ---
+        // Se o pedido foi aceito (Em Preparo) e a config permitir, imprime automaticamente
+        if (status === 'Em Preparo' && printConfig && printConfig.autoPrint) {
+            console.log("Impressão automática disparada para o pedido:", id);
+            window.imprimirPedidoDash(id);
+        }
+
         // --- LÓGICA DE FIDELIDADE (Acionada ao Finalizar) ---
         if (status === 'Finalizado') {
             await processarFidelidadeAoFinalizar({ id, ...pedidoDados });
@@ -886,31 +989,36 @@ async function processarFidelidadeAoFinalizar(pedido) {
         el.className = troco < 0 ? "text-xl font-bold text-red-400" : "text-xl font-bold text-green-500";
     }
 
-    window.confirmarPagamento = async (aceitarPedidoJunto) => {
-        if (!currentPayOrder) return;
-        try {
-            const updateData = {
-                paymentStatus: 'paid',
-                paymentMethod: currentPayMethod,
-                amountPaid: parseFloat(document.getElementById('pay-input-value').value) || currentPayOrder.total,
-                updatedAt: serverTimestamp()
-            };
-            if (aceitarPedidoJunto) updateData.status = 'Em Preparo';
-            await updateDoc(doc(db, "pedidos", currentPayOrder.id), updateData);
-            alert("Pagamento registrado!");
-            
-            // Registra entrada no financeiro se for pago
-            addDoc(collection(db, "movimentacoes"), {
-                descricao: `Venda #${currentPayOrder.id.slice(0,4)}`,
-                tipo: "entrada",
-                valor: updateData.amountPaid,
-                data: serverTimestamp()
-            });
-            atualizarSaldoCaixa("entrada", updateData.amountPaid);
+window.confirmarPagamento = async () => {
+    if (!currentPayOrder) return;
+    
+    try {
+        const payload = {
+            ...currentPayOrder,
+            status: 'Finalizado',
+            paymentStatus: 'paid',
+            paymentMethod: currentPayMethod,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        };
 
-            fecharModalPagamento();
-        } catch(e) { console.error(e); alert("Erro ao registrar pagamento."); }
+        // Salva no Firebase
+        const docRef = await addDoc(collection(db, "pedidos"), payload);
+        
+        showToast("Sucesso", "Venda realizada e gravada!");
+        
+        // Dispara Impressão
+        window.imprimirPedidoDash(docRef.id);
+
+        // Limpa tudo e volta
+        fecharModalPagamento();
+        window.navegarPara('view-pdv-wrapper');
+        
+    } catch(e) {
+        console.error(e);
+        showToast("Erro", "Falha ao gravar pedido.", true);
     }
+}
 
     // === RENDERIZAÇÃO MESAS E PDV (MANTIDO DO ANTERIOR) ===
     window.renderizarAmbientes = () => {
@@ -2493,38 +2601,36 @@ async function processarFidelidadeAoFinalizar(pedido) {
     }
 
     // 3. Salvar Configurações
-    window.salvarConfigImpressao = async () => {
-        const btn = document.querySelector('button[onclick="salvarConfigImpressao()"]');
-        const original = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-        btn.disabled = true;
+window.salvarConfigImpressao = async () => {
+    const btn = document.querySelector('button[onclick="salvarConfigImpressao()"]');
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    btn.disabled = true;
+    
+    try {
+        const width = document.querySelector('input[name="print-width"]:checked')?.value || '80mm';
         
-        try {
-            const width = document.querySelector('input[name="print-width"]:checked')?.value || '80mm';
-            
-            const data = {
-                width: width,
-                fontSize: document.getElementById('print-font-size').value,
-                copies: parseInt(document.getElementById('print-copies').value),
-                autoPrint: document.getElementById('print-auto').checked,
-                logoUrl: printConfig.logoUrl, // Salva a URL da imagem
-                footerMsg: document.getElementById('print-footer-msg').value,
-                updatedAt: serverTimestamp()
-            };
+        const data = {
+            width: width,
+            fontSize: document.getElementById('print-font-size').value,
+            copies: parseInt(document.getElementById('print-copies').value),
+            autoPrint: document.getElementById('print-auto').checked,
+            logoUrl: document.getElementById('print-logo-preview').src, // Pega a URL do preview atual
+            footerMsg: document.getElementById('print-footer-msg').value,
+            updatedAt: serverTimestamp()
+        };
 
-            await setDoc(doc(db, "config", "impressao"), data);
-            printConfig = data; // Sincroniza
-            
-            showToast("Sucesso", "Configurações de impressão salvas!");
-            
-        } catch (e) {
-            console.error(e);
-            showToast("Erro", "Falha ao salvar.", true);
-        } finally {
-            btn.innerHTML = original;
-            btn.disabled = false;
-        }
+        await setDoc(doc(db, "config", "impressao"), data);
+        printConfig = data; // Atualiza a variável na memória instantaneamente
+        
+        showToast("Sucesso", "Configurações salvas!");
+    } catch (e) {
+        showToast("Erro", "Falha ao salvar.", true);
+    } finally {
+        btn.innerHTML = original;
+        btn.disabled = false;
     }
+}
 
     // 4. Ajustar Vias (Contador)
     window.ajustarVias = (delta) => {
@@ -2538,69 +2644,98 @@ async function processarFidelidadeAoFinalizar(pedido) {
     }
 
     // 5. Função de Impressão Real (Injetando CSS dinâmico)
-    window.imprimirPedidoReal = (htmlCupom) => {
-        let iframe = document.getElementById('print-frame');
-        if (!iframe) {
-            iframe = document.createElement('iframe');
-            iframe.id = 'print-frame';
-            // CORREÇÃO ANDROID/IOS: display:none bloqueia a execução do print().
-            // Usamos visibilidade escondida e posição fora da tela.
-            iframe.style.position = 'fixed';
-            iframe.style.bottom = '0';
-            iframe.style.right = '0';
-            iframe.style.width = '0';
-            iframe.style.height = '0';
-            iframe.style.border = 'none';
-            iframe.style.visibility = 'hidden';
-            document.body.appendChild(iframe);
-        }
-
-        const doc = iframe.contentWindow.document;
-        
-        // Constrói o HTML da Logo se existir
-        const logoHtml = printConfig.logoUrl 
-            ? `<div class="text-center"><img src="${printConfig.logoUrl}" class="logo"></div>` 
-            : '';
-
-        doc.open();
-        doc.write(`
-            <html>
-            <head>
-                <style>
-                    @page { margin: 0; }
-                    body { 
-                        font-family: 'Courier New', monospace; 
-                        width: ${printConfig.width}; 
-                        font-size: ${printConfig.fontSize};
-                        margin: 0; 
-                        padding: 5px;
-                        color: black;
-                    }
-                    .text-center { text-align: center; }
-                    .text-right { text-align: right; }
-                    .font-bold { font-weight: bold; }
-                    .divider { border-top: 1px dashed #000; margin: 5px 0; }
-                    .item-row { display: flex; justify-content: space-between; }
-                    .footer { margin-top: 10px; font-size: 0.9em; text-align: center; }
-                    img.logo { max-width: 60%; height: auto; display: block; margin: 0 auto 5px auto; }
-                </style>
-            </head>
-            <body>
-                ${logoHtml}
-                ${htmlCupom}
-                ${printConfig.footerMsg ? `<div class="divider"></div><div class="footer">${printConfig.footerMsg}</div>` : ''}
-                <div class="text-center" style="margin-top:10px;">.</div>
-            </body>
-            </html>
-        `);
-        doc.close();
-
-        // Aguarda carregamento da imagem antes de imprimir
-        iframe.contentWindow.focus();
-        setTimeout(() => {
-            iframe.contentWindow.print();
-        }, 800);
+window.imprimirPedidoReal = (htmlCupom) => {
+    let iframe = document.getElementById('print-frame');
+    if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'print-frame';
+        iframe.style.position = 'fixed';
+        iframe.style.bottom = '0';
+        iframe.style.right = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        iframe.style.visibility = 'hidden';
+        document.body.appendChild(iframe);
     }
+
+    const doc = iframe.contentWindow.document;
+    
+    // Configuração de Logo
+    const logoHtml = printConfig.logoUrl 
+        ? `<div style="text-align: center; margin-bottom: 5px;"><img src="${printConfig.logoUrl}" style="max-width: 40mm; height: auto;"></div>` 
+        : '';
+
+    doc.open();
+    doc.write(`
+        <html>
+        <head>
+            <style>
+                @page { margin: 0; }
+                body { 
+                    font-family: 'Courier New', monospace; 
+                    width: ${printConfig.width || '80mm'}; 
+                    font-size: ${printConfig.fontSize || '12px'};
+                    margin: 0; padding: 10px; color: black;
+                }
+                .text-center { text-align: center; }
+                .font-bold { font-weight: bold; }
+                .divider { border-top: 1px dashed #000; margin: 8px 0; }
+                .info-loja { text-align: center; font-size: 0.9em; margin-bottom: 8px; line-height: 1.3; }
+                .item-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+                .footer { margin-top: 15px; font-size: 0.85em; text-align: center; }
+            </style>
+        </head>
+        <body>
+            ${logoHtml}
+            <div class="text-center font-bold" style="font-size: 1.3em;">TROPIBERRY</div>
+            <div class="info-loja">
+                Rua Ricardo Soares de Souza Neto, 456 - Gramame<br>
+                Fone: (83) 92002-4786 | João Pessoa - PB<br>
+                CNPJ: 58.335.245/0001-50
+            </div>
+            ${htmlCupom}
+            ${printConfig.footerMsg ? `<div class="divider">--------------------------------</div><div class="footer">${printConfig.footerMsg}</div>` : ''}
+            <div class="text-center">--- FIM DO CUPOM ---</div>
+        </body>
+        </html>
+    `);
+    doc.close();
+
+    iframe.contentWindow.focus();
+    setTimeout(() => {
+        iframe.contentWindow.print();
+    }, 800);
+}
+// 3. Atualize o salvarConfigImpressao para o botão funcionar
+window.salvarConfigImpressao = async () => {
+    const btn = document.querySelector('button[onclick="salvarConfigImpressao()"]');
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    btn.disabled = true;
+    
+    try {
+        const width = document.querySelector('input[name="print-width"]:checked')?.value || '80mm';
+        const data = {
+            width: width,
+            fontSize: document.getElementById('print-font-size').value,
+            copies: parseInt(document.getElementById('print-copies').value),
+            autoPrint: document.getElementById('print-auto').checked,
+            logoUrl: document.getElementById('print-logo-preview').src,
+            footerMsg: document.getElementById('print-footer-msg').value,
+            updatedAt: serverTimestamp()
+        };
+
+        await setDoc(doc(db, "config", "impressao"), data);
+        printConfig = data; // Sincroniza em tempo real
+        showToast("Sucesso", "Configurações salvas!");
+    } catch (e) {
+        showToast("Erro", "Falha ao salvar.", true);
+    } finally {
+        btn.innerHTML = original;
+        btn.disabled = false;
+    }
+}
 
     // 6. Teste de Impressão
     window.testarImpressao = () => {
@@ -2847,7 +2982,10 @@ async function processarFidelidadeAoFinalizar(pedido) {
         });
     }
 
-    window.abrirModalNovoProduto = () => {
+window.abrirModalNovoProduto = () => {
+        // Preenche o select com as categorias puxadas do Firebase
+        window.renderizarSeletorCategoriasModal(); 
+        
         document.getElementById('form-produto').reset();
         document.getElementById('edit-id').value = '';
         document.getElementById('edit-image-url').value = '';
@@ -2855,43 +2993,67 @@ async function processarFidelidadeAoFinalizar(pedido) {
         document.getElementById('icon-image').classList.remove('hidden');
         document.getElementById('modal-title').innerText = "Novo Produto";
         currentProductAttachedGroups = [];
+        window.renderizarGruposVinculados();
         renderTagSelector();
         window.mudarAba('sobre');
         document.getElementById('product-modal').classList.remove('hidden');
     }
 
-    window.abrirModalEdicao = (id) => {
+window.abrirModalEdicao = (id) => {
         const p = allProducts.find(x => x.id === id);
-        if (!p) return;
+        if (!p) {
+            window.showToast("Erro", "Produto não encontrado na memória.", true);
+            return;
+        }
+
+        // Popula as categorias e já deixa selecionada a do produto
+        window.renderizarSeletorCategoriasModal(p.category);
+        
+        // Preenche os inputs
         document.getElementById('edit-id').value = p.id;
         document.getElementById('edit-name').value = p.name;
         document.getElementById('edit-price').value = p.price;
+        // Adiciona preenchimento para preço original caso exista no banco
+        if(document.getElementById('edit-original-price')) document.getElementById('edit-original-price').value = p.originalPrice || '';
         document.getElementById('edit-desc').value = p.description || '';
         document.getElementById('edit-image-url').value = p.image || '';
         
+        // Tratamento da Imagem
         if(p.image) {
             document.getElementById('preview-image').src = p.image;
             document.getElementById('preview-image').classList.remove('hidden');
             document.getElementById('icon-image').classList.add('hidden');
+        } else {
+            document.getElementById('preview-image').src = '';
+            document.getElementById('preview-image').classList.add('hidden');
+            document.getElementById('icon-image').classList.remove('hidden');
         }
 
         renderTagSelector();
         setSelectedTags(p.tags || []);
+
+        currentProductAttachedGroups = p.complementIds || []; // <--- ADICIONE ESTA LINHA
+        window.renderizarGruposVinculados(); // <--- E ESTA LINHA
+        
         document.getElementById('modal-title').innerText = "Editar Produto";
+        
+        // CRÍTICO: Garante que o modal abra sempre na primeira aba, evitando travamentos
+        window.mudarAba('sobre'); 
+        
         document.getElementById('product-modal').classList.remove('hidden');
     }
-
-    window.salvarProduto = async function() {
+window.salvarProduto = async function() {
         const id = document.getElementById('edit-id').value;
         const produto = {
             name: document.getElementById('edit-name').value,
-            price: parseFloat(document.getElementById('edit-price').value),
+            price: parseFloat(document.getElementById('edit-price').value) || 0,
+            originalPrice: parseFloat(document.getElementById('edit-original-price')?.value) || 0,
             description: document.getElementById('edit-desc').value,
             image: document.getElementById('edit-image-url').value,
             tags: getSelectedTags(),
+            complementIds: currentProductAttachedGroups, // Sincroniza os complementos com o banco
             updatedAt: serverTimestamp()
         };
-
         try {
             if (id) {
                 await updateDoc(doc(db, "produtos", id), produto);
@@ -2905,6 +3067,51 @@ async function processarFidelidadeAoFinalizar(pedido) {
             window.showToast("Erro", "Falha ao salvar", true);
         }
     }
+    // --- CONTROLES DO MODAL DE PRODUTO ---
+    
+    window.fecharModalProduto = () => {
+        document.getElementById('product-modal').classList.add('hidden');
+    };
+
+    window.mudarAba = (aba) => {
+        // 1. Esconde as duas áreas de conteúdo
+        document.getElementById('tab-sobre').classList.add('hidden');
+        document.getElementById('tab-complementos').classList.add('hidden');
+        
+        // 2. Reseta o estilo dos dois botões para o padrão inativo
+        document.getElementById('tab-btn-sobre').className = "flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 transition";
+        document.getElementById('tab-btn-complementos').className = "flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 transition";
+
+        // 3. Ativa a aba e o botão correspondente
+        if (aba === 'sobre') {
+            document.getElementById('tab-sobre').classList.remove('hidden');
+            document.getElementById('tab-btn-sobre').className = "flex-1 py-3 text-sm font-bold text-cyan-700 border-b-2 border-cyan-700 bg-cyan-50 transition";
+        } else {
+            document.getElementById('tab-complementos').classList.remove('hidden');
+            document.getElementById('tab-btn-complementos').className = "flex-1 py-3 text-sm font-bold text-cyan-700 border-b-2 border-cyan-700 bg-cyan-50 transition";
+        }
+    };
+
+    window.abrirGerenciadorGrupos = () => {
+        document.getElementById('group-manager-modal').classList.remove('hidden');
+    };
+
+    window.deletarProduto = async () => {
+        const id = document.getElementById('edit-id').value;
+        if(!id) return;
+        
+        if(confirm("Tem certeza que deseja excluir este produto do cardápio? Essa ação não tem volta.")) {
+            try {
+                // A função deleteDoc e doc já estão importadas no topo do seu arquivo
+                await deleteDoc(doc(db, "produtos", id));
+                window.showToast("Sucesso", "Produto excluído com sucesso!");
+                window.fecharModalProduto();
+            } catch (e) {
+                console.error("Erro ao deletar produto:", e);
+                window.showToast("Erro", "Falha ao excluir produto.", true);
+            }
+        }
+    };
     window.editarPedidoManual = (orderId) => {
         const order = allOrders.find(o => o.id === orderId);
         if (!order) return;
@@ -3187,7 +3394,7 @@ async function processarFidelidadeAoFinalizar(pedido) {
     // Função que prepara os dados do pedido para a impressora real
   let htmlCupomTemporario = "";
 
-    window.imprimirPedidoDash = (orderId) => {
+window.imprimirPedidoDash = (orderId) => {
         // Busca o pedido na lista global
         const order = allOrders.find(o => o.id === orderId);
         
@@ -3202,19 +3409,45 @@ async function processarFidelidadeAoFinalizar(pedido) {
         const subtotal = orderFallback.items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
         const taxaEntrega = (orderFallback.total || 0) - subtotal;
 
-        // Gera as linhas dos itens
-        const itensHtml = orderFallback.items.map(item => `
-            <div class="item-row" style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-                <span style="flex: 1;">${item.quantity}x ${item.name}</span>
-                <span style="margin-left: 10px;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
-            </div>
-            ${item.details ? `<div style="font-size: 0.85em; color: #444; margin-bottom: 5px; border-bottom: 0.5px solid #eee;">(${item.details})</div>` : ''}
-        `).join('');
+        // Gera as linhas dos itens detalhadas e estruturadas
+        const itensHtml = orderFallback.items.map(item => {
+            let baseName = item.name;
+            let extras = [];
 
-        // Monta o esqueleto do cupom
+            // 1. Se vier com detalhes separados (padrão iFood/App)
+            if (item.details && item.details.trim() !== '') {
+                extras = item.details.split(',').map(e => e.trim());
+            } 
+            // 2. Se os adicionais estiverem embutidos no nome entre parênteses (padrão PDV Manual)
+            else if (item.name.includes('(') && item.name.includes(')')) {
+                const startIdx = item.name.indexOf('(');
+                const endIdx = item.name.lastIndexOf(')');
+                baseName = item.name.substring(0, startIdx).trim();
+                const extrasText = item.name.substring(startIdx + 1, endIdx);
+                extras = extrasText.split(',').map(e => e.trim());
+            }
+
+            return `
+                <div class="item-row" style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 2px;">
+                    <span style="flex: 1;">${item.quantity}x ${baseName}</span>
+                    <span style="margin-left: 10px;">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+                </div>
+                ${extras.length ? `
+                    <div style="margin-left: 12px; font-size: 0.9em; color: #333; margin-bottom: 6px; line-height: 1.4;">
+                        ${extras.map(ex => `
+                            <div style="display: flex; justify-content: space-between; padding-left: 4px;">
+                                <span>↳ ${ex}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            `;
+        }).join('');
+
+        // Monta o esqueleto do cupom com o título alterado para CUPOM FISCAL
         htmlCupomTemporario = `
             <div style="text-align: center; font-weight: bold; font-size: 1.4em; margin-bottom: 5px;">TROPIBERRY</div>
-            <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 10px;">CUPOM NÃO FISCAL</div>
+            <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 10px; font-weight: bold;">CUPOM FISCAL</div>
             <div style="display: flex; justify-content: space-between;"><b>PEDIDO:</b> <span>#${orderFallback.id.slice(-4).toUpperCase()}</span></div>
             <div style="display: flex; justify-content: space-between;"><b>DATA:</b> <span>${orderFallback.createdAt ? orderFallback.createdAt.toDate().toLocaleString('pt-BR') : '--'}</span></div>
             <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
@@ -3224,10 +3457,10 @@ async function processarFidelidadeAoFinalizar(pedido) {
             <div style="font-weight: bold; margin-bottom: 8px;">ITENS:</div>
             ${itensHtml}
             <div style="border-bottom: 1px solid #000; margin: 8px 0;"></div>
-            <div style="display: flex; justify-content: space-between;"><span>SUBTOTAL</span> <span>R$ ${subtotal.toFixed(2)}</span></div>
-            <div style="display: flex; justify-content: space-between;"><span>TAXA</span> <span>${taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2)}` : 'GRÁTIS'}</span></div>
+            <div style="display: flex; justify-content: space-between;"><span>SUBTOTAL</span> <span>R$ ${subtotal.toFixed(2).replace('.', ',')}</span></div>
+            <div style="display: flex; justify-content: space-between;"><span>TAXA</span> <span>${taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2).replace('.', ',')}` : 'GRÁTIS'}</span></div>
             <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.2em; margin-top: 5px;">
-                <span>TOTAL</span> <span>R$ ${orderFallback.total.toFixed(2)}</span>
+                <span>TOTAL</span> <span>R$ ${orderFallback.total.toFixed(2).replace('.', ',')}</span>
             </div>
             <div style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
             <div style="text-align: center;"><b>PGTO:</b> ${orderFallback.paymentMethod?.toUpperCase() || 'A DEFINIR'}</div>
@@ -3494,9 +3727,13 @@ window.salvarComandaNoBanco = (subtotal, taxaServico, total) => {
     timeoutSalvar = setTimeout(async () => {
         if (!currentTablePOS) return; 
 
+        // Descobre se é uma mesa real ou um pedido manual (Balcão/Delivery)
+        const isMesaReal = !isNaN(currentTablePOS);
+        const metodoVenda = isMesaReal ? 'mesa' : (currentTablePOS.includes('DELIVERY') ? 'delivery' : 'retirada');
+
         const existingOrder = allOrders.find(o => 
-            o.method === 'mesa' && 
-            parseInt(o.tableNumber) === parseInt(currentTablePOS) && 
+            o.method === metodoVenda && 
+            o.tableNumber == currentTablePOS && 
             !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
         );
 
@@ -3712,30 +3949,30 @@ window.confirmarLimpezaComanda = () => {
 
 // 4. FUNÇÃO DO BOTÃO "FINALIZAR E PAGAR"
 window.prepararPagamentoMesa = () => {
-    if (currentTableOrder.length === 0) {
-        return showToast("Atenção", "A comanda está vazia. Adicione itens antes de pagar.", true);
-    }
+        if (currentTableOrder.length === 0) {
+            return showToast("Atenção", "A comanda está vazia. Adicione itens antes de pagar.", true);
+        }
 
-    // Acha o ID do pedido no banco de dados para abrir o Modal de pagamento
-    const existingOrder = allOrders.find(o => 
-        o.method === 'mesa' && 
-        parseInt(o.tableNumber) === parseInt(currentTablePOS) && 
-        !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
-    );
+        // Acha o ID do pedido no banco de dados para abrir o Modal de pagamento
+        const existingOrder = allOrders.find(o => 
+            o.method === 'mesa' && 
+            parseInt(o.tableNumber) === parseInt(currentTablePOS) && 
+            !['Finalizado', 'Rejeitado', 'Cancelado'].includes(o.status)
+        );
 
-    if (existingOrder) {
-        window.abrirModalPagamento(existingOrder.id);
-    } else {
-        showToast("Processando", "Aguarde o pedido ser salvo...");
-    }
-};
+        if (existingOrder) {
+            window.abrirModalPagamentoMesa(existingOrder.id);
+        } else {
+            showToast("Processando", "Aguarde o pedido ser salvo...");
+        }
+    };
 
 // =========================================================
-// LÓGICA DE PAGAMENTO DA MESA
+// LÓGICA DE PAGAMENTO DA MESA (Nomes isolados para evitar conflito global)
 // =========================================================
 let pedidoPagamentoAtual = null;
 
-window.abrirModalPagamento = (pedidoId) => {
+window.abrirModalPagamentoMesa = (pedidoId) => {
     // Busca o pedido na lista global
     const pedido = allOrders.find(o => o.id === pedidoId);
     if (!pedido) return showToast("Erro", "Pedido não encontrado.", true);
@@ -3750,7 +3987,7 @@ window.abrirModalPagamento = (pedidoId) => {
     document.getElementById('modal-pagamento-mesa').classList.remove('hidden');
 };
 
-window.fecharModalPagamento = () => {
+window.fecharModalPagamentoMesa = () => {
     document.getElementById('modal-pagamento-mesa').classList.add('hidden');
     pedidoPagamentoAtual = null;
 };
@@ -3857,4 +4094,557 @@ window.navegarPara = (telaId) => {
         window.toggleMobileSidebar();
     }
     originalNavegarPara(telaId);
+};
+// =========================================================
+// PDV MANUAL (BALCÃO / DELIVERY) - LOGICA INTEGRADA
+// =========================================================
+let manualCart = [];
+let manualType = 'balcao';
+let currentPDVItem = null;
+let selectedPDVOptions = {};
+let currentPDVQtd = 1;
+let currentPDVContext = 'manual'; 
+
+window.iniciarVendaPDV = (tipo) => {
+    document.getElementById('modal-escolher-tipo-pdv').classList.add('hidden');
+    
+    if(tipo === 'mesa') {
+        window.navegarPara('view-pdv-wrapper');
+        window.mudarAbaServico('mesa');
+        return;
+    }
+
+    manualType = tipo;
+    manualCart = [];
+    document.getElementById('manual-cust-name').value = '';
+    document.getElementById('manual-cust-phone').value = '';
+    document.getElementById('manual-cust-address').value = '';
+    document.getElementById('manual-frete-val').value = (tipo === 'delivery' ? '5.00' : '0.00');
+
+    document.getElementById('manual-pos-title').innerText = tipo === 'delivery' ? 'Novo Delivery' : 'Venda Balcão';
+    document.getElementById('manual-pos-icon').className = tipo === 'delivery' ? 'fas fa-motorcycle' : 'fas fa-shopping-bag';
+    document.getElementById('manual-delivery-fields').classList.toggle('hidden', tipo !== 'delivery');
+
+    window.navegarPara('view-pdv-manual');
+    window.renderizarCategoriasManual();
+    window.renderizarProdutosManual();
+    window.atualizarTotaisManual();
+};
+
+window.renderizarCategoriasManual = () => {
+    const container = document.getElementById('manual-categories-nav');
+    if(!container) return;
+    const categorias = ['todos', ...new Set(allProducts.map(p => p.category).filter(c => c))];
+    container.innerHTML = categorias.map(cat => `
+        <button onclick="window.renderizarProdutosManual('${cat}')" class="px-4 py-2 rounded-full text-xs font-bold border bg-white text-gray-600 hover:bg-cyan-50 transition">${cat.toUpperCase()}</button>
+    `).join('');
+};
+
+window.renderizarProdutosManual = (cat = 'todos') => {
+    const container = document.getElementById('manual-products-grid');
+    if(!container) return;
+    let filtrados = cat === 'todos' ? allProducts : allProducts.filter(p => p.category === cat);
+    
+    container.innerHTML = filtrados.map(p => {
+        let basePrice = parseFloat(p.price || 0);
+        let displayPrice = basePrice;
+        let prefix = "R$ ";
+
+        if (basePrice === 0 && p.complementIds) {
+            let min = Infinity;
+            p.complementIds.forEach(id => {
+                const grp = allComplements[id];
+                if (grp && grp.internalCategory === 'embalagem') {
+                    grp.options.forEach(o => { if(o.price < min) min = o.price; });
+                }
+            });
+            if (min !== Infinity) { displayPrice = min; prefix = "A partir de R$ "; }
+        }
+
+        return `
+            <div onclick="window.abrirModalProdutoPDV('${p.id}', 'manual')" class="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer flex flex-col items-center text-center active:scale-95 transition">
+                <img src="${p.image || 'img/placeholder.png'}" class="w-16 h-16 object-cover rounded-xl mb-2">
+                <p class="text-[11px] font-bold text-gray-800 line-clamp-2 h-8 leading-tight">${p.name}</p>
+                <p class="text-xs font-black text-cyan-700 mt-1">${prefix}${displayPrice.toFixed(2).replace('.', ',')}</p>
+            </div>`;
+    }).join('');
+};
+
+window.abrirModalProdutoPDV = async (id, context) => {
+    const p = allProducts.find(x => x.id === id);
+    if (!p) return;
+    currentPDVItem = p;
+    currentPDVContext = context;
+    selectedPDVOptions = {};
+    currentPDVQtd = 1;
+    document.getElementById('pdv-modal-img').src = p.image || 'img/placeholder.png';
+    document.getElementById('pdv-modal-name').innerText = p.name;
+    document.getElementById('pdv-modal-desc').innerText = p.description || '';
+    document.getElementById('pdv-modal-qtd').innerText = '1';
+    const groupsContainer = document.getElementById('pdv-modal-groups');
+    groupsContainer.innerHTML = '';
+    if (p.complementIds) {
+        p.complementIds.forEach(gid => {
+            const group = allComplements[gid];
+            if (group) {
+                const type = group.max > 1 ? 'checkbox' : 'radio';
+                groupsContainer.innerHTML += `
+                    <div class="space-y-3">
+                        <p class="font-black text-gray-800 uppercase text-[10px] tracking-widest">${group.title} ${group.required ? '<span class="text-red-500">*</span>' : ''}</p>
+                        <div class="grid grid-cols-1 gap-2">
+                            ${group.options.map((opt, i) => `
+                                <label class="flex justify-between items-center p-3 border-2 border-gray-100 rounded-xl cursor-pointer hover:bg-cyan-50 transition">
+                                    <div class="flex items-center gap-3">
+                                        <input type="${type}" name="group-${group.id}" onchange="window.togglePDVOption('${group.id}', ${i}, '${type}')" class="w-5 h-5 accent-cyan-600">
+                                        <span class="text-sm font-bold text-gray-700">${opt.name}</span>
+                                    </div>
+                                    <span class="text-xs font-black text-cyan-600">+ R$ ${parseFloat(opt.price).toFixed(2)}</span>
+                                </label>`).join('')}
+                        </div>
+                    </div>`;
+            }
+        });
+    }
+    document.getElementById('modal-detalhe-pdv').classList.remove('hidden');
+    atualizarTotalModalPDV();
+};
+
+window.togglePDVOption = (groupId, optIdx, type) => {
+    const group = allComplements[groupId];
+    const opt = group.options[optIdx];
+    if (!selectedPDVOptions[groupId]) selectedPDVOptions[groupId] = [];
+    if (type === 'radio') { selectedPDVOptions[groupId] = [opt]; }
+    else {
+        const index = selectedPDVOptions[groupId].findIndex(o => o.name === opt.name);
+        if (index > -1) selectedPDVOptions[groupId].splice(index, 1);
+        else if (selectedPDVOptions[groupId].length < group.max) selectedPDVOptions[groupId].push(opt);
+    }
+    atualizarTotalModalPDV();
+};
+
+window.mudarQtdPDV = (delta) => {
+    currentPDVQtd = Math.max(1, currentPDVQtd + delta);
+    document.getElementById('pdv-modal-qtd').innerText = currentPDVQtd;
+    atualizarTotalModalPDV();
+};
+
+function atualizarTotalModalPDV() {
+    let extra = 0;
+    Object.values(selectedPDVOptions).forEach(list => list.forEach(o => extra += (o.price || 0)));
+    const total = ((parseFloat(currentPDVItem.price) || 0) + extra) * currentPDVQtd;
+    document.getElementById('pdv-modal-total-btn').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+}
+
+window.confirmarAdicaoPDV = () => {
+    let nomesExtras = [];
+    let precoExtra = 0;
+    Object.values(selectedPDVOptions).forEach(list => list.forEach(o => { nomesExtras.push(o.name); precoExtra += (o.price || 0); }));
+    const itemFinal = {
+        id: `${currentPDVItem.id}-${Date.now()}`,
+        name: currentPDVItem.name + (nomesExtras.length ? ` (${nomesExtras.join(', ')})` : ''),
+        price: (parseFloat(currentPDVItem.price) || 0) + precoExtra,
+        quantity: currentPDVQtd
+    };
+    if (currentPDVContext === 'manual') { manualCart.push(itemFinal); window.atualizarTotaisManual(); }
+    else { currentTableOrder.push(itemFinal); window.atualizarComandaPDV(); }
+    window.fecharModalPDV();
+};
+
+window.fecharModalPDV = () => document.getElementById('modal-detalhe-pdv').classList.add('hidden');
+
+window.atualizarTotaisManual = () => {
+    const container = document.getElementById('manual-order-items');
+    if(!container) return;
+    container.innerHTML = manualCart.map((item, idx) => `
+        <div class="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-100 mb-2">
+            <div class="flex-1"><p class="text-xs font-bold text-gray-800">${item.name}</p></div>
+            <div class="flex items-center gap-2">
+                <button onclick="manualCart[${idx}].quantity--; if(manualCart[${idx}].quantity<=0) manualCart.splice(${idx},1); window.atualizarTotaisManual();" class="w-6 h-6 bg-white border rounded text-red-500">-</button>
+                <span class="text-xs font-bold w-4 text-center">${item.quantity}</span>
+                <button onclick="manualCart[${idx}].quantity++; window.atualizarTotaisManual();" class="w-6 h-6 bg-white border rounded text-green-500">+</button>
+            </div>
+        </div>`).join('');
+    const subtotal = manualCart.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    const frete = parseFloat(document.getElementById('manual-frete-val').value) || 0;
+    const total = subtotal + frete;
+    document.getElementById('manual-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.',',')}`;
+    document.getElementById('manual-total').innerText = `R$ ${total.toFixed(2).replace('.',',')}`;
+};
+
+window.prepararPagamentoManual = () => {
+    if(manualCart.length === 0) return showToast("Atenção", "O carrinho está vazio!", true);
+    const subtotal = manualCart.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    const frete = parseFloat(document.getElementById('manual-frete-val').value) || 0;
+    currentPayOrder = {
+        id: `MANUAL-${Date.now()}`,
+        total: subtotal + frete,
+        items: manualCart,
+        method: manualType,
+        customer: {
+            name: document.getElementById('manual-cust-name').value || 'Cliente Manual',
+            phone: document.getElementById('manual-cust-phone').value || '',
+            address: document.getElementById('manual-cust-address').value || ''
+        }
+    };
+    document.getElementById('pay-total-display').innerText = `R$ ${currentPayOrder.total.toFixed(2).replace('.', ',')}`;
+    document.getElementById('payment-modal').classList.remove('hidden');
+};
+
+window.fecharModalPagamentoManual = () => {
+    document.getElementById('payment-modal').classList.add('hidden');
+    currentPayOrder = null;
+};
+
+window.confirmarPagamentoManual = async () => {
+    if (!currentPayOrder) return;
+    const valorRecebido = parseFloat(document.getElementById('pay-input-value').value) || currentPayOrder.total;
+    try {
+        const payload = { ...currentPayOrder, status: 'Finalizado', paymentStatus: 'paid', amountPaid: valorRecebido, paymentMethod: 'dinheiro', createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+        const docRef = await addDoc(collection(db, "pedidos"), payload);
+        await addDoc(collection(db, "movimentacoes"), { descricao: `Venda PDV #${docRef.id.slice(-4).toUpperCase()}`, valor: valorRecebido, tipo: "entrada", data: serverTimestamp() });
+        window.atualizarSaldoCaixa("entrada", valorRecebido);
+        showToast("Sucesso", "Venda finalizada!");
+        window.fecharModalPagamentoManual();
+        window.navegarPara('view-pdv-wrapper');
+        window.imprimirPedidoDash(docRef.id);
+    } catch(e) { console.error(e); showToast("Erro", "Falha ao gravar.", true); }
+};
+    // ==========================================
+    // GERENCIAMENTO DE COMPLEMENTOS / GRUPOS
+    // ==========================================
+
+window.editandoGrupoId = null; // Variável global para controlar se estamos criando ou editando um complemento
+
+    window.renderizarGruposVinculados = () => {
+        const container = document.getElementById('attached-groups-list');
+        if(!container) return;
+        
+        if(currentProductAttachedGroups.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">Nenhum complemento vinculado.</p>';
+            return;
+        }
+
+        container.innerHTML = currentProductAttachedGroups.map(gid => {
+            const group = allComplements[gid];
+            if(!group) return ''; 
+            
+            return `
+                <div class="bg-gray-50 p-3 rounded-lg border flex flex-col gap-3">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-bold text-gray-700 text-sm">${group.title}</p>
+                            <p class="text-[10px] text-gray-500 uppercase">${group.internalCategory || 'Adicional'} • ${group.required ? 'Obrigatório' : 'Opcional'} • Máx: ${group.max || 1}</p>
+                        </div>
+                        <div class="flex gap-1">
+                            <button type="button" onclick="window.editarGrupo('${gid}')" class="text-blue-500 hover:text-blue-700 p-2" title="Editar Grupo"><i class="fas fa-edit"></i></button>
+                            <button type="button" onclick="window.desvincularGrupo('${gid}')" class="text-red-500 hover:text-red-700 p-2" title="Desvincular do Produto"><i class="fas fa-unlink"></i></button>
+                        </div>
+                    </div>
+                    <div class="pl-3 border-l-2 border-cyan-300 space-y-1">
+                        ${(group.options || []).map(opt => `
+                            <div class="flex items-center gap-2 text-xs text-gray-600">
+                                ${opt.image ? `<img src="${opt.image}" class="w-6 h-6 rounded object-cover shadow-sm">` : `<div class="w-6 h-6 bg-gray-200 rounded flex items-center justify-center"><i class="fas fa-image text-[8px] text-gray-400"></i></div>`}
+                                <span class="flex-1">${opt.name}</span>
+                                <span class="font-bold text-green-600">+ R$ ${Number(opt.price || 0).toFixed(2).replace('.', ',')}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    };
+
+window.abrirGerenciadorGrupos = () => {
+        const container = document.getElementById('available-groups-list');
+        const available = Object.values(allComplements).filter(g => !currentProductAttachedGroups.includes(g.id));
+        
+        if(available.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-xs text-center py-4 italic">Nenhum grupo disponível para vincular.</p>';
+        } else {
+            container.innerHTML = available.map(g => `
+                <div class="flex justify-between items-center bg-white p-3 rounded border shadow-sm">
+                    <div class="flex flex-col">
+                        <span class="text-sm font-bold text-gray-700">${g.title}</span>
+                        <span class="text-[10px] text-gray-500">${g.options ? g.options.length : 0} opções cadastradas</span>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <button type="button" onclick="window.editarGrupo('${g.id}')" class="text-blue-500 hover:text-blue-700" title="Editar"><i class="fas fa-edit"></i></button>
+                        <button type="button" onclick="window.deletarGrupo('${g.id}')" class="text-red-500 hover:text-red-700" title="Excluir Definitivamente"><i class="fas fa-trash"></i></button>
+                        <button type="button" onclick="window.vincularGrupo('${g.id}')" class="text-xs bg-cyan-100 text-cyan-700 px-3 py-1 rounded font-bold hover:bg-cyan-200 ml-2">Vincular</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Reseta estado para "Criação"
+        window.editandoGrupoId = null;
+        document.getElementById('form-new-group').reset();
+        document.getElementById('new-group-options').innerHTML = '';
+        const btnSalvar = document.querySelector('button[onclick="window.salvarNovoGrupo()"]');
+        if(btnSalvar) btnSalvar.innerHTML = '<i class="fas fa-save mr-1"></i> Criar e Vincular';
+        
+        document.getElementById('group-manager-modal').classList.remove('hidden');
+    };
+
+    window.vincularGrupo = (gid) => {
+        if(!currentProductAttachedGroups.includes(gid)) {
+            currentProductAttachedGroups.push(gid);
+            window.renderizarGruposVinculados();
+            window.abrirGerenciadorGrupos(); // Atualiza a lista removendo o que foi vinculado
+        }
+    };
+
+    window.desvincularGrupo = (gid) => {
+        currentProductAttachedGroups = currentProductAttachedGroups.filter(id => id !== gid);
+        window.renderizarGruposVinculados();
+    };
+
+    // --- CRIAR OPÇÕES DO GRUPO (Botão + Opção) ---
+// --- CRIAR OPÇÕES DO GRUPO (Botão + Opção) ---
+// --- CRIAR OPÇÕES DO GRUPO (Padrão iFood) ---
+    window.addOptionRow = (name = '', price = '', image = '') => {
+        const container = document.getElementById('new-group-options');
+        const div = document.createElement('div');
+        div.className = "flex items-center gap-3 option-row mt-2 bg-white p-2 border-b border-gray-100 hover:bg-gray-50 transition-colors";
+        div.innerHTML = `
+            <label class="w-14 h-14 rounded-lg bg-gray-100 border border-gray-300 flex items-center justify-center cursor-pointer relative overflow-hidden shrink-0 group shadow-sm">
+                <input type="file" accept="image/*" class="hidden" onchange="window.uploadOptionImage(this)">
+                <input type="hidden" class="opt-image" value="${image}">
+                
+                <i class="fas fa-camera text-gray-400 z-10 group-hover:text-gray-600 transition-colors ${image ? 'hidden' : ''}"></i>
+                <img src="${image || ''}" class="absolute inset-0 w-full h-full object-cover z-20 ${image ? '' : 'hidden'}" alt="Preview">
+                
+                <div class="loading-overlay hidden absolute inset-0 bg-black/60 z-30 flex items-center justify-center">
+                    <i class="fas fa-spinner fa-spin text-white"></i>
+                </div>
+            </label>
+
+            <div class="flex-1 flex flex-col justify-center gap-1">
+                <input type="text" placeholder="Ex: Ouro Branco" value="${name}" class="w-full bg-transparent border-b border-transparent focus:border-cyan-600 outline-none p-1 text-sm font-semibold text-gray-700 opt-name transition-colors" required>
+                <div class="flex items-center text-sm text-gray-500">
+                    <span class="mr-1">R$</span>
+                    <input type="number" step="0.01" placeholder="0,00" value="${price}" class="w-20 bg-transparent border-b border-transparent focus:border-cyan-600 outline-none p-1 opt-price transition-colors" required>
+                </div>
+            </div>
+
+            <button type="button" onclick="this.parentElement.remove()" class="text-gray-300 hover:text-red-500 p-2 transition-colors shrink-0" title="Excluir Opção">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        `;
+        container.appendChild(div);
+    };
+
+    // --- UPLOAD DA IMAGEM PARA O FIREBASE STORAGE ---
+window.uploadOptionImage = async (fileInput) => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const label = fileInput.parentElement;
+        const overlay = label.querySelector('.loading-overlay');
+        overlay.classList.remove('hidden');
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('upload.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            // Captura o texto puro para ver se o PHP está dando erro de servidor (500)
+            const textResponse = await response.text(); 
+            console.log("Resposta do servidor:", textResponse); // <--- ABRA O CONSOLE (F12) E VEJA ISSO
+
+            const result = JSON.parse(textResponse);
+
+            if (result.sucesso) {
+                const hiddenInput = label.querySelector('.opt-image');
+                const imgElement = label.querySelector('img');
+                hiddenInput.value = result.url;
+                imgElement.src = result.url;
+                imgElement.classList.remove('hidden');
+            } else {
+                alert("Erro no upload: " + result.erro);
+            }
+        } catch (error) {
+            console.error("Erro completo:", error);
+            alert("Erro de conexão com o servidor. Verifique o console do navegador.");
+        } finally {
+            overlay.classList.add('hidden');
+            fileInput.value = '';
+        }
+    };
+    // --- SALVAR GRUPO NO BANCO (Criação de novos Complementos) ---
+// --- SALVAR GRUPO NO BANCO (Criação e Edição) ---
+    window.salvarNovoGrupo = async () => {
+        const title = document.getElementById('new-group-title').value;
+        const category = document.getElementById('new-group-category').value;
+        const required = document.getElementById('new-group-required').value === 'true';
+        const max = parseInt(document.getElementById('new-group-max').value) || 1;
+        
+        const rows = document.querySelectorAll('.option-row');
+        if(!title || rows.length === 0) {
+            window.showToast("Atenção", "Preencha o título e adicione pelo menos uma opção.", true);
+            return;
+        }
+
+        const options = [];
+        rows.forEach(r => {
+            const name = r.querySelector('.opt-name').value;
+            const price = parseFloat(r.querySelector('.opt-price').value) || 0;
+            const image = r.querySelector('.opt-image').value || '';
+            if(name) options.push({ name, price, image, available: true });
+        });
+
+        // Tenta pegar o botão tanto com window. quanto sem
+        const btn = document.querySelector('button[onclick="window.salvarNovoGrupo()"]') || document.querySelector('button[onclick="salvarNovoGrupo()"]');
+        const originalText = btn ? btn.innerHTML : 'Salvar';
+        if(btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Salvando...'; btn.disabled = true; }
+
+        try {
+            const payload = {
+                title: title,
+                internalCategory: category,
+                required: required,
+                max: max,
+                options: options,
+                updatedAt: serverTimestamp()
+            };
+
+            if (window.editandoGrupoId) {
+                // Modo Edição
+                await updateDoc(doc(db, "complementos", window.editandoGrupoId), payload);
+                window.showToast("Sucesso", "Complemento atualizado!");
+                window.editandoGrupoId = null;
+            } else {
+                // Modo Criação
+                payload.createdAt = serverTimestamp();
+                const docRef = await addDoc(collection(db, "complementos"), payload);
+                window.vincularGrupo(docRef.id);
+                window.showToast("Sucesso", "Novo complemento criado e vinculado!");
+            }
+            
+            // Re-abre/Atualiza a visão do modal
+            window.abrirGerenciadorGrupos(); 
+            window.renderizarGruposVinculados();
+            
+        } catch (e) {
+            console.error(e);
+            window.showToast("Erro", "Falha ao salvar complemento.", true);
+        } finally {
+            if(btn) { btn.innerHTML = originalText; btn.disabled = false; }
+        }
+    };
+    // --- LÓGICA DE EDIÇÃO E EXCLUSÃO DOS COMPLEMENTOS ---
+    window.editarGrupo = (gid) => {
+        const group = allComplements[gid];
+        if(!group) return;
+
+        window.editandoGrupoId = gid;
+        
+        // Abre o modal de gerenciamento se estiver fechado
+        document.getElementById('group-manager-modal').classList.remove('hidden');
+
+        // Preenche o formulário superior
+        document.getElementById('new-group-title').value = group.title || '';
+        document.getElementById('new-group-category').value = group.internalCategory || 'adicional';
+        document.getElementById('new-group-required').value = group.required ? 'true' : 'false';
+        document.getElementById('new-group-max').value = group.max || 1;
+
+        // Limpa as opções atuais e injeta as do banco
+        document.getElementById('new-group-options').innerHTML = '';
+        if(group.options) {
+            group.options.forEach(opt => {
+                window.addOptionRow(opt.name, opt.price, opt.image || '');
+            });
+        } else {
+            window.addOptionRow(); // se tiver vazio por algum erro, põe 1 em branco
+        }
+
+        // Muda visual do botão
+        const btnSalvar = document.querySelector('button[onclick="window.salvarNovoGrupo()"]') || document.querySelector('button[onclick="salvarNovoGrupo()"]');
+        if(btnSalvar) btnSalvar.innerHTML = '<i class="fas fa-save mr-1"></i> Salvar Alterações';
+    };
+
+    window.deletarGrupo = async (gid) => {
+        if(confirm("ATENÇÃO: Deseja apagar este complemento do Banco de Dados? Ele sumirá de TODOS os produtos que o utilizam.")) {
+            try {
+                await deleteDoc(doc(db, "complementos", gid));
+                
+                // Remove da lista do produto atual se estivesse lá
+                window.desvincularGrupo(gid);
+                
+                window.showToast("Sucesso", "Complemento excluído com sucesso!");
+                window.abrirGerenciadorGrupos(); // Atualiza a lista da tela
+            } catch (e) {
+                console.error("Erro ao excluir complemento:", e);
+                window.showToast("Erro", "Falha ao excluir o complemento.", true);
+            }
+        }
+    };
+    window.abrirModalNovaCategoria = () => {
+        document.getElementById('input-nova-categoria').value = '';
+        document.getElementById('modal-nova-categoria-admin').classList.remove('hidden');
+        setTimeout(() => document.getElementById('input-nova-categoria').focus(), 100);
+    };
+
+    window.salvarNovaCategoria = async () => {
+        const inputCat = document.getElementById('input-nova-categoria');
+        const nomeCategoria = inputCat.value.trim();
+        
+        if (!nomeCategoria) {
+            return window.showToast("Atenção", "Digite um nome para a categoria.", true);
+        }
+
+        window.toggleLoading(true, "Salvando...");
+        
+        try {
+            await addDoc(collection(db, "categorias"), { 
+                nome: nomeCategoria, 
+                createdAt: serverTimestamp() 
+            });
+            
+            window.showToast("Sucesso", "Categoria criada com sucesso!");
+            document.getElementById('modal-nova-categoria-admin').classList.add('hidden');
+            
+            // Força a categoria nova a ficar selecionada no select do produto
+// Força a categoria nova a ficar selecionada no select do produto
+            setTimeout(() => {
+                // Atualiza todas as listagens caso o Firebase já tenha pego, mas não forçado
+                window.renderizarSeletorCategoriasModal(nomeCategoria);
+                const selectCat = document.getElementById('edit-category');
+                // Se der tempo, ele seleciona o recém criado (caso o slug seja igual ao nome)
+                if (selectCat) selectCat.value = nomeCategoria.toLowerCase().replace(/[^a-z0-9]/g, '-'); // Assumindo que você gera slug na criação
+            }, 600); // Dá tempo do onSnapshot acima atualizar a UI
+            
+        } catch(e) {
+            console.error("Erro ao criar categoria:", e);
+            window.showToast("Erro", "Falha ao criar categoria.", true);
+        } finally {
+            window.toggleLoading(false);
+        }
+    };
+window.renderizarSeletorCategoriasModal = (selectedCat = null) => {
+    const select = document.getElementById('edit-category');
+    if (!select) return;
+
+    select.innerHTML = '<option value="" disabled selected>Selecione uma Categoria...</option>';
+
+    allCategories.forEach(cat => {
+        // Usa o nome ou o slug como valor (prefira slug se tiver, senao vai o nome mesmo)
+        const valorCategoria = cat.slug || cat.nome;
+        const nomeVisivel = cat.nome;
+        
+        const option = document.createElement('option');
+        option.value = valorCategoria;
+        option.innerText = nomeVisivel;
+        
+        // Mantém a categoria que já estava selecionada, se estivermos editando
+        if (selectedCat && valorCategoria === selectedCat) {
+            option.selected = true;
+        }
+
+        select.appendChild(option);
+    });
 };

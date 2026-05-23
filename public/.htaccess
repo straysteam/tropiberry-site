@@ -12,3 +12,21 @@ Options -Indexes
     Order deny,allow
     Allow from all
 </Files>
+
+# --------------------------------------------------------------------
+# REGRAS PARA URL AMIGÁVEL (Remover .html e mudar index)
+# --------------------------------------------------------------------
+RewriteEngine On
+
+# 1. Se o cliente digitar /inicio, o servidor lê o arquivo index.html silenciosamente
+RewriteRule ^inicio/?$ index.html [L,NC]
+
+# 2. Força o redirecionamento: se a pessoa (ou código) tentar acessar /index ou /index.html, joga ela para /inicio
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /(index\.html|index)\ HTTP/ [NC]
+RewriteRule ^(index\.html|index)$ /inicio [R=301,L]
+
+# 3. Remove a extensão .html de todas as outras páginas (ex: cardapio.html vira /cardapio)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^([^\.]+)$ $1.html [NC,L]
