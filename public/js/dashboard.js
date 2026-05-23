@@ -3421,6 +3421,9 @@ async function processarFidelidadeAoFinalizar(pedido) {
         const valor = parseFloat(document.getElementById('cupom-valor').value) || 0;
         const min = parseFloat(document.getElementById('cupom-minimo').value) || 0;
         const kmLimit = parseFloat(document.getElementById('cupom-km').value) || 0;
+        
+        // 1. ELE ADICIONA ESSA LINHA AQUI:
+        const cupomEhSecreto = document.getElementById('cupom-secreto')?.checked || false;
 
         if(!code || !titulo) return window.showToast("Atenção", "Preencha o código e o título.", true);
 
@@ -3432,7 +3435,10 @@ async function processarFidelidadeAoFinalizar(pedido) {
             await addDoc(collection(db, "marketing_cupons"), {
                 code: code, titulo: titulo, descricao: desc, tipo: tipo,
                 valor: valor, min: min, kmLimit: tipo === 'frete' ? kmLimit : 0, 
-                ativo: true, createdAt: serverTimestamp()
+                ativo: true, createdAt: serverTimestamp(),
+                
+                // 2. E ELE ADICIONA ESSA LINHA AQUI NO FINAL DO OBJETO:
+                secreto: cupomEhSecreto 
             });
 
             window.showToast("Sucesso", "Cupom criado com sucesso!");
