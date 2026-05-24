@@ -1057,7 +1057,9 @@ if(quickModal && !quickModal.classList.contains('hidden') && modalObs) {
         }
 
         if (cupomAtivo) {
-            if (subtotal < cupomAtivo.min) {
+            // MUDANÇA AQUI: Adicionamos o "cart.length === 0" e a proteção "(cupomAtivo.min || 0)"
+            if (cart.length === 0 || subtotal < (cupomAtivo.min || 0)) {
+                
                 cupomAtivo = null;
                 localStorage.removeItem('tropyberry_cupom');
                 const couponText = document.getElementById('coupon-selected-text');
@@ -1288,10 +1290,16 @@ if(quickModal && !quickModal.classList.contains('hidden') && modalObs) {
                         return showToast("Selecione a data e o horário para o agendamento.", true);
                     }
                     
-                    // Validação extra: Data futura
-                    const selectedDate = new Date(`${date}T${time}`);
-                    if (selectedDate < new Date()) {
-                        return showToast("A data/hora deve ser futura.", true);
+                    // Validação extra: Data futura com antecedência (TRAVA SENIOR)
+                    const selectedDate = new Date(`${date}T${time}:00`);
+                    const dataMinima = new Date();
+                    
+                    // Define o tempo mínimo de preparo em minutos
+                    const tempoPreparoMinutos = 40;
+                    dataMinima.setMinutes(dataMinima.getMinutes() + tempoPreparoMinutos);
+
+                    if (selectedDate < dataMinima) {
+                        return showToast(`O agendamento requer pelo menos ${tempoPreparoMinutos} min de antecedência.`, true);
                     }
 
                     const dataFormatada = date.split('-').reverse().join('/');
@@ -1329,9 +1337,18 @@ if(quickModal && !quickModal.classList.contains('hidden') && modalObs) {
             renderReceipt();
         }
     }
-    document.getElementById('input-district')?.addEventListener('input', () => {
+    document.getElementById('input-district')?.addEventListener('change', () => {
         updateCartUI();
-        renderReceipt();      
+        renderReceipt();
+        if (typeof window.calcularDistanciaGoogle === 'function') window.calcularDistanciaGoogle();
+    });
+    
+    document.getElementById('input-street')?.addEventListener('change', () => {
+        if (typeof window.calcularDistanciaGoogle === 'function') window.calcularDistanciaGoogle();
+    });
+    
+    document.getElementById('input-number')?.addEventListener('change', () => {
+        if (typeof window.calcularDistanciaGoogle === 'function') window.calcularDistanciaGoogle();
     });
 
     // === PROCESSAMENTO DE PAGAMENTO (CORRIGIDO) ===
@@ -2217,6 +2234,15 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
         if (cart.length === 0) return;
         cart = []; 
         localStorage.removeItem('tropyberry_cart'); 
+
+        cupomAtivo = null;
+        localStorage.removeItem('tropyberry_cupom');
+        const couponText = document.getElementById('coupon-selected-text');
+        if(couponText) {
+            couponText.innerText = "Cupom de desconto";
+            couponText.classList.remove('text-cyan-600', 'font-bold');
+        }
+
         updateCartUI(); 
         showToast("Carrinho esvaziado!");
 

@@ -3530,10 +3530,13 @@ window.imprimirPedidoDash = (orderId) => {
                             </div>
                             <div class="mt-6 pt-4 border-t border-dashed flex justify-between items-center">
                                 <span class="font-mono font-black text-cyan-600 tracking-tighter bg-cyan-50 px-3 py-1 rounded-lg">${c.code || c.id}</span>
-                                <span class="font-black text-orange-500 text-sm whitespace-nowrap">${valorBadge}</span>
-                                <button onclick="window.deletarItemMarketing('marketing_cupons', '${c.id}')" class="text-red-400 hover:text-red-600 text-[10px] font-bold bg-red-50 px-2 py-1 rounded transition ml-2">EXCLUIR</button>
+                                    <span class="font-black text-orange-500 text-sm whitespace-nowrap">${valorBadge}</span>
+    
+                                <div class="flex gap-2">
+                                    <button onclick="window.prepararEdicaoCupom('${c.id}')" class="text-blue-500 hover:text-blue-700 text-[10px] font-bold bg-blue-50 px-2 py-1 rounded transition">EDITAR</button>
+                                    <button onclick="window.deletarItemMarketing('marketing_cupons', '${c.id}')" class="text-red-400 hover:text-red-600 text-[10px] font-bold bg-red-50 px-2 py-1 rounded transition">EXCLUIR</button>
+                                </div>
                             </div>
-                        </div>
                     `}).join('');
                 }
             }
@@ -3664,17 +3667,24 @@ window.imprimirPedidoDash = (orderId) => {
         const txtOrg = btn ? btn.innerText : 'CRIAR CUPOM';
         if(btn) { btn.innerText = 'SALVANDO...'; btn.disabled = true; }
 
-        try {
-            await addDoc(collection(db, "marketing_cupons"), {
-                code: code, titulo: titulo, descricao: desc, tipo: tipo,
-                valor: valor, min: min, kmLimit: tipo === 'frete' ? kmLimit : 0, 
-                ativo: true, createdAt: serverTimestamp(),
-                
-                // 2. E ELE ADICIONA ESSA LINHA AQUI NO FINAL DO OBJETO:
-                secreto: cupomEhSecreto 
-            });
+        const editId = document.getElementById('cupom-edit-id')?.value;
+        const cupomData = {
+            code: code, titulo: titulo, descricao: desc, tipo: tipo,
+            valor: valor, min: min, kmLimit: tipo === 'frete' ? kmLimit : 0, 
+            ativo: true, secreto: cupomEhSecreto 
+        };
 
-            window.showToast("Sucesso", "Cupom criado com sucesso!");
+        try {
+            if (editId) {
+                // ATUALIZA O EXISTENTE
+                await updateDoc(doc(db, "marketing_cupons", editId), cupomData);
+                window.showToast("Sucesso", "Cupom atualizado!");
+            } else {
+                // CRIA UM NOVO
+                cupomData.createdAt = serverTimestamp();
+                await addDoc(collection(db, "marketing_cupons"), cupomData);
+                window.showToast("Sucesso", "Cupom criado com sucesso!");
+            }
             document.getElementById('modal-novo-cupom').classList.add('hidden');
         } catch (e) {
             console.error("Erro ao criar cupom:", e);
@@ -4536,6 +4546,38 @@ window.uploadOptionImage = async (fileInput) => {
             if(btn) { btn.innerHTML = originalText; btn.disabled = false; }
         }
     };
+
+    window.prepararEdicaoCupom = async (id) => {
+    // 1. Puxa os dados fresquinhos do Firebase
+    const docRef = doc(db, "marketing_cupons", id);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return window.showToast("Erro", "Cupom não encontrado.", true);
+    
+    const c = snap.data();
+
+    // 2. Preenche todos os campos
+    document.getElementById('cupom-edit-id').value = id;
+    document.getElementById('cupom-codigo').value = c.code || '';
+    document.getElementById('cupom-titulo').value = c.titulo || '';
+    document.getElementById('cupom-desc').value = c.descricao || '';
+    document.getElementById('cupom-tipo').value = c.tipo || 'fixo';
+    document.getElementById('cupom-valor').value = c.valor || 0;
+    document.getElementById('cupom-minimo').value = c.min || 0;
+    
+    if(document.getElementById('cupom-km')) document.getElementById('cupom-km').value = c.kmLimit || '';
+    if(document.getElementById('cupom-secreto')) document.getElementById('cupom-secreto').checked = c.secreto || false;
+
+    // 3. Atualiza a interface e abre o modal
+    if(typeof window.mudarTipoCupom === 'function') window.mudarTipoCupom(); 
+    
+    const tituloModal = document.querySelector('#modal-novo-cupom h3');
+    if(tituloModal) tituloModal.innerText = 'Editar Cupom';
+    
+    const btnSalvar = document.querySelector('#modal-novo-cupom button.bg-cyan-600');
+    if(btnSalvar) btnSalvar.innerText = 'ATUALIZAR CUPOM';
+
+    document.getElementById('modal-novo-cupom').classList.remove('hidden');
+};
     // --- LÓGICA DE EDIÇÃO E EXCLUSÃO DOS COMPLEMENTOS ---
     window.editarGrupo = (gid) => {
         const group = allComplements[gid];
