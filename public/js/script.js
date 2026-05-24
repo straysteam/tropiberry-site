@@ -247,12 +247,11 @@ const ORIGEM_COORD = [-34.870621816331834, -7.200324786180237]; // [Longitude, L
             desconto = subtotal * fator;
         } else if (cupom.tipo === 'frete') {
             if (frete !== null) {
-                const limite = parseFloat(cupom.valor) || 4.99;
-                // Se o frete for menor ou igual ao limite, dá o desconto total do frete
-                if (frete <= limite) {
+                const kmAtual = window.distanciaKmGlobal || 0;
+                // Se o kmLimit for 0 (ilimitado) ou o KM do cliente for menor que o limite
+                if (cupom.kmLimit === 0 || kmAtual <= cupom.kmLimit) {
                     desconto = frete;
                 } else {
-                    // Se for maior que a distância permitida, não dá desconto nenhum!
                     desconto = 0;
                 }
             }
@@ -1917,8 +1916,8 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
                     valorDesconto = subtotal * fator;
                 } else if (cupomAtivo.tipo === 'frete') {
                     if (frete !== null) {
-                        // A correção do Math.min que estava tirando os 4,99
-                        if (valorFreteNum <= limiteCupom) {
+                        const kmAtual = window.distanciaKmGlobal || 0;
+                        if (cupomAtivo.kmLimit === 0 || kmAtual <= cupomAtivo.kmLimit) {
                             valorDesconto = valorFreteNum;
                         } else {
                             valorDesconto = 0;
@@ -2281,6 +2280,7 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
         let valorFrete = 0;
         const km = distanciaKm;
 
+        window.distanciaKmGlobal = km;
         // Tabela de Preços
         if (km <= 1.0) valorFrete = 4.99;
         else if (km <= 2.0) valorFrete = 6.99;
@@ -2555,10 +2555,8 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
                     const fator = cupomAtivo.valor > 1 ? cupomAtivo.valor / 100 : cupomAtivo.valor;
                     valorDesconto = subtotal * fator;
                 } else if (cupomAtivo.tipo === 'frete') {
-                    const limiteCupom = parseFloat((cupomAtivo.valor || 4.99).toFixed(2));
-                    
-                    // Se o frete for menor ou igual ao limite do cupom (ex: 4.99), o desconto é o valor integral do frete
-                    if (valorFreteReal <= limiteCupom) {
+                    const kmAtual = window.distanciaKmGlobal || 0;
+                    if (cupomAtivo.kmLimit === 0 || kmAtual <= cupomAtivo.kmLimit) {
                         valorDesconto = valorFreteReal;
                     }
                 }
@@ -2848,46 +2846,46 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
     renderizarBannersSite();
     // Função para renderizar os cupons no Index (Site do Cliente)
     function renderizarCuponsSite() {
-        const container = document.getElementById('marketing-coupons-site');
-        // Pegamos a SECTION inteira (pai do container e do título)
-        const sectionArea = document.getElementById('section-cupons-area'); 
+    const container = document.getElementById('marketing-coupons-site');
+    const sectionArea = document.getElementById('section-cupons-area'); 
 
-        if (!container || !db) return;
+    if (!container || !db) return;
 
-        onSnapshot(query(collection(db, "marketing_cupons"), where("ativo", "==", true)), (snapshot) => {
-            const cupons = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            
-            if (cupons.length === 0) {
-                // Se não tem cupons, esconde a seção inteira (incluindo o título "Economize Agora")
-                if(sectionArea) sectionArea.classList.add('hidden');
-                return;
-            } else {
-                // Se tem cupons, mostra a seção
-                if(sectionArea) sectionArea.classList.remove('hidden');
-            }
+    onSnapshot(query(collection(db, "marketing_cupons"), where("ativo", "==", true)), (snapshot) => {
+        let cupons = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        // 🔥 A MÁGICA 2: Tira os secretos da vitrine da página inicial
+        cupons = cupons.filter(c => !c.secreto);
+        
+        if (cupons.length === 0) {
+            if(sectionArea) sectionArea.classList.add('hidden');
+            return;
+        } else {
+            if(sectionArea) sectionArea.classList.remove('hidden');
+        }
 
-            container.innerHTML = cupons.map(c => `
-                <div class="bg-white rounded-xl p-4 border-2 border-dashed border-cyan-200 flex items-center justify-between relative overflow-hidden group hover:border-cyan-400 transition-colors cursor-pointer" onclick="copiarCupomSite('${c.code}')">
-                    <div class="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-blue-50 rounded-full border-r border-cyan-200"></div>
-                    <div class="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-blue-50 rounded-full border-l border-cyan-200"></div>
-                    
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-lg ${c.color || 'bg-cyan-600'} text-white flex items-center justify-center text-lg shadow-sm">
-                            ${c.icon || '🎟️'}
-                        </div>
-                        <div>
-                            <p class="font-bold text-gray-800 text-sm leading-none">${c.title}</p>
-                            <p class="text-xs text-gray-500 mt-1">${c.desc}</p>
-                        </div>
+        container.innerHTML = cupons.map(c => `
+            <div class="bg-white rounded-xl p-4 border-2 border-dashed border-cyan-200 flex items-center justify-between relative overflow-hidden group hover:border-cyan-400 transition-colors cursor-pointer" onclick="copiarCupomSite('${c.code}')">
+                <div class="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-blue-50 rounded-full border-r border-cyan-200"></div>
+                <div class="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-blue-50 rounded-full border-l border-cyan-200"></div>
+                
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg ${c.color || 'bg-cyan-600'} text-white flex items-center justify-center text-lg shadow-sm">
+                        ${c.icon || '🎟️'}
                     </div>
-                    
-                    <div class="bg-cyan-50 text-cyan-700 font-mono font-bold text-sm px-3 py-1 rounded border border-cyan-100 group-hover:bg-cyan-600 group-hover:text-white transition">
-                        ${c.code}
+                    <div>
+                        <p class="font-bold text-gray-800 text-sm leading-none">${c.title}</p>
+                        <p class="text-xs text-gray-500 mt-1">${c.desc}</p>
                     </div>
                 </div>
-            `).join('');
-        });
-    }
+                
+                <div class="bg-cyan-50 text-cyan-700 font-mono font-bold text-sm px-3 py-1 rounded border border-cyan-100 group-hover:bg-cyan-600 group-hover:text-white transition">
+                    ${c.code}
+                </div>
+            </div>
+        `).join('');
+    });
+}
 
     // Função para copiar o código ao clicar
     window.copiarCupomSite = (codigo) => {
@@ -2935,48 +2933,49 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
         if (modal) modal.classList.add('hidden');
     };
 
-    // 4. Desenha a lista de cupons e já bloqueia o que não pode usar
     window.renderizarListaCupons = () => {
-        const container = document.getElementById('coupons-list');
-        if (!container) return;
-        
-        const subtotal = obterSubtotalCart();
-        const freteAtual = distanciaConfirmada ? freteGoogleCalculado : 0;
-        
-        if(listaCupons.length === 0) {
-            container.innerHTML = '<p class="text-center text-gray-500 py-4 font-bold">Nenhum cupom disponível no momento.</p>';
-            return;
-        }
+    const container = document.getElementById('coupons-list');
+    if (!container) return;
+    
+    const subtotal = obterSubtotalCart();
+    
+    // 🔥 A MÁGICA AQUI: Filtra a lista pra exibir SÓ os que NÃO são secretos
+    const cuponsVisiveis = listaCupons.filter(c => !c.secreto);
 
-        container.innerHTML = listaCupons.map(cupom => {
-            // Regras para bloquear o clique no cupom
-            const subtotalInvalido = subtotal < (cupom.min || 0);
-            const freteInvalido = cupom.tipo === 'frete' && freteAtual > (cupom.valor || 0);
-            const bloqueado = subtotalInvalido || freteInvalido;
-            const isAtivo = cupomAtivo?.id === cupom.id;
+    if(cuponsVisiveis.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 py-4 font-bold">Nenhum cupom disponível no momento.</p>';
+        return;
+    }
 
-            // Texto do erro
+    // Passa o .map na lista filtrada em vez da lista completa
+    container.innerHTML = cuponsVisiveis.map(cupom => {
+        const subtotalInvalido = subtotal < (cupom.min || 0);
+        const kmAtual = window.distanciaKmGlobal || 0;
+        const freteInvalido = cupom.tipo === 'frete' && cupom.kmLimit > 0 && kmAtual > cupom.kmLimit;
+        const bloqueado = subtotalInvalido || freteInvalido;
+        const isAtivo = cupomAtivo?.id === cupom.id;
+
             let msgErro = "";
             if (subtotalInvalido) msgErro = `Mínimo R$ ${(cupom.min || 0).toFixed(2).replace('.', ',')}`;
-            else if (freteInvalido) msgErro = `Exclusivo para raio de entrega próximo`;
-            
-            return `
-                <div class="bg-white p-4 rounded-xl border-2 ${isAtivo ? 'border-cyan-500 bg-cyan-50' : 'border-gray-100'} ${bloqueado ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:border-cyan-300 transition'}" 
-                    onclick="${!bloqueado ? `window.aplicarCupom('${cupom.id}')` : `showToast('${msgErro}', true)`}">
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <h4 class="font-black text-cyan-900 text-lg">${cupom.titulo || cupom.code}</h4>
-                            <p class="text-xs text-gray-500">${cupom.descricao || 'Desconto'}</p>
-                            <p class="text-[10px] font-bold text-orange-500 mt-1 uppercase">
-                                ${msgErro ? msgErro : 'Disponível para você'}
-                            </p>
-                        </div>
-                        ${isAtivo ? '<i class="fas fa-check-circle text-cyan-600 text-3xl"></i>' : (bloqueado ? '<i class="fas fa-lock text-gray-400 text-xl"></i>' : '<i class="fas fa-ticket-alt text-cyan-600 text-xl"></i>')}
+            else if (freteInvalido) msgErro = `Válido apenas até ${cupom.kmLimit}km`;
+        
+        return `
+            <div class="bg-white p-4 rounded-xl border-2 ${isAtivo ? 'border-cyan-500 bg-cyan-50' : 'border-gray-100'} ${bloqueado ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:border-cyan-300 transition'}" 
+                onclick="${!bloqueado ? `window.aplicarCupom('${cupom.id}')` : `showToast('${msgErro}', true)'`}">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h4 class="font-black text-cyan-900 text-lg">${cupom.titulo || cupom.code}</h4>
+                        <p class="text-xs text-gray-500">${cupom.descricao || 'Desconto'}</p>
+                        <p class="text-[10px] font-bold text-orange-500 mt-1 uppercase">
+                            ${msgErro ? msgErro : 'Disponível para você'}
+                        </p>
                     </div>
+                    ${isAtivo ? '<i class="fas fa-check-circle text-cyan-600 text-3xl"></i>' : (bloqueado ? '<i class="fas fa-lock text-gray-400 text-xl"></i>' : '<i class="fas fa-ticket-alt text-cyan-600 text-xl"></i>')}
                 </div>
-            `;
-        }).join('');
-    };
+            </div>
+        `;
+    }).join('');
+};
 
     // 5. Clicou no cupom ou digitou o código = Aplica e salva!
     window.aplicarCupom = (cupomId) => {
@@ -2999,9 +2998,9 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
         const cupom = listaCupons.find(c => c.id === cupomId);
         if (!cupom) return;
 
-        const freteAtual = distanciaConfirmada ? freteGoogleCalculado : 0;
-        if (cupom.tipo === 'frete' && freteAtual > (cupom.valor || 0)) {
-            return showToast("Este cupom é válido apenas para fretes menores", true);
+        const kmAtual = window.distanciaKmGlobal || 0;
+        if (cupom.tipo === 'frete' && cupom.kmLimit > 0 && kmAtual > cupom.kmLimit) {
+            return showToast(`Cupom válido apenas para entregas até ${cupom.kmLimit}km`, true);
         }
 
         cupomAtivo = cupom;
@@ -3030,14 +3029,14 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
 
         const cupom = listaCupons.find(c => c.code === codigoInput);
         const subtotal = obterSubtotalCart();
-        const freteAtual = distanciaConfirmada ? freteGoogleCalculado : 0;
+        const kmAtual = window.distanciaKmGlobal || 0;
 
         if (!cupom) {
             showToast("Cupom inválido ou inativo", true);
         } else if (subtotal < (cupom.min || 0)) {
             showToast(`Valor mínimo do pedido: R$ ${(cupom.min || 0).toFixed(2).replace('.', ',')}`, true);
-        } else if (cupom.tipo === 'frete' && freteAtual > (cupom.valor || 0)) {
-            showToast("Este cupom é apenas para clientes com raio próximo", true);
+        } else if (cupom.tipo === 'frete' && cupom.kmLimit > 0 && kmAtual > cupom.kmLimit) {
+            showToast(`Este cupom é válido apenas para entregas até ${cupom.kmLimit}km`, true);
         } else {
             window.aplicarCupom(cupom.id); 
             document.getElementById('input-coupon-code').value = '';
