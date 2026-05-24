@@ -749,10 +749,10 @@
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbW_ZTCs-k6OW034Ee93IYf4IZpHKFzno&libraries=geometry,places"></script>
 <script type="module" src="js/script.js?v=1.0.1"></script>
 
-<a id="btn-download" href="TropiBerry.apk" class="fixed bottom-20 right-4 bg-yellow-400 text-cyan-900 font-bold p-4 rounded-full shadow-2xl flex items-center gap-2 z-[40] animate-bounce">
-        <i class="fas fa-mobile-alt"></i>
-        Baixar nosso App!
-    </a>
+<button id="btn-download" onclick="document.getElementById('modal-download-app').classList.remove('hidden')" 
+    class="fixed bottom-20 right-4 bg-yellow-400 text-cyan-900 font-bold p-4 rounded-full shadow-2xl flex items-center gap-2 z-[40] animate-bounce">
+    <i class="fas fa-mobile-alt"></i> Baixar nosso App!
+</button>
 
     <script>
     // 1. Pega o parâmetro da URL (?platform=app)
@@ -866,6 +866,29 @@
         </div>
     </div>
 </div>
+<div id="modal-download-app" class="fixed inset-0 bg-black/70 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up">
+    <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6 relative">
+        <button onclick="document.getElementById('modal-download-app').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-red-500 text-xl">&times;</button>
+        
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-shield-alt text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-black text-gray-800">Segurança do App</h3>
+            <p class="text-xs text-gray-500 mt-2">Como nosso App é exclusivo e não está na Play Store, o Android pode exibir um aviso de "Arquivo não seguro". Não se preocupe, é 100% confiável!</p>
+        </div>
 
+        <div class="space-y-4 text-xs text-gray-700">
+            <p><b class="text-blue-600">1.</b> Toque em "Fazer download mesmo assim".</p>
+            <p><b class="text-blue-600">2.</b> Se aparecer "Este tipo de arquivo pode danificar...", toque em "OK".</p>
+            <p><b class="text-blue-600">3.</b> Após baixar, abra o arquivo e clique em "Instalar".</p>
+            <p><b class="text-blue-600">4.</b> Se pedir permissão, vá em "Configurações" e marque "Permitir desta fonte".</p>
+        </div>
+
+        <a href="TropiBerry.apk" class="block w-full bg-cyan-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-cyan-700 transition mt-6 text-center">
+            ENTENDI, BAIXAR AGORA
+        </a>
+    </div>
+</div>
 </body>
 </html>
