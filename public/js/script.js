@@ -1240,9 +1240,26 @@ if(quickModal && !quickModal.classList.contains('hidden') && modalObs) {
         } 
     }
     function useSavedAddress() { goToSummary(); }
-    function goToPaymentMethod() {
-        // 1. Calcula o subtotal atual para validar a trava de valor mínimo
-        const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+function goToPaymentMethod() {
+    // --- NOVA TRAVA: VALIDAÇÃO DE AGENDAMENTO (LOJA FECHADA) ---
+    if (!isStoreOpen && configPedidos.allowScheduled) {
+        const timing = document.querySelector('input[name="order-timing"]:checked')?.value;
+        const date = document.getElementById('input-schedule-date').value;
+        const time = document.getElementById('input-schedule-time').value;
+
+        // Se a loja está fechada e não selecionou "Agendar" ou faltou data/hora
+        if (timing !== 'schedule' || !date || !time) {
+            return showToast("Loja fechada! Selecione 'Agendar', data e hora antes de continuar.", true);
+        }
+
+        // Se passou, salva no objeto para o processamento final
+        const dataFormatada = date.split('-').reverse().join('/');
+        currentOrder.scheduled = `${dataFormatada} às ${time}`;
+    }
+    // ---------------------------------------------------------
+
+    // 1. Calcula o subtotal atual para validar a trava de valor mínimo
+    const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
         
         // 2. Captura e limpa os campos básicos de identificação
         const n = document.getElementById('input-name').value.trim(); 
@@ -1276,40 +1293,41 @@ if(quickModal && !quickModal.classList.contains('hidden') && modalObs) {
                 currentOrder.customer.extraInfo = extraInput;
             }
 
-            // --- TRAVA: Agendamento de Pedido (CORRIGIDO) ---
-            if (configPedidos.allowScheduled) {
-                // Verifica se escolheu "Agora" ou "Agendar"
-                const timing = document.querySelector('input[name="order-timing"]:checked')?.value;
-                
-                // Só cobra a data se o cliente escolheu "Agendar"
-                if (timing === 'schedule') {
-                    const date = document.getElementById('input-schedule-date').value;
-                    const time = document.getElementById('input-schedule-time').value;
-                    
-                    if (!date || !time) {
-                        return showToast("Selecione a data e o horário para o agendamento.", true);
-                    }
-                    
-                    // Validação extra: Data futura com antecedência (TRAVA SENIOR)
-                    const selectedDate = new Date(`${date}T${time}:00`);
-                    const dataMinima = new Date();
-                    
-                    // Define o tempo mínimo de preparo em minutos
-                    const tempoPreparoMinutos = 40;
-                    dataMinima.setMinutes(dataMinima.getMinutes() + tempoPreparoMinutos);
+// --- TRAVA DE SEGURANÇA: Agendamento Obrigatório ---
+if (configPedidos.allowScheduled) {
+    const timing = document.querySelector('input[name="order-timing"]:checked')?.value;
+    
+    // Se a loja está FECHADA, forçamos o "Agendar"
+    if (!isStoreOpen && timing !== 'schedule') {
+        return showToast("A loja está fechada. Selecione a opção 'Agendar'.", true);
+    }
 
-                    if (selectedDate < dataMinima) {
-                        return showToast(`O agendamento requer pelo menos ${tempoPreparoMinutos} min de antecedência.`, true);
-                    }
+    // Se escolheu Agendar OU se a loja está fechada (obrigando agendamento), valida campos
+    if (timing === 'schedule' || !isStoreOpen) {
+        const date = document.getElementById('input-schedule-date').value;
+        const time = document.getElementById('input-schedule-time').value;
+        
+        if (!date || !time) {
+            return showToast("Selecione a data e o horário para o agendamento.", true);
+        }
+        
+        // Validação de antecedência que você já tinha
+        const selectedDate = new Date(`${date}T${time}:00`);
+        const dataMinima = new Date();
+        const tempoPreparoMinutos = 40;
+        dataMinima.setMinutes(dataMinima.getMinutes() + tempoPreparoMinutos);
 
-                    const dataFormatada = date.split('-').reverse().join('/');
-                    currentOrder.scheduled = `${dataFormatada} às ${time}`;
-                } else {
-                    // Se for "Agora", remove qualquer agendamento
-                    delete currentOrder.scheduled;
-                }
-            }
+        if (selectedDate < dataMinima) {
+            return showToast(`O agendamento requer pelo menos ${tempoPreparoMinutos} min de antecedência.`, true);
+        }
 
+        const dataFormatada = date.split('-').reverse().join('/');
+        currentOrder.scheduled = `${dataFormatada} às ${time}`;
+    } else {
+        // Se for "Agora" (loja aberta), remove qualquer agendamento
+        delete currentOrder.scheduled;
+    }
+}
             // --- VALIDAÇÃO DE ENDEREÇO ---
             const s = document.getElementById('input-street').value.trim(); 
             const num = document.getElementById('input-number').value.trim(); 
@@ -1465,6 +1483,7 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
         total: totalFinal,
         paymentMethod: 'card',
         method: currentOrder.method,
+        scheduled: currentOrder.scheduled || null, // <--- ADICIONE ESTA LINHA
         status: 'Aguardando Pagamento', // Este status agora é ignorado pelo dashboard até o webhook mudar para 'Aguardando' ou 'Pago'
         paymentStatus: 'pending',
         createdAt: serverTimestamp()
@@ -1800,15 +1819,19 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
         }
     };
 
-    document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
         const savedCart = localStorage.getItem('tropyberry_cart');
-        const savedCupom = localStorage.getItem('tropyberry_cupom'); // <-- Busca o cupom na memória
+        const savedCupom = localStorage.getItem('tropyberry_cupom');
         
-        // Se tinha cupom antes de recarregar a tela, ativa ele de novo!
         if (savedCupom) {
-            cupomAtivo = JSON.parse(savedCupom); 
+            cupomAtivo = JSON.parse(savedCupom);
+            // Atualiza o texto do botão no checkout se o elemento existir
+            const textoBotao = document.getElementById('coupon-selected-text');
+            if (textoBotao) {
+                textoBotao.innerText = `Cupom: ${cupomAtivo.code}`;
+                textoBotao.classList.add('text-cyan-600', 'font-bold');
+            }
         }
-
         if (savedCart) {
             cart = JSON.parse(savedCart);
             
@@ -2529,115 +2552,135 @@ const response = await fetch("https://tropiberry.site/pagamento.php", {
 
     // Função que abre a tela de Resumo
     window.goToSummary = function() {
-        // 1. Validações básicas
-        const name = document.getElementById('input-name').value;
-        if(!name) return showToast("Por favor, informe seu nome.", true);
-        
-        // 2. Captura dados para o objeto do pedido
-        currentOrder.customer = {
-            name: name,
-            phone: document.getElementById('input-phone').value,
-            email: document.getElementById('input-email').value
-        };
+    // === TRAVA DE SEGURANÇA: AGENDAMENTO OBRIGATÓRIO (Loja Fechada) ===
+    if (!isStoreOpen && configPedidos.allowScheduled) {
+        const timing = document.querySelector('input[name="order-timing"]:checked')?.value;
+        const date = document.getElementById('input-schedule-date').value;
+        const time = document.getElementById('input-schedule-time').value;
 
-        if (currentOrder.method === 'delivery') {
-            const rua = document.getElementById('input-street').value;
-            const num = document.getElementById('input-number').value;
-            const bairro = document.getElementById('input-district').value;
-            
-            if(!rua || !num || !bairro) return showToast("Preencha o endereço completo!", true);
-            
-            const modo = configPedidos.deliveryMode;
-            if (modo === 'ifood' || modo === 'distance' || modo === 'google') {
-                if (!distanciaConfirmada || freteGoogleCalculado === 0) {
-                    showToast("Calculando frete... Aguarde a confirmação da distância.", false);
-                    window.calcularDistanciaGoogle();
-                    setTimeout(() => { if(distanciaConfirmada) window.goToSummary(); }, 1500);
-                    return;
-                }
-            }
-            currentOrder.customer.address = `${rua}, ${num} - ${bairro}`;
-        } else {
-            currentOrder.customer.address = "Retirada na Loja";
+        // Se a loja está fechada e o cara não marcou 'Agendar' ou esqueceu data/hora
+        if (timing !== 'schedule' || !date || !time) {
+            return showToast("A loja está fechada! Selecione 'Agendar', data e hora para continuar.", true);
         }
-
-        window.salvarDadosClienteAutomatico();
-
-        // === CÁLCULO DE VALORES COM CUPOM NO RESUMO (REVISADO) ===
-        const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-        const frete = calcularFrete();
-        const valorFreteReal = (frete === null) ? 0 : frete;
         
-        // Lógica do Desconto (Cupom) - Garantindo que subtraia do Total Final
-        let valorDesconto = 0;
-        if (cupomAtivo) {
-            // Converte para número para evitar erros de comparação de texto
-            const minCarrinho = parseFloat(cupomAtivo.min) || 0;
-            
-            if (subtotal >= minCarrinho) {
-                if (cupomAtivo.tipo === 'fixo') {
-                    valorDesconto = parseFloat(cupomAtivo.valor);
-                } else if (cupomAtivo.tipo === 'porcentagem') {
-                    const fator = cupomAtivo.valor > 1 ? cupomAtivo.valor / 100 : cupomAtivo.valor;
-                    valorDesconto = subtotal * fator;
-                } else if (cupomAtivo.tipo === 'frete') {
-                    const kmAtual = window.distanciaKmGlobal || 0;
-                    if (cupomAtivo.kmLimit === 0 || kmAtual <= cupomAtivo.kmLimit) {
-                        valorDesconto = valorFreteReal;
-                    }
-                }
-            }
-        }
+        // Validação de tempo mínimo (antecedência)
+        const selectedDate = new Date(`${date}T${time}:00`);
+        const dataMinima = new Date();
+        const tempoPreparoMinutos = 40;
+        dataMinima.setMinutes(dataMinima.getMinutes() + tempoPreparoMinutos);
 
-        const taxaServico = (currentOrder.method === 'delivery') ? (parseFloat(configPedidos.delivServiceFee) || 0) : 0;
+        if (selectedDate < dataMinima) {
+            return showToast(`Agendamento requer pelo menos ${tempoPreparoMinutos} min de antecedência.`, true);
+        }
         
-        // AQUI O TOTAL FINAL RECEBE A SUBTRAÇÃO DO DESCONTO (Sincronizado com o carrinho)
-        const totalFinal = (subtotal + valorFreteReal + taxaServico) - valorDesconto;
-        
-        currentOrder.total = totalFinal;
+        const dataFormatada = date.split('-').reverse().join('/');
+        currentOrder.scheduled = `${dataFormatada} às ${time}`;
+    }
+    // -------------------------------------------------------------
 
-        // --- ATUALIZAÇÃO DA UI DO MODAL DE RESUMO ---
-        document.getElementById('summary-address-display').innerText = currentOrder.customer.address;
-        document.getElementById('summary-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
-        
-        const deliveryDisplay = document.getElementById('summary-delivery');
-        if (frete === null) {
-            deliveryDisplay.innerText = "Calculando...";
-        } else if (valorFreteReal > 0) {
-            deliveryDisplay.innerText = `R$ ${valorFreteReal.toFixed(2).replace('.', ',')}`;
-            deliveryDisplay.classList.remove('text-green-600');
-        } else {
-            deliveryDisplay.innerText = "Grátis";
-            deliveryDisplay.classList.add('text-green-600');
-        }
-
-        // EXIBIÇÃO DO DESCONTO NO RESUMO
-        const summaryDiscountRow = document.getElementById('summary-discount-row');
-        const summaryDiscountVal = document.getElementById('summary-discount');
-        if (summaryDiscountRow && summaryDiscountVal) {
-            if (valorDesconto > 0) {
-                summaryDiscountRow.classList.remove('hidden');
-                summaryDiscountVal.innerText = `- R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
-            } else {
-                summaryDiscountRow.classList.add('hidden');
-            }
-        }
-
-        // Atualiza o Total Final com o desconto aplicado (Garante o R$ 15,00 na tela)
-        document.getElementById('summary-total').innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
-
-        const itemsContainer = document.getElementById('summary-items');
-        if (itemsContainer) {
-            itemsContainer.innerHTML = cart.map(item => `
-                <div class="flex justify-between border-b border-gray-50 pb-1">
-                    <span class="text-gray-600">${item.quantity}x ${item.name}</span>
-                    <span class="font-bold">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
-                </div>
-            `).join('');
-        }
-
-        showStep('step-summary');
+    // 1. Validações básicas
+    const name = document.getElementById('input-name').value;
+    if(!name) return showToast("Por favor, informe seu nome.", true);
+    
+    // 2. Captura dados para o objeto do pedido
+    currentOrder.customer = {
+        name: name,
+        phone: document.getElementById('input-phone').value,
+        email: document.getElementById('input-email').value
     };
+
+    if (currentOrder.method === 'delivery') {
+        const rua = document.getElementById('input-street').value;
+        const num = document.getElementById('input-number').value;
+        const bairro = document.getElementById('input-district').value;
+        
+        if(!rua || !num || !bairro) return showToast("Preencha o endereço completo!", true);
+        
+        const modo = configPedidos.deliveryMode;
+        if (modo === 'ifood' || modo === 'distance' || modo === 'google') {
+            if (!distanciaConfirmada || freteGoogleCalculado === 0) {
+                showToast("Calculando frete... Aguarde a confirmação da distância.", false);
+                window.calcularDistanciaGoogle();
+                setTimeout(() => { if(distanciaConfirmada) window.goToSummary(); }, 1500);
+                return;
+            }
+        }
+        currentOrder.customer.address = `${rua}, ${num} - ${bairro}`;
+    } else {
+        currentOrder.customer.address = "Retirada na Loja";
+    }
+
+    window.salvarDadosClienteAutomatico();
+
+    // === CÁLCULO DE VALORES COM CUPOM NO RESUMO (REVISADO) ===
+    const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const frete = calcularFrete();
+    const valorFreteReal = (frete === null) ? 0 : frete;
+    
+    let valorDesconto = 0;
+    if (cupomAtivo) {
+        const minCarrinho = parseFloat(cupomAtivo.min) || 0;
+        
+        if (subtotal >= minCarrinho) {
+            if (cupomAtivo.tipo === 'fixo') {
+                valorDesconto = parseFloat(cupomAtivo.valor);
+            } else if (cupomAtivo.tipo === 'porcentagem') {
+                const fator = cupomAtivo.valor > 1 ? cupomAtivo.valor / 100 : cupomAtivo.valor;
+                valorDesconto = subtotal * fator;
+            } else if (cupomAtivo.tipo === 'frete') {
+                const kmAtual = window.distanciaKmGlobal || 0;
+                if (cupomAtivo.kmLimit === 0 || kmAtual <= cupomAtivo.kmLimit) {
+                    valorDesconto = valorFreteReal;
+                }
+            }
+        }
+    }
+
+    const taxaServico = (currentOrder.method === 'delivery') ? (parseFloat(configPedidos.delivServiceFee) || 0) : 0;
+    const totalFinal = (subtotal + valorFreteReal + taxaServico) - valorDesconto;
+    
+    currentOrder.total = totalFinal;
+
+    // --- ATUALIZAÇÃO DA UI DO MODAL DE RESUMO ---
+    document.getElementById('summary-address-display').innerText = currentOrder.customer.address;
+    document.getElementById('summary-subtotal').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+    
+    const deliveryDisplay = document.getElementById('summary-delivery');
+    if (frete === null) {
+        deliveryDisplay.innerText = "Calculando...";
+    } else if (valorFreteReal > 0) {
+        deliveryDisplay.innerText = `R$ ${valorFreteReal.toFixed(2).replace('.', ',')}`;
+        deliveryDisplay.classList.remove('text-green-600');
+    } else {
+        deliveryDisplay.innerText = "Grátis";
+        deliveryDisplay.classList.add('text-green-600');
+    }
+
+    const summaryDiscountRow = document.getElementById('summary-discount-row');
+    const summaryDiscountVal = document.getElementById('summary-discount');
+    if (summaryDiscountRow && summaryDiscountVal) {
+        if (valorDesconto > 0) {
+            summaryDiscountRow.classList.remove('hidden');
+            summaryDiscountVal.innerText = `- R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
+        } else {
+            summaryDiscountRow.classList.add('hidden');
+        }
+    }
+
+    document.getElementById('summary-total').innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
+
+    const itemsContainer = document.getElementById('summary-items');
+    if (itemsContainer) {
+        itemsContainer.innerHTML = cart.map(item => `
+            <div class="flex justify-between border-b border-gray-50 pb-1">
+                <span class="text-gray-600">${item.quantity}x ${item.name}</span>
+                <span class="font-bold">R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+            </div>
+        `).join('');
+    }
+
+    showStep('step-summary');
+};
 
     // Atualização da função de passos para incluir o resumo
     window.showStep = function(stepId) { 

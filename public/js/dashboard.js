@@ -834,9 +834,15 @@ filtered = filtered.filter(o => {
                 </div>
                 
                 <div class="w-full md:col-span-4 p-4 md:p-3 text-xs border-b md:border-b-0 md:border-r truncate">
-                    <div class="font-black text-gray-800 text-sm md:text-xs uppercase">${order.customer?.name || 'Cliente Final'}</div>
-                    <div class="text-gray-500 font-bold mt-0.5">${order.items?.length || 0} itens • ${order.method?.toUpperCase() || 'BALCÃO'}</div>
-                </div>
+    <div class="font-black text-gray-800 text-sm md:text-xs uppercase">${order.customer?.name || 'Cliente Final'}</div>
+    <div class="text-gray-500 font-bold mt-0.5">${order.items?.length || 0} itens • ${order.method?.toUpperCase() || 'BALCÃO'}</div>
+    
+    ${order.scheduled ? `
+        <div class="mt-1 inline-block bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-black text-[10px]">
+            <i class="fas fa-calendar-alt"></i> Agendado: ${order.scheduled}
+        </div>
+    ` : ''}
+</div>
                 
                 <div class="w-full md:col-span-2 p-4 md:p-3 flex items-center justify-between md:justify-end gap-3 bg-gray-50/50 md:bg-transparent">
                     <button onclick="window.imprimirPedidoDash('${order.id}')" class="bg-white border border-gray-200 text-gray-500 hover:text-cyan-600 p-3 md:p-2 rounded-xl transition shadow-sm active:scale-90" title="Imprimir Cupom">
@@ -860,7 +866,7 @@ window.atualizarStatus = async (id, status) => {
             updatedAt: serverTimestamp()
         }); 
         
-        window.showToast("Status Atualizado", `Pedido #${id.slice(0,4)} movido para ${status}`);
+        window.showToast("Status Atualizado", `Pedido #${id.slice(0,4)} movido para ${status}`, false);
 
         // --- LÓGICA DE IMPRESSÃO AUTOMÁTICA ---
         // Se o pedido foi aceito (Em Preparo) e a config permitir, imprime automaticamente
@@ -2696,7 +2702,7 @@ window.imprimirPedidoReal = (htmlCupom) => {
             </div>
             ${htmlCupom}
             ${printConfig.footerMsg ? `<div class="divider">--------------------------------</div><div class="footer">${printConfig.footerMsg}</div>` : ''}
-            <div class="text-center">--- FIM DO CUPOM ---</div>
+            <div class="text-center">---   ---</div>
         </body>
         </html>
     `);
@@ -3453,7 +3459,14 @@ window.imprimirPedidoDash = (orderId) => {
             <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
             <div style="margin-bottom: 5px;"><b>CLIENTE:</b> ${orderFallback.customer?.name || 'N/I'}</div>
             <div style="margin-bottom: 5px;"><b>END:</b> ${orderFallback.customer?.address || 'Retirada'}</div>
-            <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+
+${orderFallback.scheduled ? `
+    <div style="margin-bottom: 5px; font-weight: bold; color: #ea580c; text-transform: uppercase;">
+        AGENDAMENTO: ${orderFallback.scheduled}
+    </div>
+` : ''}
+
+<div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
             <div style="font-weight: bold; margin-bottom: 8px;">ITENS:</div>
             ${itensHtml}
             <div style="border-bottom: 1px solid #000; margin: 8px 0;"></div>
@@ -3537,6 +3550,7 @@ window.imprimirPedidoDash = (orderId) => {
                                     <button onclick="window.deletarItemMarketing('marketing_cupons', '${c.id}')" class="text-red-400 hover:text-red-600 text-[10px] font-bold bg-red-50 px-2 py-1 rounded transition">EXCLUIR</button>
                                 </div>
                             </div>
+                        </div>
                     `}).join('');
                 }
             }
@@ -3699,11 +3713,41 @@ window.imprimirPedidoDash = (orderId) => {
         try { await updateDoc(doc(db, colecao, id), { ativo: !statusAtual }); } catch(e) { console.error(e); }
     };
 
-    window.deletarItemMarketing = async (colecao, id) => {
-        if(confirm("Excluir permanentemente?")) {
-            try { await deleteDoc(doc(db, colecao, id)); } catch(e) { console.error(e); }
+window.deletarItemMarketing = async (colecao, id) => {
+    const t = document.getElementById('toast');
+    const tTitle = document.getElementById('toast-title');
+    const tMsg = document.getElementById('toast-msg');
+
+    if (!t || !tTitle || !tMsg) return;
+
+    // Configura o toast como aviso (amarelo)
+    tTitle.innerText = "Confirmar Exclusão";
+    tMsg.innerHTML = `
+        <div class="mt-2 text-gray-700 text-xs mb-3">Tem certeza que deseja excluir permanentemente este item?</div>
+        <div class="flex gap-2">
+            <button id="btn-toast-sim" class="bg-red-600 text-white px-3 py-1 rounded font-bold text-[10px]">SIM</button>
+            <button id="btn-toast-nao" class="bg-gray-200 text-gray-700 px-3 py-1 rounded font-bold text-[10px]">CANCELAR</button>
+        </div>
+    `;
+    t.className = `fixed top-4 right-4 z-[100] shadow-2xl rounded px-4 py-3 animate-fade-in-up border-l-4 bg-white border-yellow-500 text-gray-800`;
+    t.classList.remove('hidden');
+
+    // Ações dos botões
+    document.getElementById('btn-toast-sim').onclick = async () => {
+        t.classList.add('hidden');
+        try {
+            await deleteDoc(doc(db, colecao, id));
+            window.showToast("Sucesso", "Item excluído com sucesso!");
+        } catch(e) {
+            console.error(e);
+            window.showToast("Erro", "Falha ao excluir.", true);
         }
     };
+
+    document.getElementById('btn-toast-nao').onclick = () => {
+        t.classList.add('hidden');
+    };
+};
 
     window.voltarParaListaDeMesas = () => {
     // Usa a navegação existente para voltar para a tela de PDV principal (onde as mesas ficam)
@@ -4689,4 +4733,39 @@ window.renderizarSeletorCategoriasModal = (selectedCat = null) => {
 
         select.appendChild(option);
     });
+};
+window.deletarItemMarketing = async (colecao, id) => {
+    const t = document.getElementById('toast');
+    const tTitle = document.getElementById('toast-title');
+    const tMsg = document.getElementById('toast-msg');
+
+    if (!t || !tTitle || !tMsg) return;
+
+    // Configura o toast como aviso (amarelo)
+    tTitle.innerText = "Confirmar Exclusão";
+    tMsg.innerHTML = `
+        <div class="mt-2 text-gray-700 text-xs mb-3">Tem certeza que deseja excluir permanentemente este item?</div>
+        <div class="flex gap-2">
+            <button id="btn-toast-sim" class="bg-red-600 text-white px-3 py-1 rounded font-bold text-[10px]">SIM</button>
+            <button id="btn-toast-nao" class="bg-gray-200 text-gray-700 px-3 py-1 rounded font-bold text-[10px]">CANCELAR</button>
+        </div>
+    `;
+    t.className = `fixed top-4 right-4 z-[100] shadow-2xl rounded px-4 py-3 animate-fade-in-up border-l-4 bg-white border-yellow-500 text-gray-800`;
+    t.classList.remove('hidden');
+
+    // Ações dos botões
+    document.getElementById('btn-toast-sim').onclick = async () => {
+        t.classList.add('hidden');
+        try {
+            await deleteDoc(doc(db, colecao, id));
+            window.showToast("Sucesso", "Item excluído com sucesso!");
+        } catch(e) {
+            console.error(e);
+            window.showToast("Erro", "Falha ao excluir.", true);
+        }
+    };
+
+    document.getElementById('btn-toast-nao').onclick = () => {
+        t.classList.add('hidden');
+    };
 };

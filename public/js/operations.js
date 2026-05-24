@@ -23,59 +23,80 @@
 
     // === 1. COZINHA (KITCHEN) ===
     window.iniciarMonitorCozinha = () => {
-        if (kitchenListener) kitchenListener();
+    if (kitchenListener) kitchenListener();
 
-        // Filtra pedidos com status "Em Preparo"
-        const q = query(collection(db, "pedidos"), where("status", "==", "Em Preparo"), orderBy("createdAt", "asc"));
+    const q = query(collection(db, "pedidos"), 
+        where("status", "in", ["Em Preparo", "Pronto", "Saiu para Entrega", "Finalizado"]), 
+        orderBy("createdAt", "asc")
+    );
+    
+    kitchenListener = onSnapshot(q, (snapshot) => {
+        // Mapeamento dos containers
+        const containers = {
+            preparo: document.getElementById('col-preparo'),
+            pronto: document.getElementById('col-pronto'),
+            rota: document.getElementById('col-rota'),
+            finalizados: document.getElementById('col-finalizados')
+        };
         
-        kitchenListener = onSnapshot(q, (snapshot) => {
-            const grid = document.getElementById('kitchen-grid');
-            const badge = document.getElementById('kitchen-count-badge');
-            
-            if (!grid) return;
-            
-            grid.innerHTML = '';
-            badge.innerText = snapshot.size;
+        // Limpar tudo
+        Object.values(containers).forEach(c => c.innerHTML = '');
+        
+        const counts = { preparo: 0, pronto: 0, rota: 0, finalizados: 0 };
 
-            if (snapshot.empty) {
-                grid.innerHTML = `<div class="col-span-full py-20 text-center text-gray-400">Nenhum pedido em preparação no momento.</div>`;
-                return;
+        snapshot.forEach(docSnap => {
+            const order = docSnap.data();
+            const id = docSnap.id;
+            const time = order.createdAt?.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            // 24h filter
+            const now = Date.now();
+            if (order.status === 'Finalizado' && (now - order.createdAt?.toDate().getTime() > 24 * 60 * 60 * 1000)) return;
+
+            let targetId = '';
+            let btnAcao = '';
+
+            if (order.status === 'Em Preparo') {
+                targetId = 'preparo';
+                btnAcao = `<button onclick="atualizarStatus('${id}', 'Pronto')" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 rounded-lg text-xs transition">MARCAR PRONTO</button>`;
+            } else if (order.status === 'Pronto') {
+                targetId = 'pronto';
+                btnAcao = `<button onclick="atualizarStatus('${id}', 'Saiu para Entrega')" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg text-xs transition">SAIU P/ ENTREGA</button>`;
+            } else if (order.status === 'Saiu para Entrega') {
+                targetId = 'rota';
+                btnAcao = `<button onclick="atualizarStatus('${id}', 'Finalizado')" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg text-xs transition">CONCLUIR</button>`;
+            } else {
+                targetId = 'finalizados';
+                btnAcao = `<div class="text-center text-[10px] text-gray-400 font-bold uppercase">Concluído</div>`;
             }
 
-            snapshot.forEach(docSnap => {
-                const order = docSnap.data();
-                const id = docSnap.id;
-                const time = order.createdAt?.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) || '--:--';
-
-                grid.innerHTML += `
-                    <div class="bg-white rounded-xl border-2 border-gray-100 shadow-sm overflow-hidden flex flex-col h-fit">
-                        <div class="bg-gray-50 p-3 border-b flex justify-between items-center">
-                            <span class="font-bold text-gray-700">#${id.slice(-4).toUpperCase()}</span>
-                            <span class="text-[10px] font-bold text-gray-400"><i class="far fa-clock"></i> ${time}</span>
-                        </div>
-                        <div class="p-4 flex-1">
-                            <div class="space-y-3">
-                                ${order.items.map(item => `
-                                    <div class="border-b border-gray-50 pb-2">
-                                        <div class="flex justify-between items-start">
-                                            <span class="text-sm font-bold text-gray-800">${item.quantity}x ${item.name}</span>
-                                            <i class="fas fa-utensils text-gray-200"></i>
-                                        </div>
-                                        ${item.details ? `<p class="text-[10px] text-orange-500 font-medium mt-1"><i class="fas fa-exclamation-circle"></i> ${item.details}</p>` : ''}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                        <div class="p-3 bg-gray-50 border-t">
-                            <button onclick="finalizarPreparo('${id}')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-xs hover:bg-blue-700 transition shadow-sm">
-                                MARCAR COMO PRONTO
-                            </button>
-                        </div>
-                    </div>
-                `;
-            });
+            counts[targetId]++;
+            containers[targetId].innerHTML += `
+                <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-100 text-xs">
+                    <div class="flex justify-between font-bold mb-2"><span>#${id.slice(-4).toUpperCase()}</span><span>${time}</span></div>
+                    <div class="text-gray-600 mb-3">${order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}</div>
+                    ${btnAcao}
+                </div>
+            `;
         });
-    };
+
+// Atualizar Badges e Visibilidade dos avisos
+Object.keys(counts).forEach(key => {
+    // Atualiza o contador
+    document.getElementById(`badge-${key}`).innerText = counts[key];
+    
+    // Pega o elemento do "vazio"
+    const emptyEl = document.getElementById(`empty-${key}`);
+    
+    // Se não houver pedidos (count == 0), remove a classe 'hidden', senão adiciona
+    if (counts[key] === 0) {
+        emptyEl.classList.remove('hidden');
+    } else {
+        emptyEl.classList.add('hidden');
+    }
+});
+    });
+};
 
     window.finalizarPreparo = async (id) => {
         try {
