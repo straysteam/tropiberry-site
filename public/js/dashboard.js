@@ -4394,15 +4394,24 @@ window.editandoGrupoId = null; // Variável global para controlar se estamos cri
                             <button type="button" onclick="window.desvincularGrupo('${gid}')" class="text-red-500 hover:text-red-700 p-2" title="Desvincular do Produto"><i class="fas fa-unlink"></i></button>
                         </div>
                     </div>
-                    <div class="pl-3 border-l-2 border-cyan-300 space-y-1">
-                        ${(group.options || []).map(opt => `
-                            <div class="flex items-center gap-2 text-xs text-gray-600">
-                                ${opt.image ? `<img src="${opt.image}" class="w-6 h-6 rounded object-cover shadow-sm">` : `<div class="w-6 h-6 bg-gray-200 rounded flex items-center justify-center"><i class="fas fa-image text-[8px] text-gray-400"></i></div>`}
-                                <span class="flex-1">${opt.name}</span>
-                                <span class="font-bold text-green-600">+ R$ ${Number(opt.price || 0).toFixed(2).replace('.', ',')}</span>
-                            </div>
-                        `).join('')}
-                    </div>
+                    <div class="space-y-2 mt-2">
+    ${(group.options || []).map((opt, index) => `
+        <div class="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-cyan-300 transition-all ${opt.available === false ? 'opacity-50 grayscale' : ''}">
+            ${opt.image ? `<img src="${opt.image}" class="w-10 h-10 rounded-lg object-cover shadow-sm">` : `<div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400"><i class="fas fa-image"></i></div>`}
+            
+            <div class="flex-1">
+                <p class="font-bold text-gray-800 text-sm">${opt.name}</p>
+                <p class="font-bold text-cyan-700 text-xs">+ R$ ${Number(opt.price || 0).toFixed(2).replace('.', ',')}</p>
+            </div>
+
+            <button type="button" 
+                    onclick="window.toggleOptionAvailability('${gid}', ${index})" 
+                    class="p-2 rounded-lg transition-colors ${opt.available !== false ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}">
+                <i class="fas ${opt.available !== false ? 'fa-toggle-on' : 'fa-toggle-off'} text-xl"></i>
+            </button>
+        </div>
+    `).join('')}
+</div>
                 </div>
             `;
         }).join('');
@@ -4768,4 +4777,30 @@ window.deletarItemMarketing = async (colecao, id) => {
     document.getElementById('btn-toast-nao').onclick = () => {
         t.classList.add('hidden');
     };
+};
+// Função para alternar disponibilidade de um item
+window.toggleOptionAvailability = async (groupId, optionIndex) => {
+    const group = allComplements[groupId];
+    if (!group) return;
+
+    // Inverte o status atual
+    const isAvailable = group.options[optionIndex].available !== false;
+    group.options[optionIndex].available = !isAvailable;
+
+    try {
+        // Atualiza o documento no Firestore
+        const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+        const groupRef = doc(db, "complementos", groupId);
+        
+        await updateDoc(groupRef, {
+            options: group.options
+        });
+
+        window.showToast("Sucesso", `Item ${!isAvailable ? 'disponível' : 'ocultado'}!`);
+        window.renderizarGruposVinculados(); // Re-renderiza para aplicar estilo visual
+        
+    } catch (e) {
+        console.error("Erro ao atualizar status:", e);
+        window.showToast("Erro", "Não foi possível atualizar o item.", true);
+    }
 };
